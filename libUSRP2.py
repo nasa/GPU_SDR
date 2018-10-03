@@ -17,8 +17,10 @@ from Queue import Empty
 from threading import Thread,Condition
 import time
 import gc
-from datetime import datetime
+import datetime
 
+#needed to print the data acquisition process
+import progressbar
 
 def print_warning(message):
     print "\033[40;1;33mWARNING\033[0m: "+str(message)+"."
@@ -70,8 +72,10 @@ Sync_RX_condition = Condition()
 #threading condition variables for controlling Async RX and TX thread activity
 Async_condition = Condition()
 
-#condition used to notify the end of a measure, See Decode_async_payload()
-END_OF_MEASURE = Condition()
+#variable used to notify the end of a measure, See Decode_async_payload()
+END_OF_MEASURE = False
+#mutex guarding the variable above
+EOM_cond = Condition()
 
 #becomes true when a communication error occured
 ERROR_STATUS = False
@@ -119,17 +123,37 @@ def USRP_socket_bind(USRP_socket, server_address, timeout):
             USRP_socket.connect(server_address)
             return True
         except socket.error as msg:
+            USRP_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            USRP_socket.settimeout(1)
+            USRP_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             print(("Socket binding " + str(msg) + ", " + "Retrying..."))
             time.sleep(1)
             timeout = timeout - 1
             return USRP_socket_bind(USRP_socket, server_address, timeout)
 
 def Decode_Sync_Header(raw_header):
+    '''
+    Decode an async header containing the metadata of the packet.
+    
+    Return:
+        - The metadata in dictionary form.
+        
+    Arguments:
+        - The raww header as a string (as returned by the recv() method of socket).
+    '''
+    def decode_frontend(code):
+        return {
+            'A': "A_TXRX",
+            'B': "A_RX2",
+            'C': "B_TXRX",
+            'D': "B_RX2"
+        }[code]
+    
     try:
         header = np.fromstring(raw_header, dtype=header_type, count=1)
         metadata = {}
         metadata['usrp_number'] = header[0]['usrp_number'] 
-        metadata['front_end_code'] = header[0]['front_end_code'] 
+        metadata['front_end_code'] = decode_frontend(header[0]['front_end_code'])
         metadata['packet_number'] = header[0]['packet_number'] 
         metadata['length'] = header[0]['length'] 
         metadata['errors'] = header[0]['errors'] 
@@ -158,7 +182,7 @@ def Decode_Async_payload(message):
     '''
     Decode asynchronous payloads coming from the GPU server
     '''
-    global ERROR_STATUS, END_OF_MEASURE, REMOTE_FILENAME
+    global ERROR_STATUS, END_OF_MEASURE, REMOTE_FILENAME, EOM_cond
     
     try:
         res = json.loads(message)
@@ -170,21 +194,27 @@ def Decode_Async_payload(message):
         atype = res['type']
     except KeyError:
         print_warning("Unexpected json string from the server: type")
+    
+    print "FROM SERVER: "+str(res['payload'])
         
     if atype == 'ack':
-        if message.find("EOM")!=-1:
+        if res['payload'].find("EOM")!=-1:
             print "Measure finished"
-            END_OF_MEASURE.notifyAll()
-        elif message.find("filename")!=-1:
-            REMOTE_FILENAME = message.split("\"")[1]
+            EOM_cond.acquire()
+            END_OF_MEASURE = True
+            EOM_cond.release()
+        elif res['payload'].find("filename")!=-1:
+            REMOTE_FILENAME = res['payload'].split("\"")[1]
         else:
-            print "General ack message received from the server."
+            print "General ack message received from the server: "+str(res['payload'])
             
             
     if atype == 'nack':
         print_warning("Server detected an error.")
         ERROR_STATUS = True
-        END_OF_MEASURE.notifyAll()
+        EOM_cond.acquire()
+        END_OF_MEASURE = True
+        EOM_cond.release()
         
 
 def Encode_async_message(payload):
@@ -261,15 +291,17 @@ def Async_thread():
     old_data_len = 0
     
     #try to connect, if it fails set internal status to False (close the thread)
+    Async_condition.acquire()
     if(not USRP_socket_bind(USRP_socket, USRP_server_address, 5)):
-        Async_condition.acquire()
+        
         internal_status = False
         Async_status = False
-        Async_condition.release()
+        
         print_warning("Async data connection failed")
+        Async_condition.release()
     else:
         Async_status = True
-        
+        Async_condition.release()
     #acquisition loop
     while(internal_status):
         
@@ -341,6 +373,7 @@ def Async_thread():
                     internal_status = False
                     Async_status = False
                     Async_condition.release()
+                    print_warning("Async connection is down: "+msg)
 
 Async_RX_loop = Thread(target=Async_thread, name="Async_RX", args=(), kwargs={})
 Async_RX_loop.daemon = True
@@ -358,26 +391,37 @@ def Wait_for_async_connection(timeout = None):
     
     global Async_condition
     global Async_status
-    global Async_RX_loop
     
-    #incremental interval for waiting time
-    wait_time = 0.1
-    wait = 0
-    if timeout == None:
-        timeout = sys.maxint
+    Async_condition.acquire()
+
+    x = Async_status
+
+    Async_condition.release()
     
-    if Async_condition:
-        while wait < timeout:
-            if Async_status == True:
-                return True
-            if not Async_RX_loop.is_alive():
-                return False
-            wait += wait_time
-            time.sleep(wait_time)
-    else:
-        print_warning("The Async thread condition is off.")
-        return False
+    return x
+
+def Wait_for_sync_connection(timeout = None):
+    '''
+    Block until async thead has established a connection with the server or the thread is expired. In case a timeout value is given, returns after timeout if no connection is established before.
+    
+    Arguments:
+        - timeout: Second to wait for connection. Default is infinite timeout
         
+    Return:
+        - boolean representing the sucess of the operation.
+    '''
+    
+    global Sync_RX_condition
+    global Sync_RX_status
+    
+    Sync_RX_condition.acquire()
+
+    x = Sync_RX_status
+
+    Sync_RX_condition.release()   
+    
+    return x
+         
 def Start_Async_RX():
 
     '''Start the Aswync thread. See Async_thread() function for a more detailed explanation.'''
@@ -389,7 +433,7 @@ def Start_Async_RX():
         Async_RX_loop = Thread(target=Async_thread, name="Async_RX", args=(), kwargs={})
         Async_RX_loop.daemon = True
         Async_RX_loop.start()
-    print "Async RX thread launched"
+    #print "Async RX thread launched"
     
 
 def Stop_Async_RX():
@@ -403,6 +447,35 @@ def Stop_Async_RX():
     Async_condition.release()
     Async_RX_loop.join()
     print_warning("Async RX stopped")
+    
+def Connect(timeout = None):
+    '''
+    Connect both, the Syncronous and Asynchronous communication service.
+    
+    Returns:
+        - True if both services are connected, False otherwise.
+        
+    Arguments:
+        - the timeout in seconds. Default is retry forever.
+    '''
+    Start_Sync_RX()
+    Wait_for_sync_connection(timeout = None)
+    Start_Async_RX()
+    Wait_for_async_connection(timeout = None)
+    
+    
+def Disconnect(blocking = True):
+    '''
+    Disconnect both, the Syncronous and Asynchronous communication service.
+    
+    Returns:
+        - True if both services are connected, False otherwise.
+        
+    Arguments:
+        - define if the call is blocking or not. Default is blocking.
+    '''
+    Stop_Async_RX()
+    Stop_Sync_RX()
     
     
 def Sync_RX():
@@ -427,18 +500,23 @@ def Sync_RX():
         dat_tmp = dat
         USRP_data_queue.put((meta_data_tmp,dat_tmp))
         
-    internal_status = True
-    Sync_RX_status = True
+    
 
     #try to connect, if it fails set internal status to False (close the thread)
+    Sync_RX_condition.acquire()
+    
     if(not USRP_socket_bind(USRP_data_socket, USRP_server_address_data, 5)):
-        Sync_RX_condition.acquire()
+        
         internal_status = False
         Sync_RX_status = False
-        Sync_RX_condition.release()
+        print_warning("RX data sync onnection failed.")
+    else:
+        internal_status = True
+        Sync_RX_status = True
+        
+    Sync_RX_condition.release()
     #acquisition loop
     while(internal_status):
-        
         #counter used to prevent the API to get stuck on sevrer shutdown
         data_timeout_counter = 0
         data_timeout_limit = 5 #(seconds)
@@ -453,14 +531,13 @@ def Sync_RX():
             internal_status = False
         #print internal_status
         Sync_RX_condition.release()
-        
         if(internal_status):
             header_data = ""
             try:
                 old_header_len = 0    
                 header_timeout_counter = 0
                 while (len(header_data) < header_size) and internal_status:
-                    header_timeout_counter += 1 
+                    header_timeout_counter += 1
                     header_data += USRP_data_socket.recv(min(header_size, header_size-len(header_data)))
                     if old_header_len != len(header_data):
                         header_timeout_counter = 0
@@ -472,6 +549,7 @@ def Sync_RX():
                     #print internal_status
                     Sync_RX_condition.release()
                     old_header_len = len(header_data)
+                    if(len(header_data) == 0): time.sleep(0.01)
                     
             except socket.error as msg:
                 print_error(msg)
@@ -529,9 +607,11 @@ def Sync_RX():
         USRP_data_socket.close()
     except socket.error:
         print_warning("Sounds like the server was down when the API tried to close the connection")
+    
  
 Sync_RX_loop = Thread(target=Sync_RX, name="Sync_RX", args=(), kwargs={})
 Sync_RX_loop.daemon = True
+
         
 def Start_Sync_RX():
     global Sync_RX_loop
@@ -721,7 +801,7 @@ class global_parameter(object):
         empty_spec['gain'] = 0
         empty_spec['bw'] = 0
         empty_spec['samples'] = 0
-        empty_spec['delay'] = 0
+        empty_spec['delay'] = 1
         empty_spec['burst_on'] = 0
         empty_spec['burst_off'] = 0
         empty_spec['buffer_len'] = 0
@@ -931,6 +1011,9 @@ class global_parameter(object):
     def get_active_rx_param(self):
         '''
         Discover which is(are) the active receiver designed by the global parameter object.
+        
+        Returns:
+            list of active rx antenna names : this names correspond to the parameter group in the h5 file and to the dictionary name in the (this) parameter object. 
         '''
         if not self.initialized:
             print_warning("Cannot return correct parameters because the parameter object has not been initialized")
@@ -943,19 +1026,22 @@ class global_parameter(object):
         active_rx = []
         
         if self.parameters['A_TXRX']['mode'] == "RX":
-            active_rx.append(self.parameters['A_TXRX'])
+            active_rx.append('A_TXRX')
         if self.parameters['B_TXRX']['mode'] == "RX":
-            active_rx.append(self.parameters['B_TXRX'])
+            active_rx.append('B_TXRX')
         if self.parameters['A_RX2']['mode'] == "RX":
-            active_rx.append(self.parameters['A_RX2'])
+            active_rx.append('A_RX2')
         if self.parameters['B_RX2']['mode'] == "RX":
-            active_rx.append(self.parameters['B_RX2'])
+            active_rx.append('B_RX2')
             
         return active_rx
         
     def get_active_tx_param(self):
         '''
         Discover which is(are) the active emitters designed by the global parameter object.
+        
+        Returns:
+            list of active tx antenna names : this names correspond to the parameter group in the h5 file and to the dictionary name in the (this) parameter object. 
         '''
         if not self.initialized:
             print_warning("Cannot return correct parameters because the parameter object has not been initialized")
@@ -968,13 +1054,13 @@ class global_parameter(object):
         active_tx = []
         
         if self.parameters['A_TXRX']['mode'] == "TX":
-            active_rx.append(self.parameters['A_TXRX'])
+            active_tx.append('A_TXRX')
         if self.parameters['B_TXRX']['mode'] == "TX":
-            active_rx.append(self.parameters['B_TXRX'])
+            active_tx.append('B_TXRX')
         if self.parameters['A_RX2']['mode'] == "TX":
-            active_rx.append(self.parameters['A_RX2'])
+            active_tx.append('A_RX2')
         if self.parameters['B_RX2']['mode'] == "TX":
-            active_rx.append(self.parameters['B_RX2'])
+            active_tx.append('B_RX2')
             
         return active_tx    
 
@@ -1170,7 +1256,7 @@ def Front_end_chk(Front_end):
     
     return True
         
-def Param_to_H5(H5fp, parameters):
+def Param_to_H5(H5fp, parameters_class,tag):
     '''
     Generate the internal structure of a H5 file correstonding to the parameters given.
     
@@ -1179,14 +1265,29 @@ def Param_to_H5(H5fp, parameters):
         - parameters: an initialized global_parameter object containing the informations used to drive the GPU server.
         
     Returns:
-        - A list of H5 groups where to write incoming data.
+        - A list of names of H5 groups where to write incoming data.
         
     Note:
         This function is ment to be used inside the Packets_to_file() function for data collection.
     '''
-    if parameters.self_check():
-        #write file
-        print_warning("implementation not found")
+    if parameters_class.self_check():
+        rx_names = parameters_class.get_active_rx_param()
+        tx_names = parameters_class.get_active_tx_param()
+        usrp_group = H5fp.create_group("raw_data"+str(int(parameters_class.parameters['device'])))
+        if tag != None:
+            usrp_group.attrs.create(name = "tag", data=str(tag))
+        for ant_name in tx_names:
+            tx_group = usrp_group.create_group(ant_name)
+            for param_name in parameters_class.parameters[ant_name]:
+                tx_group.attrs.create(name = param_name, data=parameters_class.parameters[ant_name][param_name])
+   
+        for ant_name in rx_names: 
+            rx_group = usrp_group.create_group(ant_name)
+            for param_name in parameters_class.parameters[ant_name]:
+                rx_group.attrs.create(name = param_name, data=parameters_class.parameters[ant_name][param_name])
+            
+        return rx_names
+        
     else:
         print_error("Cannot initialize H5 file without checked parameters.self_check() failed.")
         return []
@@ -1198,28 +1299,44 @@ def Packets_to_variable(max_sample, average = None):
     '''
     global DATA_ACCUMULATOR, USRP_data_queue, END_OF_MEASURE
 
-class EOM_flag(object):
+
+def to_list_of_str(user_input):
     '''
-    This class warns about the END_OF_MEASURE condition. TODO
+    Determines if the input is a string or a list of string. In case is not a list of string, returns a single element list; returns the list otherwise.
+    
+    Arguments:
+        - string or list of strings.
+        
+    Returns:
+        - list of strings.
+        
+    Note:
+        - I'm assuming the strings contain filenames that can't be long 1.
     '''
-    def __init__ (self):
-        return False
-    def wait_for_EOM():
-        global END_OF_MEASURE
-        END_OF_MEASURE.acquire()
-        END_OF_MEASURE.wait()
-        END_OF_MEASURE.relese()
-    
-    def check():
-        return True
-        return False
+    try:
+        l = len(user_input[0])
+    except:
+        print_error("Something went wrong in the string to list of string conversion. Check function input: "+str(user_input))
         
-    def close():
-        return True
+    if l == 1:
+        return [user_input]
+    elif l == 0:
+        print_warning("an input name has length 0.")
+        return user_input
+    else:
+        return user_input
         
+        
+def get_timestamp():
+    '''
+    Returns the timestamp formatted in a stirng.
     
+    Returns:
+        string containing the timestamp.
+    '''    
+    return str(datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
     
-def Packets_to_file(parameters, timeout = None, filename = None, meas_tag = None):
+def Packets_to_file(parameters, timeout = None, filename = None, meas_tag = None, dpc_expected = None):
     '''
     Consume the USRP_data_queue and writes an H5 file on disk.
     
@@ -1228,9 +1345,13 @@ def Packets_to_file(parameters, timeout = None, filename = None, meas_tag = None
         - timeout: time after which the function stops and tries to stop the server.
         - filename: eventual filename. Default is datetime.
         - meas_tag: an eventual string attribute to the raw_data# group to tag the measure.
+        - dpc_expected: number of sample per channel expected. if given display a percentage progressbar.
         
     Returns:
         - filename or empty string if something went wrong
+        
+    Note:
+        - if the \"End of measurement\" async signal is received from the GPU server the timeout mode becomes active.
     '''
     
     def write_single_H5_packet(metadata,data,h5fp):
@@ -1240,31 +1361,131 @@ def Packets_to_file(parameters, timeout = None, filename = None, meas_tag = None
         Arguments:
             - metadata: the metadata describing the packet directly coming from the GPU sevrer.
             - data: the data to be written inside the dataset.
-            - h5fp: already opened, with wite permission and group created h5 file pointer
+            - h5fp: already opened, with wite permission and group created h5 file pointer.
+        
+        Returns:
+            - Nothing    
+            
+        Notes:
+            - The way this function write the packets inside the h5 file is strictly related to the metadata type in decribed in USRP_server_setting.hpp as RX_wrapper struct.
         '''
+            
+        dev_name = "raw_data"+str(int(metadata['usrp_number']))
+        group_name = metadata['front_end_code']
+        dataset_name = "dataset_"+str(int(metadata['packet_number']))
+        
+        shaped_data = np.reshape(data,(metadata['channels'],metadata['length']/metadata['channels']))
+        ds = h5fp[dev_name][group_name].create_dataset(dataset_name, data = shaped_data )
+        ds.attrs.create(name = "errors", data=metadata['errors'])
+        if metadata['errors'] != 0:
+            print_warning("The server encounterd a transmission error: "+str(metadata['errors']))
+        
     
-    global USRP_data_queue, END_OF_MEASURE
+    def create_h5_file(filename):
+        '''
+        Tries to open a h5 file without overwriting files with the same name. If the file already exists rename it and then create the file.
+        
+        Arguments:
+            - String containing the name of the file.
+            
+        Returns:
+            - Pointer to rhe opened file in write mode.
+        '''
+        filename = filename.split(".")[0]
+        
+        try:
+            h5file = h5py.File(filename+".h5", 'r')
+            h5file.close()
+        except IOError:
+            try:
+                h5file = h5py.File(filename+".h5", 'w')
+                return h5file
+            except IOError as msg:
+                print_error("Cannot create the file "+filename+".h5:")
+                print msg
+                return ""
+        else:
+            print_warning("Filename "+filename+".h5 is already present in the folder, adding old(#)_ to the filename")
+            count = 0
+            while True:
+                new_filename = "old("+str(int(count))+")_"+filename+".h5"
+                try:
+                    test = h5py.File(new_filename ,'r')
+                    tets.close()
+                except IOError:
+                    os.rename(filename+".h5",new_filename)
+                    return open_h5_file(filename)
+                else:
+                    count += 1
+        
+    global USRP_data_queue, END_OF_MEASURE, EOM_cond
     
     accumulated_timeout = 0
     sleep_time = 0.1
     
     acquisition_end_flag = False
     
-    while(not acquisition_end_flag):
-        if(END_OF_MEASURE): acquisition_end_flag = True
-        try:
-            meta_data, data = USRP_data_queue.get()
-            USRP_data_queue.task_done()
-            accumulated_timeout = 0
-            
-        except Empty:
-            if timeout:
-                accumulated_timeout+=sleep_time
-                time.sleep(sleep_time)
-                if accumulated_timeout>timeout:
-                    break
-                    
+    spc_acc = 0
     
+    if filename == None:
+        filename = "USRP_DATA_"+get_timestamp()
+        print "Writing data on disk with filename: \""+filename+".h5\""
+    
+    H5_file_pointer = create_h5_file(str(filename))
+    Param_to_H5(H5_file_pointer, parameters, tag = meas_tag)
+    if dpc_expected!=None:
+        widgets = [progressbar.Percentage(), progressbar.Bar()]
+        bar = progressbar.ProgressBar(widgets=widgets, max_value=max_samp).start()
+    else:
+        widgets = [progressbar.FormatLabel(
+            'Processed: %(value)d samples per channel (in: %(elapsed)s)')]
+        bar = progressbar.ProgressBar(widgets=widgets)
+    data_warning = True
+
+    while(not acquisition_end_flag):
+        try:
+            try:
+                meta_data, data = USRP_data_queue.get(timeout = 0.1)
+                USRP_data_queue.task_done()
+                accumulated_timeout = 0
+                if meta_data == None:
+                    acquisition_end_flag = True
+                else:
+                    write_single_H5_packet(meta_data, data, H5_file_pointer)
+                    spc_acc += meta_data['length']/meta_data['channels']
+                    try:
+                        bar.update(spc_acc)
+                    except:
+                        if data_warning:
+                            bar.update(dpc_expected)
+                            print_warning("Sync rx is receiving more data than expected.")
+                            data_warning = False
+                
+            except Empty:
+                time.sleep(sleep_time)
+                if timeout:
+                    accumulated_timeout+=sleep_time
+                    if accumulated_timeout>timeout:
+                        print_warning("Sync data receiver timeout condition reached. Closing file...")
+                        acquisition_end_flag = True
+                        break
+        except KeyboardInterrupt:
+            print_warning("keyboard interrupt received. closing file...")
+            acquisition_end_flag = True
+            
+        EOM_cond.acquire()             
+        if END_OF_MEASURE:
+            timeout = 1
+        EOM_cond.release()
+        
+    print "Setting EOM mutex"
+    EOM_cond.acquire()
+    END_OF_MEASURE = False
+    EOM_cond.release()   
+             
+    H5_file_pointer.close()
+    print "H5 file closed succesfully."
+    return filename
 
 def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decimation = True, RF = None, Front_end = None, Device = None, filename = None, Multitone_compensation = None, Iterations = 1, verbose = False):
 

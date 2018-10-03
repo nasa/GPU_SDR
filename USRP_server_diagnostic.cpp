@@ -75,6 +75,7 @@ int get_tx_error(uhd::async_metadata_t *async_md, bool verbose = false){
     int error = 0;
     switch(async_md->event_code){
         case 0 :
+            if(verbose)print_warning("TX async metadata non init");
             break;
     
         case uhd::async_metadata_t::EVENT_CODE_TIME_ERROR:
@@ -83,6 +84,7 @@ int get_tx_error(uhd::async_metadata_t *async_md, bool verbose = false){
             break;
 
         case uhd::async_metadata_t::EVENT_CODE_BURST_ACK:
+            if(verbose)print_debug("TX is fine",0);
             break;
 
         case uhd::async_metadata_t::EVENT_CODE_UNDERFLOW:
@@ -149,7 +151,7 @@ void print_params(usrp_param my_parameter){
     if(my_parameter.B_TXRX.mode == OFF) B_TXRX = false;
     if(my_parameter.A_RX2.mode == OFF) A_RX2 = false;
     if(my_parameter.B_RX2.mode == OFF) B_RX2 = false;
-    
+
     ss << "\033[47;1;30m RATE  \033[0m"<<"     ";
     
     ss << (A_TXRX?(position_formatting % (my_parameter.A_TXRX.rate/1e6)).str():(std::string)"  -    ") << "          ";
@@ -197,6 +199,7 @@ void print_params(usrp_param my_parameter){
     ss << "\033[40;1;37m                  S I G N A L S    P A R A M E T E R S                  \033[0m"<<std::endl<<std::endl;
 
     if(A_TXRX){
+        
         ss <<   "\033[40;1;32mRF A TX/RX                                        No. of signals:    ";
         ss << my_parameter.A_TXRX.wave_type.size()<<" \033[0m"<<std::endl<<std::endl;
         ss <<   "\033[40;1;32mRF Buffer lenght:  "<<my_parameter.A_TXRX.buffer_len;
@@ -211,6 +214,7 @@ void print_params(usrp_param my_parameter){
         ss << "\033[47;1;30m  2 FRQ  \033[0m"<<" "<< "\033[47;1;30m  STEPS  \033[0m"<<" "<<"\033[47;1;30m  LAPSE  \033[0m"<< "";
         ss << "\033[47;1;30m   TYPE  \033[0m"<<std::endl;
         for(int i = 0; i<my_parameter.A_TXRX.wave_type.size();i++){
+        
             ss << "    "<<(position_formatting % (i)).str() <<"      ";
             ss << (position_formatting % (my_parameter.A_TXRX.ampl[i]/1.)).str() <<"   ";
             ss << (position_formatting % (my_parameter.A_TXRX.freq[i]/1e6)).str() <<"   ";

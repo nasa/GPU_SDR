@@ -9,21 +9,27 @@ THIS FILE CONTAINS VARIABLES AND FUNCTIONS NEEDED TO SEND THE DATA TO THE PYTHON
 #include "USRP_server_diagnostic.cpp"
 #include "USRP_server_memory_management.cpp"
 #include "USRP_server_settings.hpp"
+#include "USRP_JSON_interpreter.cpp"
 
 using boost::asio::ip::tcp;
 using boost::asio::ip::address;
 
 #define MSG_LENGHT 1e4  //Lenght og the buffer string of the server, should not influent since is in a loop
 
+std::atomic<bool> reconnect_data; //when th async server detects a disconnection of the API make the sync thread reconnect
+
 class Sync_server{
 
     public:
     
+        
         //true if the udp socket is connected
         std::atomic<bool> NET_IS_CONNECTED;
         
         //true when the server is streaming data
         std::atomic<bool> NET_IS_STREAMING;
+        
+        bool NEED_RECONNECT = false;
 
         bool verbose;
         bool passthrough;
@@ -31,29 +37,13 @@ class Sync_server{
         rx_queue* out_queue;
         preallocator<float2>* memory;
         
-        /* CROSS INCLUDE PROBLEM
-        //constructor for usage outside TXRX class
-        Sync_server(TXRX *thread_manager,bool init_passthrough = false){
-            passthrough = init_passthrough;
-            stream_queue = thread_manager->stream_queue;
-            if(passthrough){
-                out_queue = new rx_queue(SECONDARY_STREAM_QUEUE_LENGTH);
-                memory = thread_manager->rx_output_memory;
-            }
-            NET_IS_CONNECTED = false;
-            NET_IS_STREAMING = false;
-            verbose = true;
-            io_service = new boost::asio::io_service;
-            option = new boost::asio::socket_base::reuse_address(true);
-        }
-        */
-        //constructor to be used inside a TXRX class
         Sync_server(rx_queue* init_stream_queue, preallocator<float2>* init_memory,bool init_passthrough = false){
             passthrough = init_passthrough;
             stream_queue = init_stream_queue;
             if(passthrough){
                 out_queue = new rx_queue(SECONDARY_STREAM_QUEUE_LENGTH);
             }
+            virtual_pinger_online = false;
             memory = init_memory;
             NET_IS_CONNECTED = false;
             NET_IS_STREAMING = false;
@@ -69,18 +59,43 @@ class Sync_server{
         }
         
         void connect(int init_tcp_port){
+            boost::asio::socket_base::reuse_address ciao(true);
             if(verbose)std::cout<<"Waiting for TCP data connection on port: "<< init_tcp_port<<" ..."<<std::flush;
-            acceptor = new tcp::acceptor(*io_service, tcp::endpoint(tcp::v4(), init_tcp_port));
-            acceptor->set_option(*option);
+            acceptor = new tcp::acceptor(*io_service, tcp::endpoint(tcp::v4(), init_tcp_port),true);
+            acceptor->set_option(ciao);
             socket = new tcp::socket(*io_service);
             acceptor->accept(*socket);
             if(verbose)std::cout<<"Connected."<< std::endl;
             NET_IS_CONNECTED = true;
         }
         
+        void reconnect(int init_tcp_port){
+        
+            stop();
+            boost::asio::socket_base::reuse_address ciao(true);
+            delete acceptor;
+            delete socket;
+            if(verbose)std::cout<<"Waiting for TCP data connection on port: "<< init_tcp_port<<" ..."<<std::flush;
+            acceptor = new tcp::acceptor(*io_service, tcp::endpoint(tcp::v4(), init_tcp_port),true);
+            acceptor->set_option(ciao);
+            socket = new tcp::socket(*io_service);
+            acceptor->accept(*socket);
+            if(verbose)std::cout<<"Connected."<< std::endl;
+            NET_IS_CONNECTED = true;
+            NEED_RECONNECT = false;
+            
+        }
+        
         void start(param* current_settings){
+            if (NEED_RECONNECT){
+                print_warning("Before start streaming, data soket has to be reconnected.");
+                while(NEED_RECONNECT)std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
             if (NET_IS_CONNECTED){
                 TCP_worker = new boost::thread(boost::bind(&Sync_server::tcp_streamer,this, current_settings));
+                if(not virtual_pinger_online){
+                    virtual_pinger_thread = new boost::thread(boost::bind(&Sync_server::virtual_pinger,this));
+                }
             }
         }
         
@@ -120,12 +135,35 @@ class Sync_server{
     private:
         
         boost::thread* TCP_worker;
+        boost::thread* reconnect_thread;
+        boost::thread* virtual_pinger_thread;
+        std::atomic<bool> virtual_pinger_online;
         
         boost::asio::io_service *io_service;
         boost::asio::socket_base::reuse_address *option;
         tcp::acceptor *acceptor;
         tcp::socket *socket;
         
+        //periodically check the status of the async thread to determine if there is needing to reconnect
+        void virtual_pinger(){
+            bool active = true;
+            virtual_pinger_online = true;
+            while(active){
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                try{
+                    if(reconnect_data){
+                        NEED_RECONNECT = true;
+                        NET_IS_CONNECTED = false;
+                        reconnect_thread = new boost::thread(boost::bind(&Sync_server::reconnect,this,TCP_SYNC_PORT));
+                        reconnect_data = false;
+                        active = false;
+                    }   
+                }catch(boost::thread_interrupted &){
+                    active = false;
+                } 
+            }
+            virtual_pinger_online = false;
+        }
         //This function serialize a net_buffer struct into a boost buffer.
         void format_net_buffer(RX_wrapper input_packet, char* __restrict__ output_buffer){
 
@@ -159,6 +197,9 @@ class Sync_server{
         
         //THIS FUNCTION IS INTENDED TO BE LUNCHED AS A SEPARATE THREAD
         void tcp_streamer(param* current_settings){
+        
+            
+        
             //Packet to be serialized and sent
             RX_wrapper incoming_packet;
             
@@ -194,14 +235,22 @@ class Sync_server{
                         
                         //setrialize data structure in a char buffer
                         format_net_buffer(incoming_packet, fullData);
-                        
-                        try{
-                            //send data structure         
-                            boost::asio::write(*socket, boost::asio::buffer(fullData,total_size),boost::asio::transfer_all(), ignored_error);
-                        }catch(std::exception &e){
-                            active = false;
-                            NET_IS_STREAMING = false;
-                            std::cout<<e.what()<<std::endl;
+                        if(not NEED_RECONNECT){
+                            try{
+                                //send data structure         
+                                boost::asio::write(*socket, boost::asio::buffer(fullData,total_size),boost::asio::transfer_all(), ignored_error);
+                            }catch(std::exception &e){
+                                active = false;
+                                NET_IS_STREAMING = false;
+                                std::cout<<e.what()<<std::endl;
+                            }
+                            if (ignored_error!=boost::system::errc::success){
+                                std::stringstream ss;
+                                print_error(ss.str());
+                                NEED_RECONNECT = true;
+                                NET_IS_CONNECTED = false;
+                                reconnect_thread = new boost::thread(boost::bind(&Sync_server::reconnect,this,TCP_SYNC_PORT));
+                            }
                         }
                         //print_debug("Packet length is:",incoming_packet.length);
                         if(passthrough){
@@ -299,18 +348,35 @@ class Async_server{
     
     public:
     
-        Async_server(){
+        //determines if the async server is connected or not
+        std::atomic<bool> ASYNC_SERVER_CONNECTED;
+        
+        bool connected(){
+            return ASYNC_SERVER_CONNECTED;
+        }
+        
+        Async_server(bool init_verbose = false){
+        
+            verbose = init_verbose;
         
             //connect the async server
             ASYNC_SERVER_CONNECTED = false;
             connect(TCP_ASYNC_PORT);
             
             //create the message queue
-            command_queue = new async_queue();
-            response_queue = new async_queue();
+            command_queue = new async_queue(0);
+            response_queue = new async_queue(0);
             
             //start the server
+            TCP_async_worker_RX = new boost::thread(boost::bind(&Async_server::rx_async,this,command_queue));
+            TCP_async_worker_TX = new boost::thread(boost::bind(&Async_server::tx_async,this,response_queue));
             
+            
+        }
+        
+        bool chk_new_command(){
+            print_debug("async interrupt size: ",socket->available());
+            return socket->available()>0?true:false;
         }
         
         //blocks until it pushes the pointer in the async transmit queue
@@ -321,41 +387,81 @@ class Async_server{
         };
         
         //return true if there is a message and points to it
-        bool recv_async(){return false;}
+        bool recv_async(usrp_param &my_parameter, bool blocking = true){
+            if(not ASYNC_SERVER_CONNECTED){
+                print_warning("Async server is not connected, cannot receive messages.");
+                return false;
+            }
+            bool res = false;
+            std::string* message_string;
+            if (blocking){
+                while(not command_queue->pop(message_string)) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                res = string2param(*message_string, my_parameter);
+                return res;
+                
+            }else{
+                
+                if(command_queue->pop(message_string)){
+                    //interpreter goes here
+                    res = string2param(*message_string, my_parameter);
+                    delete message_string;
+                }
+                return res;
+            }
+        }
     
 
     private:
-    
-        //determines if the async server is connected or not
-        std::atomic<bool> ASYNC_SERVER_CONNECTED;
         
         //determine if the threads foreward messages to the std out    
         bool verbose;
         
-        //this thread will send the async messages in the response_queue data queue
-        boost::thread* TCP_send;
+        //relax the busy loops. Value in ms
+        int loop_delay = 50;
+                
+        //this thread will fill the command_queue
+        boost::thread* TCP_async_worker_RX;
+        boost::thread* TCP_async_worker_TX;
+        
+        async_queue* command_queue;
         async_queue* response_queue;
         
-        //this thread will fill the command_queue
-        boost::thread* TCP_receive;
-        async_queue* command_queue;
-        
         boost::asio::io_service *io_service;
-        boost::asio::socket_base::reuse_address *option;
+        boost::asio::socket_base::reuse_address option;
         tcp::acceptor *acceptor;
         tcp::socket *socket;
     
-        //connect to the asunc server
+        //connect to the async server
         void connect(int init_tcp_port){
                 if(verbose)std::cout<<"Waiting for TCP async data connection on port: "<< init_tcp_port<<" ..."<<std::flush;
-                acceptor = new tcp::acceptor(*io_service, tcp::endpoint(tcp::v4(), init_tcp_port));
-                acceptor->set_option(*option);
+                boost::asio::socket_base::reuse_address ciao(true);
+                io_service = new boost::asio::io_service();
+                acceptor = new tcp::acceptor(*io_service, tcp::endpoint(tcp::v4(), init_tcp_port),true);
+                acceptor->set_option(ciao);
+                
                 socket = new tcp::socket(*io_service);
+                
                 acceptor->accept(*socket);
+                //socket->set_option(ciao);
                 if(verbose)std::cout<<"Connected."<< std::endl;
                 ASYNC_SERVER_CONNECTED = true;
             }
             
+        void Disconnect(){
+            
+            delete io_service;
+            delete acceptor;
+            delete socket;
+        }    
+            
+        void Reconnect(){
+            reconnect_data = true;
+            ASYNC_SERVER_CONNECTED = false;
+            connect(TCP_ASYNC_PORT);
+            TCP_async_worker_RX = new boost::thread(boost::bind(&Async_server::rx_async,this,command_queue));
+            TCP_async_worker_TX = new boost::thread(boost::bind(&Async_server::tx_async,this,response_queue));
+        }    
+        
         //returns the number of bytes in the next async message
         int check_header(char* init_header){
             int* code_check = reinterpret_cast<int*>(init_header); 
@@ -373,15 +479,8 @@ class Async_server{
             head[1]=message->length();
         }
         
-        void recv_error_handler(
-            const boost::system::error_code& error,
-            std::size_t bytes_transferred
-        ){
-          if (error == boost::asio::error::eof)ASYNC_SERVER_CONNECTED = false;
-        }
-        
        
-        void rx_async(){
+        void rx_async(async_queue* link_command_queue){
         
             //preallocate space for the fixed header
             char* header_buffer;
@@ -396,64 +495,69 @@ class Async_server{
             boost::system::error_code error;
             
             while(active){
-            
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
                 try{
                 
                     boost::this_thread::interruption_point();
-                    
-                    //Use an asynchronous operation so that it can be cancelled on timeout.
-                    std::future<std::size_t> read_header = socket->async_receive(
+
+                    *header_buffer = {0};
+                    boost::asio::read(
+                        *socket,
                         boost::asio::buffer(header_buffer,2*sizeof(int)),
-                        boost::asio::use_future
+                        boost::asio::transfer_all(),
+                        error
                     );
 
-                    // If timeout occurs, then cancel the operation.
-                    if (read_header.wait_for(std::chrono::milliseconds(200)) != std::future_status::timeout){
-                        
-                        //if (error == boost::asio::error::eof){
-                        if(false){
-                            ASYNC_SERVER_CONNECTED = false;
-                        
-                        }else{
-                        
-                            int size = (reinterpret_cast<int*>(header_buffer))[1];
-                            
-                            //allocates the message buffer
-                            message_buffer = (char*)malloc(size);
-                            
-                            std::future<std::size_t> read_message = socket->async_receive(
-                                boost::asio::buffer(message_buffer,size),
-                                boost::asio::use_future
-                                //&Async_server::recv_error_handler
-                            );
-                            
-                            //if (error == boost::asio::error::eof){
-                            if(false){
-                                ASYNC_SERVER_CONNECTED = false;
-                        
-                            }else{
-                            
-                                if (read_message.wait_for(std::chrono::milliseconds(500)) == std::future_status::timeout){
-                                    //if the operation goes in timeout cancel the buffer and print an error
-                                    
-                                    free(message_buffer);
-                                    
-                                    print_error("An async message was not fully received due to network timeout.");
-                                    
-                                }else{
-                                    
-                                    message_string = new std::string(message_buffer);
-                                    
-                                    //the buffer has been received, push the message in the queue
-                                    while(not command_queue->push(message_string))std::this_thread::sleep_for(std::chrono::microseconds(25));
-                                    
-                                    free(message_buffer);
-                                    
-                                }
-                            }
-                        }
-                    }
                     
+                    int size = error != boost::system::errc::success?0:(reinterpret_cast<int*>(header_buffer))[1];
+                    if ((reinterpret_cast<int*>(header_buffer))[0]!=0){
+                        print_warning("Corrupted async header detected!");
+                    }
+                    if (error == boost::system::errc::success){
+                        //std::cout<<"Header size is "<<size<<std::endl;
+                        
+                        //allocates the message buffer
+                        message_buffer = (char*)malloc(size);
+                        *message_buffer = {0};
+                        
+                        //std::cout<<message_buffer<<std::endl;
+                        boost::asio::read(
+                            *socket,
+                            boost::asio::buffer(message_buffer,size),
+                            boost::asio::transfer_all(),
+                            error
+                        );
+                        
+                        if (error == boost::system::errc::success){
+                        
+                            message_string = new std::string(message_buffer,size);
+                            //std::cout<<message_buffer<<std::endl;
+                            //the buffer has been received, push the message in the queue
+                            while(not link_command_queue->push(message_string))std::this_thread::sleep_for(std::chrono::microseconds(25));
+                            free(message_buffer);
+                            
+                            
+                        }else{
+                            std::stringstream ss;
+                            ss<<"Async RX server side encountered a payload problem: "<<error.message()<<std::endl;
+                            print_warning(ss.str());
+                            active = false;
+                            ASYNC_SERVER_CONNECTED = false;
+                            Disconnect();
+                            Reconnect();
+                            
+                        }
+                    }else{
+                    
+                            std::stringstream ss;
+                            ss<<"Async RX server side encountered a header problem: "<<error.message()<<std::endl;
+                            print_warning(ss.str());
+                            active = false;
+                            ASYNC_SERVER_CONNECTED = false;
+                            Disconnect();
+                            Reconnect();
+                    
+                    }
                     if(not ASYNC_SERVER_CONNECTED)active = false;
                     
                 }catch(boost::thread_interrupted &){
@@ -461,10 +565,10 @@ class Async_server{
                 }
             }
             
-            free(header_buffer);
+            //free(header_buffer);
         }
         
-        void tx_async(){
+        void tx_async(async_queue* response_queue_link){
         
             bool active = true;
             
@@ -482,7 +586,7 @@ class Async_server{
                 
                     boost::this_thread::interruption_point();
                     
-                    if(response_queue->pop(message)){
+                    if(response_queue_link->pop(message)){
                         
                         //format the header
                         format_header(header, message);
@@ -493,6 +597,13 @@ class Async_server{
                         //send message
                         boost::asio::write(*socket, boost::asio::buffer(*message),boost::asio::transfer_all(), ignored_error);
                         
+                        //check error
+                        if (ignored_error!=boost::system::errc::success){
+                            std::stringstream ss;
+                            ss<<"Async tx error: "<<ignored_error.message()<<std::endl;
+                            print_warning(ss.str());
+                        }
+                        
                         //release the message memory
                         delete message;
                         
@@ -502,11 +613,12 @@ class Async_server{
                 }catch(boost::thread_interrupted &){
                     active = false;
                 }
+                
+                if(not ASYNC_SERVER_CONNECTED)active = false;
             }
             
             free(header);
         }
-        
 };
 
 

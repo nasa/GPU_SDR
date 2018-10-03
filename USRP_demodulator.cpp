@@ -58,7 +58,7 @@ class RX_buffer_demodulator{
             
             //if there is a valid decimation enable the decimator
             decimator_active = (parameters->decim > 1)?true:false;
-            print_debug("decimator is active?",decimator_active);
+            //print_debug("decimator is active?",decimator_active);
             //initialize the memory pointer for eventual spare buffers
             spare_size = 0;
             
@@ -173,8 +173,8 @@ class RX_buffer_demodulator{
                         
                         //set the decimator parameter
                         ppt = h_parameter.length;
-                        print_debug("PPT is: ",ppt);
-                        print_debug("Buffer_len is: ",parameters->buffer_len);
+                        //print_debug("PPT is: ",ppt);
+                        //print_debug("Buffer_len is: ",parameters->buffer_len);
                         
                         vna_helper = new VNA_decimator_helper(ppt, parameters->buffer_len);
                         

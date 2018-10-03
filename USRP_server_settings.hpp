@@ -89,8 +89,10 @@ void print_debug(std::string text, double value){
 #define MAX_USEFULL_BUFFER 6000000
 #define MIN_USEFULL_BUFFER 50000
 
-#define TCP_SYNC_PORT 61360
-#define TCP_ASYNC_PORT 61361
+#define DEFAULT_BUFFER_LEN 1000000
+
+int TCP_SYNC_PORT = 61360;
+int TCP_ASYNC_PORT = 22001;
 
 //valid for TX and RX operations, describe the signal generation/demodulation.
 enum w_type { TONES, CHIRP, NOISE , RAMP, NODSP, SWONLY};
@@ -133,7 +135,13 @@ w_type string_to_w_type(std::string input_string){
     return conv;
     
 }
-
+std::vector<w_type> string_to_w_type_vector(std::vector<std::string> string_vector){
+    std::vector<w_type> res(string_vector.size());
+    for(int i = 0; i <string_vector.size(); i++ ){
+        res[i] = string_to_w_type(string_vector[i]);
+    }
+    return res;
+}
 //state of the USRP antenna
 enum ant_mode { TX, RX, OFF };
 std::string ant_mode_to_str(ant_mode enumerator){
@@ -152,11 +160,19 @@ std::string ant_mode_to_str(ant_mode enumerator){
     }
     return comp_string;
 }
+ant_mode ant_mode_from_string(std::string str){
+    if (not str.compare("OFF")) return (ant_mode)OFF;
+    if (not str.compare("RX")) return (ant_mode)RX;
+    if (not str.compare("TX")) return (ant_mode)TX;
+    print_warning("ant_mode from parametern conversion has not been recognised. Setting to OFF");
+    return (ant_mode)OFF;
+}
+
 //describe the hardware and software paramenter for a single antenna of the USRP.
 struct param{
     
     //how to use the selected antenna
-    ant_mode mode;
+    ant_mode mode = OFF;
     
     //hardware parameters
     int rate,tone,gain,bw;

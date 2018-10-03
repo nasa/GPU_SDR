@@ -94,8 +94,7 @@ class TXRX{
         //launches the setting functions for the required signals, antennas...
         void set(usrp_param* global_param){
         
-            std::cout<<"\033[1;32mSetting USRP hardware:\033[0m"<<std::endl;
-            hardware->preset_usrp(global_param);
+            
             
             std::vector<param*> modes(4);
             modes[0] = &global_param->A_TXRX;
@@ -112,6 +111,22 @@ class TXRX{
             //single TX and RX cases initialization
             if(global_param->get_number(RX)<2 and global_param->get_number(TX)<2){
                 for(int i = 0; i < modes.size(); i++ ){
+                
+                    if(modes[i]->mode != OFF){
+                        if((modes[i]->burst_on != 0) and (modes[i]->burst_on == 0)){
+                            print_error("one parameter has burst_off != 0 and burst_on == 0");
+                            exit(-1);
+                        }
+                        if((modes[i]->burst_on == 0) and (modes[i]->burst_on != 0)){
+                            print_error("one parameter has burst_on != 0 and burst_off == 0");
+                            exit(-1);
+                        }
+                        if(modes[i]->burst_on != 0){
+                            modes[i]->buffer_len = modes[i]->burst_on * modes[i]->rate;
+                            std::cout<<"Resizing buffer length to match burst length to: "<< modes[i]->buffer_len<<" samples."<<std::endl;
+                        }
+                    }
+                
                     switch(modes[i]->mode){
                         case OFF:
                             break;
@@ -144,7 +159,11 @@ class TXRX{
                             
                             //update pointers
                             if(tcp_streaming)TCP_streamer->update_pointers(stream_queue, rx_output_memory);
-                            if(file_writing)H5_writer->update_pointers(stream_queue, rx_output_memory);
+                            if(file_writing){
+                                tcp_streaming?
+                                    H5_writer->update_pointers(TCP_streamer->out_queue, TCP_streamer->memory):
+                                    H5_writer->update_pointers(stream_queue, rx_output_memory);
+                            }
                             
                             //initialize the demodulator class
                             rx_dem = new RX_buffer_demodulator(modes[i]);
@@ -185,6 +204,10 @@ class TXRX{
                 print_error("Dual tx rx mode has to be implemented in the thread link library");
                 exit(-1);
             }
+            
+            std::cout<<"\033[1;32mSetting USRP hardware:\033[0m"<<std::endl;
+            hardware->preset_usrp(global_param);
+            
         }
 
         //start the threads
@@ -259,9 +282,11 @@ class TXRX{
         //in case the force option is true, force close the threads and cleans the queues
         // NOTE: with force option true this call is blocking
         bool stop(bool force = false){
+        
+            if(tcp_streaming)if (TCP_streamer->NEED_RECONNECT == true)force = true;
+            
             bool status = true;
             if(current_rx_param){
-            
                 
                 bool data_output_status;
                 data_output_status = (file_writing or tcp_streaming)?true:false;
@@ -299,6 +324,8 @@ class TXRX{
                     
                 //if the threads are still running
                 }else{status = status and false;}
+                
+                
             }
             
             if(current_tx_param){

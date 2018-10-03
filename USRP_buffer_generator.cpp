@@ -44,6 +44,10 @@ class TX_buffer_generator{
             
             //assign the function pointer to the correct generator and initialize the buffer
             switch(last_w_type){
+                case NOISE:
+                    get_ptr = &TX_buffer_generator::get_from_noise;
+                    clr_ptr = &TX_buffer_generator::close_noise;
+                
                 case TONES:
                     
                     //assign the get() and close() function pointers               
@@ -111,6 +115,7 @@ class TX_buffer_generator{
                     if(h_parameter.length<1){
                         print_warning("Duration of each frequency in chirp signal cannot be less than one sample. Setting duration of each tone to 1.");
                         h_parameter.length = 1;
+                        h_parameter.num_steps = parameters->chirp_t[0] * parameters->rate;
                     }
                     
                     //the chirpness is expressed as double this expression somewhere
@@ -141,11 +146,6 @@ class TX_buffer_generator{
                     
                     break;
                     
-                case NOISE:
-                    get_ptr = &TX_buffer_generator::get_from_noise;
-                    print_error("noise buffer generation has to be already incorporated.");
-                    exit(-1);
-                    break;
             }
         }
         
@@ -233,14 +233,18 @@ class TX_buffer_generator{
             TONES_last_sample = (TONES_last_sample + buffer_len) % TONES_buffer_len;
         }
         
+        void get_from_noise(){}
         
         //versions of the cleaning function
         void close_host(){free(base_buffer);}
+        
         void close_device_chirp(){
             cudaFree(base_buffer);
             cudaFree(d_parameter);
             cudaStreamDestroy(internal_stream);
         }
+        
+        void close_noise(){}
         
 
 };

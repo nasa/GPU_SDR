@@ -353,6 +353,7 @@ class H5_file_writer{
                         
                         //write data in the dataset
                         dataset.write( wrapper.buffer, *complex_data_type );
+                        dataset.flush(H5F_SCOPE_LOCAL);
                         
                         //cleanup stuff
                         delete dataspace;
@@ -371,6 +372,32 @@ class H5_file_writer{
                     }else finishing = false;
                 }
             }
+            if(A_TXRX){
+                A_TXRX->flush(H5F_SCOPE_LOCAL);
+                A_TXRX->flush(H5F_SCOPE_GLOBAL);
+                delete A_TXRX;
+            }
+            if(A_RX2){
+                A_RX2->flush(H5F_SCOPE_LOCAL);
+                A_RX2->flush(H5F_SCOPE_GLOBAL);
+                delete A_RX2;
+            }
+            if(B_TXRX){
+                B_TXRX->flush(H5F_SCOPE_LOCAL);
+                B_TXRX->flush(H5F_SCOPE_GLOBAL);
+                delete B_TXRX;
+            }
+            if(B_RX2){
+                B_RX2->flush(H5F_SCOPE_LOCAL);
+                B_RX2->flush(H5F_SCOPE_GLOBAL);
+                delete B_RX2;
+            }
+            
+            
+            group->flush(H5F_SCOPE_LOCAL);
+            group->flush(H5F_SCOPE_GLOBAL);
+            file->flush(H5F_SCOPE_LOCAL);
+            file->flush(H5F_SCOPE_GLOBAL);
             
             delete group;
             delete file;

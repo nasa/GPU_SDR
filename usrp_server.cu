@@ -63,9 +63,11 @@ int main(int argc, char **argv){
     
     while(active){
     
-        usrp_param global_parameters;
         std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        
         if(async.connected()){
+            usrp_param global_parameters;
+            
             bool res = async.recv_async(global_parameters);
             res = chk_param(&global_parameters);
             json_res = new std::string(res?server_ack("Message received"):server_nack("Cannot convert JSON to params"));
@@ -80,6 +82,7 @@ int main(int argc, char **argv){
                 boost::this_thread::sleep_for(boost::chrono::milliseconds{500});
                 //if (async.chk_new_command())done = thread_manager.stop(true); //this is not working
             }
+            print_debug("sending response message...",0);
             server_ack("EOM: end of measurement");
         }
     }

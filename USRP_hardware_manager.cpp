@@ -82,11 +82,9 @@ class hardware_manager{
         //this function should be used to set the USRP device with user parameters
         //TODO catch exceptions and return a boolean
         bool preset_usrp(usrp_param* requested_config){
-        
             apply(requested_config);
             set_streams();
             if(not sw_loop){
-
                 check_tuning();
             }
             return true;
@@ -673,7 +671,7 @@ class hardware_manager{
                 }
                 if((old_parameters->mode == OFF or old_parameters->burst_on != parameters->burst_on) and parameters->burst_on != 0){
                     changed = true;
-                    old_parameters->burst_off = parameters->burst_on;
+                    old_parameters->burst_on = parameters->burst_on;
                     ss << boost::format("\tSetting bursts duration: %f msec. ") % (parameters->burst_on*1e3 ) << std::endl;
                 }
                 if(old_parameters->mode == OFF or old_parameters->samples != parameters->samples){
@@ -690,16 +688,16 @@ class hardware_manager{
                     changed = true;
                     old_parameters->burst_off = parameters->burst_off;
                     if(old_parameters->burst_off == 0){
-                        ss << boost::format("\tSetting RX in continuous acquisition mode (no bursts)")<< std::endl;
+                        ss << boost::format("\tSetting continuous acquisition mode (no bursts)")<< std::endl;
                     }else{
-                        ss << boost::format("\tSetting samples between bursts to %f Ms") % (parameters->burst_off /1e6 ) << std::endl;
+                        ss << boost::format("\tSetting samples between bursts to %f msec") % (parameters->burst_off *1e3 ) << std::endl;
                     }
                 }
                 if(old_parameters->mode == OFF or old_parameters->burst_on != parameters->burst_on){
                     changed = true;
                     old_parameters->burst_on = parameters->burst_on;
                     if(old_parameters->burst_on != 0){
-                        ss << boost::format("\tSetting bursts length to %f Ms") % (parameters->burst_on /1e6 ) << std::endl;
+                        ss << boost::format("\tSetting bursts length to %f msec") % (parameters->burst_on *1e3 ) << std::endl;
                     }
                 }
                 if(not changed) ss<<"\tHardware parameters were identical to last setup"<<std::endl;
@@ -737,7 +735,6 @@ class hardware_manager{
             param *current_settings,                //some parameters are useful also in sw
             preallocator<float2>* memory            //custom memory preallocator
             ){
-                
             float2* tx_buffer;          //the buffer pointer
             tx_thread_operation = true; //class variable to account for thread activity
             bool active = true;         //local activity monitor
@@ -785,9 +782,9 @@ class hardware_manager{
             long int sent_samp = 0;       //total number of samples sent
             float2* tx_buffer;  //the buffer pointer
             
-            boost::thread* metadata_thread = new boost::thread(boost::bind(&hardware_manager::async_stream,this));
+            //boost::thread* metadata_thread = new boost::thread(boost::bind(&hardware_manager::async_stream,this));
             
-            float timeout = 0.2f;   //timeout in seconds(will be used to sync the recv calls)
+            float timeout = 0.1f;   //timeout in seconds(will be used to sync the recv calls)
             tx_thread_operation = true; //class variable to account for thread activity
             
             uhd::tx_metadata_t metadata_tx;
@@ -797,8 +794,8 @@ class hardware_manager{
             metadata_tx.time_spec = uhd::time_spec_t(current_settings->delay);
             
             //if the number of samples to receive is smaller than the buffer the first packet is also the last one
-            metadata_tx.end_of_burst = current_settings->samples <= current_settings->buffer_len ? true : false;
-        
+            //metadata_tx.end_of_burst = current_settings->samples <= current_settings->buffer_len ? true : false;
+            metadata_tx.end_of_burst = current_settings->burst_off!=0?true:false;;
             //boost::chrono::high_resolution_clock::time_point ti ;
             //boost::chrono::high_resolution_clock::time_point tf ;
             
@@ -808,17 +805,41 @@ class hardware_manager{
                 try{
                     boost::this_thread::interruption_point();
                     if(TX_queue->pop(tx_buffer)){
-                    
+
+                        if(sent_samp + current_settings->buffer_len >= current_settings->samples)metadata_tx.end_of_burst   = (bool)true;
+                        
+                        if((current_settings->burst_off!=0) and (not first_packet)){
+                            metadata_tx.end_of_burst   = (bool)true;
+                            metadata_tx.start_of_burst = (bool)true;
+                            metadata_tx.has_time_spec = (bool)true;
+                            timeout = 0.1f + current_settings->burst_off;
+                            metadata_tx.time_spec = main_usrp->get_time_now() + uhd::time_spec_t(current_settings->burst_off);
+                            //std::this_thread::sleep_for(std::chrono::nanoseconds(long(current_settings->burst_off*1e9-10000)));
+                        }
+                        
+                        
                         tx_stream->send(tx_buffer, current_settings->buffer_len, metadata_tx,timeout);
+                        //print_debug("sent",current_settings->buffer_len);
+
+                        
                         sent_samp += current_settings->buffer_len;
                         
-                        if(sent_samp + current_settings->buffer_len >= current_settings->samples)metadata_tx.end_of_burst   = (bool)true;
-                        if(first_packet){
-                            metadata_tx.start_of_burst = false;
-                            metadata_tx.has_time_spec = current_settings->burst_off == 0? false:true;
-                            metadata_tx.time_spec = uhd::time_spec_t(current_settings->burst_off);
+                        if(current_settings->burst_off!=0){
                             first_packet = false;
-                            timeout = 0.2f;
+                            uhd::async_metadata_t async_md;
+                            //loop through all messages for the ACK packet (may have underflow messages in queue)
+                            /*
+                            while (tx_stream->recv_async_msg(async_md)){
+                                get_tx_error(&async_md,true);
+                            }
+                            */
+                            
+                        }else if(first_packet){
+                            metadata_tx.start_of_burst = false;
+                            metadata_tx.has_time_spec = false;
+                            first_packet = false;
+                            timeout = 0.1f;
+
                         }
                             
                         //elegant but not working yet    
@@ -830,12 +851,14 @@ class hardware_manager{
                     
                         //print_debug("tx process: ",(tf-ti).count()/1.e6);
 
-
-                        
+                        //send returns immediately even if the time was longer.. manually wait residual time
+                        double wait_correction = (metadata_tx.time_spec -main_usrp->get_time_now()).get_real_secs() +
+                                                 (double)current_settings->buffer_len/current_settings->rate;
+                        if(wait_correction>0)std::this_thread::sleep_for(std::chrono::nanoseconds(long(wait_correction*1e9)));
                     }else{
                         std::this_thread::sleep_for(std::chrono::microseconds(10));
 
-                        //if(active)print_error("TX queue is empty, cannot transmit buffer!");
+                        if(active)print_error("TX queue is empty, cannot transmit buffer!");
                         //should I push an error?
                     }
                 }catch (boost::thread_interrupted &){
@@ -845,7 +868,6 @@ class hardware_manager{
                 }
  
             }
-            
             //clean the queue as it's le last consumer
             while(not TX_queue->empty()){
                 TX_queue->pop(tx_buffer);
@@ -855,8 +877,8 @@ class hardware_manager{
             if(not active){
                 print_warning("TX thread was taken down without transmitting the specified samples");
             }
-            metadata_thread->interrupt();
-            metadata_thread->join();
+            //metadata_thread->interrupt();
+            //metadata_thread->join();
             
             //set check the condition to false
             tx_thread_operation = false;
@@ -893,6 +915,7 @@ class hardware_manager{
             preallocator<float2>* memory,
             rx_queue* Rx_queue
         ){
+            
             rx_thread_operation = true; //class variable to account for thread activity
             bool active = true;         //control the interruption of the thread
             bool taken = true;
@@ -901,6 +924,7 @@ class hardware_manager{
             float2 *rx_buffer_cpy;
             long int acc_samp = 0;  //total number of samples received
             int counter = 0;
+            //int ll = 0;
             while(active and (acc_samp < current_settings->samples)){
             
                 try{
@@ -910,7 +934,6 @@ class hardware_manager{
                     if(taken)rx_buffer_cpy = memory->get();
                     
                     if(sw_loop_queue->pop(rx_buffer)){
-                        
                         taken = true;
                         counter++;
                         memcpy(rx_buffer_cpy, rx_buffer, current_settings->buffer_len * sizeof(float2));
@@ -922,6 +945,8 @@ class hardware_manager{
                         warapped_buffer.front_end_code = front_end_code0;
                         while(not Rx_queue->push(warapped_buffer))std::this_thread::sleep_for(std::chrono::microseconds(1));
                         acc_samp += current_settings->buffer_len;
+                        //print_debug("swtx inter: ",ll);
+                        //ll++;
                     }else{
                         taken = false;
                         std::this_thread::sleep_for(std::chrono::milliseconds(5));
