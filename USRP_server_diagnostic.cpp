@@ -3,6 +3,7 @@
 
 #include "USRP_server_settings.hpp"
 #include <uhd/types/metadata.hpp>
+#include <chrono>
 
 #ifndef WARNING_PRINTER
 #define WARNING_PRINTER
@@ -59,7 +60,7 @@ int get_rx_errors(uhd::rx_metadata_t *metadata, bool verbose = false){
     
     //maximum result will be one in this configuration
     if(metadata->error_code != uhd::rx_metadata_t::error_code_t::ERROR_CODE_NONE){
-        error++;
+        error=1;
         if(verbose){
             interptet_rx_error(metadata->error_code);
             if(metadata->out_of_sequence)print_warning("RX error: was a sequence error.");
@@ -327,6 +328,89 @@ void print_params(usrp_param my_parameter){
     
 }
 
+
+class stop_watch{
+    //using namespace std::chrono;
+    typedef std::chrono::high_resolution_clock Time;
+    typedef std::chrono::duration<double> dsec;
+    public:
+        
+        stop_watch(){
+            start_t = boost::chrono::high_resolution_clock::now();
+        
+        }
+        
+        void start(){
+            start_t = boost::chrono::high_resolution_clock::now();
+            elapsed_time = get_time();
+            state = true;
+        }
+        
+        void stop(){
+            double y = get_time();
+            double x = y - elapsed_time;
+            if(state){
+                total_time+=x;
+                state = false;
+            }
+        }
+        
+        void reset(){
+            start_t = boost::chrono::high_resolution_clock::now();
+            total_time = 0;
+            state = false;
+        }
+        
+        double get(){
+            if(state){
+                print_warning("Getting a running stopwatch value");
+            }
+            return total_time;
+        }
+        
+        void store(){
+            acc.push_back(total_time);
+            if(state){
+                print_warning("Storing a running stopwatch value");
+            }
+        }
+        
+        double get_average(){
+            if(state){
+                    print_warning("Getting the average of a running stopwatch");
+                }
+            double avg = 0;
+            for(size_t i = 0; i < acc.size(); i++){
+                avg += acc[i];
+            }
+            avg/=acc.size();
+            return avg;
+        }
+        
+        void cycle(){
+            stop();
+            store();
+            reset();
+        }
+        
+    private:
+        
+        double get_time(){
+            boost::chrono::nanoseconds ns = boost::chrono::high_resolution_clock::now() - start_t;
+            return 1e-9 * ns.count();
+        }
+        
+        boost::chrono::high_resolution_clock::time_point start_t;
+        
+        double elapsed_time = 0;
+        
+        double total_time = 0;
+        
+        std::vector<double> acc;
+        
+        bool state = false;   
+        
+};
 
 #endif
 

@@ -66,8 +66,9 @@ void print_warning(std::string text){
     std::cout << "\033[40;1;33mWARNING\033[0m: "<< text<<std::endl;
 }
 
-void print_debug(std::string text, double value){
-    std::cout << "\033[40;1;34mDEBUG\033[0m: "<< text<< " " <<value<<std::endl;
+void print_debug(std::string text, double value = std::numeric_limits<double>::quiet_NaN()){
+    std::cout << "\033[40;1;34mDEBUG\033[0m: "<< text<< " " << isnan(value)?"":boost::lexical_cast<std::string>(value);
+    std::cout<<std::endl;
 }
 
 
@@ -75,12 +76,16 @@ void print_debug(std::string text, double value){
 #endif
 
 //length of the TX and RX queue. for non real time application longer queue are needed to stack up data
-#define RX_QUEUE_LENGTH     50
-#define TX_QUEUE_LENGTH     50
-#define ERROR_QUEUE_LENGTH  50
-#define STREAM_QUEUE_LENGTH 50
-#define SW_LOOP_QUEUE_LENGTH 50
-#define SECONDARY_STREAM_QUEUE_LENGTH 500 //between the stream and the filewriter (keep it long if writing files)
+
+//this two values increase the ammount of cpu RAM initially allocated. Increasing those values will result in more memory usage.
+#define RX_QUEUE_LENGTH     200
+#define TX_QUEUE_LENGTH     200
+
+//increasing those values will only increase the limit of RAM that COULD be used.
+#define ERROR_QUEUE_LENGTH  20000
+#define STREAM_QUEUE_LENGTH 20000
+#define SW_LOOP_QUEUE_LENGTH 200
+#define SECONDARY_STREAM_QUEUE_LENGTH 20000 //between the stream and the filewriter (keep it long if writing files)
 
 //cut-off frequency of the post-demodulation decimator filter (relative to Nyquist)(deprecated)
 #define ADDITIONAL_FILTER_FCUT 0.2
@@ -178,24 +183,24 @@ struct param{
     int rate,tone,gain,bw;
     
     //runtime hardware parameters
-    long int samples;
+    size_t samples;
     float delay;
     float burst_on;  //time length of the bursts in seconds
     float burst_off; //time between bursts in seconds
-    int buffer_len;  //length of the transport buffer (both GPU and USRP). SET to 0 for default.
+    size_t buffer_len;  //length of the transport buffer (both GPU and USRP). SET to 0 for default.
     
     //software signal parameters
     std::vector<int> freq;
     std::vector<w_type> wave_type;
     std::vector<float> ampl;
-    int decim;              //all channels have the same decimation factor
+    size_t decim;              //all channels have the same decimation factor
     std::vector<float> chirp_t;
     std::vector<int> chirp_f;
     std::vector<int> swipe_s;
     
     //polyphase filter bank specific
-    int fft_tones;
-    int pf_average;
+    int fft_tones; // it is an int because of size_t* incompatible with cufft calls
+    size_t pf_average;
     
     //returns the maximum output buffer size (not all samples of that size will be always good)
     //TODO something's wrong with this function
@@ -332,6 +337,7 @@ std::string get_front_end_name(char code){
 }
 
 //queues used for data communication between data generation/analysis classes and hardware interface class
+
 typedef boost::lockfree::queue< RX_wrapper, boost::lockfree::fixed_sized<(bool)true>> rx_queue;
 typedef boost::lockfree::queue< float2*, boost::lockfree::fixed_sized<(bool)true>> tx_queue;
 typedef boost::lockfree::queue< int, boost::lockfree::fixed_sized<(bool)true>> error_queue;

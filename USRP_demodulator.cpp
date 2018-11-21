@@ -51,7 +51,7 @@ class RX_buffer_demodulator{
             //create an high priority stream (allow to overlap TX and RX operation on same GPU)
             int low_p,high_p;
             cudaDeviceGetStreamPriorityRange ( &low_p, &high_p );
-            cudaStreamCreateWithPriority(&internal_stream,cudaStreamNonBlocking, high_p);
+            cudaStreamCreateWithPriority(&internal_stream,cudaStreamNonBlocking, low_p);
             
             //needed only in case of buffer mismamtch
             int in_out_len = 0;
@@ -653,8 +653,8 @@ class RX_buffer_demodulator{
             for(int u = 0; u<h_param.eff_n_tones;u++){
             
                 tone_bins[u] = parameters->freq[u]>0?
-                    parameters->fft_tones * (double)parameters->freq[u]/(double)parameters->rate:
-                    parameters->fft_tones*(1.-(double)parameters->freq[u]/(double)parameters->rate);
+                    round((double)parameters->fft_tones * (double)parameters->freq[u]/(double)parameters->rate):
+                    round((double)parameters->fft_tones*((double)1.-(double)parameters->freq[u]/(double)parameters->rate));
                 std::cout<<"parameter f: "<<parameters->freq[u]<<" goes in bin: "<<tone_bins[u]<<std::endl;
             }
             

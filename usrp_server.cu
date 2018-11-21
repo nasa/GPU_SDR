@@ -55,35 +55,39 @@ int main(int argc, char **argv){
     //look for USRP
     hardware_manager usrp(&settings,sw_loop);
     
-    //look for CUDA
-    TXRX thread_manager(&settings, &usrp, true);
+    //look for CUDA, initialize memory     (last arg is debug)
+    //blocks until tcp data connection is on-line if TCP streamer is enabled
+    TXRX thread_manager(&settings, &usrp, false);
     
     //look for USER
     Async_server async(true);
     
     while(active){
-    
-        std::this_thread::sleep_for(std::chrono::milliseconds(25));
-        
+        std::cout<<"\t\t\tNEW LOOP IN MAIN"<<std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         if(async.connected()){
             usrp_param global_parameters;
             
-            bool res = async.recv_async(global_parameters);
+            bool res = async.recv_async(global_parameters);//add here the action code as argument
             res = chk_param(&global_parameters);
             json_res = new std::string(res?server_ack("Message received"):server_nack("Cannot convert JSON to params"));
             async.send_async(json_res);
-
-            print_params(global_parameters);
-            thread_manager.set(&global_parameters);
-            thread_manager.start(&global_parameters);
-            bool done = false;
-            while(not done){
-                done = thread_manager.stop();
-                boost::this_thread::sleep_for(boost::chrono::milliseconds{500});
-                //if (async.chk_new_command())done = thread_manager.stop(true); //this is not working
+            if(res){
+                print_params(global_parameters);
+                thread_manager.set(&global_parameters);
+                thread_manager.start(&global_parameters);
+                bool done = false;
+                while(not done){
+                    std::cout<<"below will check..."<<std::endl;
+                    done = thread_manager.stop();
+                    print_debug("check if done... ",done);
+                    boost::this_thread::sleep_for(boost::chrono::milliseconds{500});
+                    //if (async.chk_new_command())done = thread_manager.stop(true); //this is not working
+                }
+                print_debug("sending response message...",0);
+                json_res = new std::string(server_ack("EOM: end of measurement"));
+                async.send_async(json_res);
             }
-            print_debug("sending response message...",0);
-            server_ack("EOM: end of measurement");
         }
     }
     

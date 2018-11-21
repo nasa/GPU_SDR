@@ -1,32 +1,45 @@
 import numpy as np
-import plotly.plotly as py
-import plotly.graph_objs as go
-import plotly
-import colorlover as cl
 import scipy.signal as signal
+import signal as Signal
 import h5py
 import sys
 import struct
 import json
-from plotly.graph_objs import Scatter, Layout
-from plotly import tools
-
+import os
 import socket
 import Queue
 from Queue import Empty
 from threading import Thread,Condition
+import multiprocessing
+from joblib import Parallel, delayed
+from subprocess import call
 import time
 import gc
 import datetime
+
+#plotly stuff
+from plotly.graph_objs import Scatter, Layout
+from plotly import tools
+import plotly.plotly as py
+import plotly.graph_objs as go
+import plotly
+import colorlover as cl
+
+#matplotlib stuff
+import matplotlib.pyplot as pl
+import matplotlib.patches as mpatches
 
 #needed to print the data acquisition process
 import progressbar
 
 def print_warning(message):
-    print "\033[40;1;33mWARNING\033[0m: "+str(message)+"."
+    print "\033[40;33mWARNING\033[0m: "+str(message)+"."
     
 def print_error(message):
     print "\033[1;31mERROR\033[0m: "+str(message)+"."
+
+def print_debug(message):
+    print "\033[3;2;37m"+str(message)+"\033[0m"
 
 def print_line(msg):
     sys.stdout.write(msg)
@@ -36,7 +49,7 @@ def print_line(msg):
 libUSRP_net_version = "2.0"
 
 #ip address of USRP server
-USRP_IP_ADDR = 'localhost'
+USRP_IP_ADDR = '127.0.0.1'
 
 #soket used for command
 USRP_server_address = (USRP_IP_ADDR, 22001)
@@ -46,12 +59,77 @@ USRP_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 USRP_server_address_data = (USRP_IP_ADDR, 61360)
 USRP_data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-#queue for passing data and metadata from network
-USRP_data_queue = Queue.Queue()
-
 USRP_socket.settimeout(1)
 USRP_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 USRP_data_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+def reinit_data_socket():
+    global USRP_data_socket
+    USRP_data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    USRP_data_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    
+def reinit_async_socket():
+    global USRP_socket
+    USRP_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    USRP_socket.settimeout(1)
+    USRP_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    
+#queue for passing data and metadata from network
+#USRP_data_queue = Queue.Queue()
+USRP_data_queue = multiprocessing.Queue()
+
+#compression used in H5py datasets
+H5PY_compression = "gzip"
+HDF5_compatible_compression = 'gzip'
+
+#Cores to use in analysis
+N_CORES = 10
+parallel_backend = 'multiprocessing'
+
+#usrp output power at 0 tx gain
+USRP_power = -6.15
+
+#Colors used for plotting
+COLORS = ['black','red','green','blue','violet','brown','purple']
+
+#this enable disable warning generated when more data that expected is received in the h5 file.
+dynamic_alloc_warning = True
+
+
+def get_color(N):
+    '''
+    Get a color for the list above without exceeding bounds. Usefull to change the overall color scheme.
+    
+    Arguments:
+        N: index identifying stuff that has to have the same color.
+        
+    Return:
+        string containing the color name.
+    '''
+    N = int(N)
+    return COLORS[N%len(COLORS)]
+    
+def clean_data_queue(USRP_data_queue = USRP_data_queue):
+    '''
+    Clean the USRP_data_queue from residual elements. returns the number of element found in the queue.
+    
+    Returns:
+        - Integer number of packets removed from the queue.
+    '''
+    #global USRP_data_queue
+    print_debug("Cleaning data queue... ")
+    residual_packets = 0
+    while(True):
+        try:
+            meta_data, data = USRP_data_queue.get(timeout = 0.1)
+            #USRP_data_queue.task_done()
+            residual_packets += 1
+        except Empty:
+            break
+    print_debug("Queue cleaned of "+str(residual_packets)+" packets.")
+    return residual_packets
+    
+
 
 #reproduce the RX_wrapper struct in server_settings
 header_type = np.dtype([
@@ -65,9 +143,6 @@ header_type = np.dtype([
 
 #data type expected for the buffer
 data_type = np.complex64
-
-#threading condition variables for controlling Sync RX thread activity
-Sync_RX_condition = Condition()
 
 #threading condition variables for controlling Async RX and TX thread activity
 Async_condition = Condition()
@@ -87,8 +162,28 @@ REMOTE_FILENAME = ""
 DATA_ACCUMULATOR = []
 
 #initially the status is off. It's set to True in the Sync_RX function/thread
-Sync_RX_status = False
 Async_status = False
+
+#manager = multiprocessing.Manager() # this was too high level
+from multiprocessing.managers import SyncManager
+manager = SyncManager()
+# explicitly starting the manager, and telling it to ignore the interrupt signal
+# initializer for SyncManager
+def mgr_init():
+    Signal.signal(Signal.SIGINT, Signal.SIG_IGN)
+    print_debug('initializing global variable manager...')
+manager.start(mgr_init)
+
+CLIENT_STATUS = manager.dict()
+CLIENT_STATUS["Sync_RX_status"] = False
+CLIENT_STATUS["keyboard_disconnect"] = False
+CLIENT_STATUS["keyboard_disconnect_attemp"] = 0
+CLIENT_STATUS["measure_running_now"] = False
+#threading condition variables for controlling Sync RX thread activity
+Sync_RX_condition = manager.Condition()
+
+
+
 
 def USRP_socket_bind(USRP_socket, server_address, timeout):
     """
@@ -123,15 +218,17 @@ def USRP_socket_bind(USRP_socket, server_address, timeout):
             USRP_socket.connect(server_address)
             return True
         except socket.error as msg:
+            print(("Socket binding " + str(msg) + ", " + "Retrying..."))
+            return False
             USRP_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             USRP_socket.settimeout(1)
             USRP_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            print(("Socket binding " + str(msg) + ", " + "Retrying..."))
+            
             time.sleep(1)
             timeout = timeout - 1
             return USRP_socket_bind(USRP_socket, server_address, timeout)
 
-def Decode_Sync_Header(raw_header):
+def Decode_Sync_Header(raw_header, CLIENT_STATUS = CLIENT_STATUS):
     '''
     Decode an async header containing the metadata of the packet.
     
@@ -160,7 +257,8 @@ def Decode_Sync_Header(raw_header):
         metadata['channels'] = header[0]['channels']
         return metadata
     except ValueError:
-        print_error("Received corrupted header. No recover method has been implemented.")
+        if CLIENT_STATUS["keyboard_disconnect"] == False:
+            print_error("Received corrupted header. No recover method has been implemented.")
         return None
         
 def Print_Sync_Header(header):
@@ -195,18 +293,18 @@ def Decode_Async_payload(message):
     except KeyError:
         print_warning("Unexpected json string from the server: type")
     
-    print "FROM SERVER: "+str(res['payload'])
+#    print "FROM SERVER: "+str(res['payload'])
         
     if atype == 'ack':
         if res['payload'].find("EOM")!=-1:
-            print "Measure finished"
+            print_debug("Async message from server: Measure finished")
             EOM_cond.acquire()
             END_OF_MEASURE = True
             EOM_cond.release()
         elif res['payload'].find("filename")!=-1:
             REMOTE_FILENAME = res['payload'].split("\"")[1]
         else:
-            print "General ack message received from the server: "+str(res['payload'])
+            print_debug( "Ack message received from the server: "+str(res['payload']))
             
             
     if atype == 'nack':
@@ -268,7 +366,6 @@ def Async_send(payload):
         return True
     
     else:
-        
         print_warning("The Async RX thread is not running, cannot send Async message.")
         return False
         
@@ -292,8 +389,21 @@ def Async_thread():
     
     #try to connect, if it fails set internal status to False (close the thread)
     Async_condition.acquire()
-    if(not USRP_socket_bind(USRP_socket, USRP_server_address, 5)):
-        
+    #if(not USRP_socket_bind(USRP_socket, USRP_server_address, 5)):
+    time_elapsed = 0
+    timeout = 10#sys.maxint
+    connected = False
+    while time_elapsed < timeout and (not connected):
+        try:
+            print_debug("Async command thread:")
+            connected = USRP_socket_bind(USRP_socket, USRP_server_address, 7)
+            time.sleep(1)
+            time_elapsed+=1
+        except KeyboardInterrupt:
+            print_warning("Keyboard interrupt aborting connection...")
+            break
+    
+    if not connected:
         internal_status = False
         Async_status = False
         
@@ -301,9 +411,12 @@ def Async_thread():
         Async_condition.release()
     else:
         Async_status = True
+        print_debug("Async data connected")
         Async_condition.release()
     #acquisition loop
     while(internal_status):
+        
+        
         
         #counter used to prevent the API to get stuck on sevrer shutdown
         data_timeout_counter = 0
@@ -337,6 +450,8 @@ def Async_thread():
                     #print internal_status
                     Async_condition.release()
                     old_header_len = len(header_data)
+                    #general timer
+                    time.sleep(.1)
                     
                 if(internal_status): size = Decode_Async_header(header_data)
                 
@@ -347,6 +462,7 @@ def Async_thread():
                     internal_status = False
                     Async_status = False
                     Async_condition.release()
+        
                 
         if(internal_status and size>0):
             data = ""
@@ -367,13 +483,20 @@ def Async_thread():
                 if(internal_status): Decode_Async_payload(data)
                    
             except socket.error as msg:
-                if msg.errno != None:
-                    print_error(msg)
+                if msg.errno == 4:
+                    pass #the ctrl-c exception is handled elsewhere
+                elif msg.errno != None:
+                    print_error("Async thread: "+str(msg))
                     Async_condition.acquire()
                     internal_status = False
                     Async_status = False
                     Async_condition.release()
                     print_warning("Async connection is down: "+msg)
+
+    USRP_socket.shutdown(1)
+    USRP_socket.close()
+    del USRP_socket
+    gc.collect()
 
 Async_RX_loop = Thread(target=Async_thread, name="Async_RX", args=(), kwargs={})
 Async_RX_loop.daemon = True
@@ -391,13 +514,27 @@ def Wait_for_async_connection(timeout = None):
     
     global Async_condition
     global Async_status
+    time_elapsed = 0
     
-    Async_condition.acquire()
+    if timeout is None:
+        timeout = sys.maxint
+    try:    
+        while time_elapsed < timeout:
+            Async_condition.acquire()
 
-    x = Async_status
+            x = Async_status
 
-    Async_condition.release()
-    
+            Async_condition.release()
+            
+            time.sleep(1)
+            
+            if x:
+                break
+            else:
+                time_elapsed += 1
+    except KeyboardInterrupt:
+        print_warning("keyboard interrupt received. Closing connections.")
+        return False
     return x
 
 def Wait_for_sync_connection(timeout = None):
@@ -412,14 +549,29 @@ def Wait_for_sync_connection(timeout = None):
     '''
     
     global Sync_RX_condition
-    global Sync_RX_status
-    
-    Sync_RX_condition.acquire()
+    global CLIENT_STATUS
+    time_elapsed = 0
+    x = False
+    if timeout is None:
+        timeout = sys.maxint
+    try:
+        while time_elapsed < timeout:
+        
+            Sync_RX_condition.acquire()
 
-    x = Sync_RX_status
+            x = CLIENT_STATUS['Sync_RX_status']
 
-    Sync_RX_condition.release()   
-    
+            Sync_RX_condition.release()   
+            
+            time.sleep(1)
+            
+            if x:
+                break
+            else:
+                time_elapsed += 1
+    except KeyboardInterrupt:
+        print_warning("keyboard interrupt received. Closing connections.")
+        return False
     return x
          
 def Start_Async_RX():
@@ -427,6 +579,7 @@ def Start_Async_RX():
     '''Start the Aswync thread. See Async_thread() function for a more detailed explanation.'''
     
     global Async_RX_loop
+    reinit_async_socket()
     try:
         Async_RX_loop.start()
     except RuntimeError:
@@ -446,7 +599,7 @@ def Stop_Async_RX():
     Async_status = False
     Async_condition.release()
     Async_RX_loop.join()
-    print_warning("Async RX stopped")
+    print_line("Async RX stopped")
     
 def Connect(timeout = None):
     '''
@@ -458,10 +611,19 @@ def Connect(timeout = None):
     Arguments:
         - the timeout in seconds. Default is retry forever.
     '''
-    Start_Sync_RX()
-    Wait_for_sync_connection(timeout = None)
-    Start_Async_RX()
-    Wait_for_async_connection(timeout = None)
+    ret = True
+    try:
+        Start_Sync_RX()
+        #ret &= Wait_for_sync_connection(timeout = 10)
+        
+        Start_Async_RX()
+        ret &= Wait_for_async_connection(timeout = 10)
+    except KeyboardInterrupt:
+        print_warning("keyboard interrupt received. Closing connections.")
+        exit()
+
+    
+    return ret
     
     
 def Disconnect(blocking = True):
@@ -476,26 +638,32 @@ def Disconnect(blocking = True):
     '''
     Stop_Async_RX()
     Stop_Sync_RX()
+
+def force_ternimate():
+    global Sync_RX_loop,Async_RX_loop
+    Sync_RX_loop.terminate()
     
-    
-def Sync_RX():
+def Sync_RX(CLIENT_STATUS,Sync_RX_condition,USRP_data_queue):
     '''
     Thread that recive data from the TCP data streamer of the GPU server and loads each packet in the data queue USRP_data_queue. The format of the data is specified in a subfunction fill_queue() and consist in a tuple containing (metadata,data).
     
     Note:
         This funtion is ment to be a standalone thread handled via the functions Start_Sync_RX() and Stop_Sync_RX().
     '''
-    global Sync_RX_condition
-    global Sync_RX_status
+
+    #global Sync_RX_condition
+    #global Sync_RX_status
     global USRP_data_socket
     global USRP_server_address_data
-    global USRP_data_queue
-    
+    #global USRP_data_queue
+
     header_size = 5*4 + 1
     
+    acc_recv_time = []
+    cycle_time = []
+    
     #use to pass stuff in the queue without reference
-    def fill_queue(meta_data,dat):
-        global USRP_data_queue
+    def fill_queue(meta_data,dat,USRP_data_queue=USRP_data_queue):
         meta_data_tmp = meta_data
         dat_tmp = dat
         USRP_data_queue.put((meta_data_tmp,dat_tmp))
@@ -503,34 +671,52 @@ def Sync_RX():
     
 
     #try to connect, if it fails set internal status to False (close the thread)
-    Sync_RX_condition.acquire()
+    #Sync_RX_condition.acquire()
     
-    if(not USRP_socket_bind(USRP_data_socket, USRP_server_address_data, 5)):
+    #if(not USRP_socket_bind(USRP_data_socket, USRP_server_address_data, 7)):
+    time_elapsed = 0
+    timeout = 10#sys.maxint
+    connected = False
+    
+    #try:
+    while time_elapsed < timeout and (not connected):
+        print_debug("RX sync data thread:")
+        connected = USRP_socket_bind(USRP_data_socket, USRP_server_address_data, 7)
+        time.sleep(1)
+        time_elapsed+=1
         
+        
+    if not connected:    
         internal_status = False
-        Sync_RX_status = False
-        print_warning("RX data sync onnection failed.")
+        CLIENT_STATUS['Sync_RX_status'] = False
+        print_warning("RX data sync connection failed.")
     else:
+        print_debug("RX data sync connected.")
         internal_status = True
-        Sync_RX_status = True
+        CLIENT_STATUS['Sync_RX_status'] = True
         
-    Sync_RX_condition.release()
+    #Sync_RX_condition.release()
     #acquisition loop
+    start_total = time.time()
+    
     while(internal_status):
+    
+        start_cycle = time.time()
+    
         #counter used to prevent the API to get stuck on sevrer shutdown
         data_timeout_counter = 0
         data_timeout_limit = 5 #(seconds)
         
         header_timeout_limit = 5
         header_timeout_counter = 0
-        header_timeout_wait = 0.1
+        header_timeout_wait = 0.01
         
         #lock the "mutex" for checking the state of the main API instance
-        Sync_RX_condition.acquire()
-        if Sync_RX_status == False:
-            internal_status = False
+        #Sync_RX_condition.acquire()
+        if CLIENT_STATUS['Sync_RX_status'] == False:
+            CLIENT_STATUS['Sync_RX_status'] = False
         #print internal_status
-        Sync_RX_condition.release()
+        #Sync_RX_condition.release()
         if(internal_status):
             header_data = ""
             try:
@@ -543,26 +729,31 @@ def Sync_RX():
                         header_timeout_counter = 0
                     if (header_timeout_counter > header_timeout_limit):
                         time.sleep(header_timeout_wait)
-                    Sync_RX_condition.acquire()
-                    if Sync_RX_status == False:
+                    #Sync_RX_condition.acquire()
+                    if CLIENT_STATUS['Sync_RX_status'] == False:
                         internal_status = False
                     #print internal_status
-                    Sync_RX_condition.release()
+                    #Sync_RX_condition.release()
                     old_header_len = len(header_data)
-                    if(len(header_data) == 0): time.sleep(0.01)
+                    if(len(header_data) == 0): time.sleep(0.001)
                     
             except socket.error as msg:
-                print_error(msg)
-                Sync_RX_condition.acquire()
-                internal_status = False
-                Sync_RX_condition.release()
+                if msg.errno == 4:
+                    pass #message is handled elsewhere
+                elif msg.errno == 107:
+                    print_debug("Interface connected too soon. This bug has not been covere yet.")
+                else:
+                    print_error("Sync thread: "+str(msg)+" error number is "+str(msg.errno))
+                    #Sync_RX_condition.acquire()
+                    internal_status = False
+                    #Sync_RX_condition.release()
 
         if(internal_status):
             metadata = Decode_Sync_Header(header_data)
             if(not metadata):
-                Sync_RX_condition.acquire()
+                #Sync_RX_condition.acquire()
                 internal_status = False
-                Sync_RX_condition.release()
+                #Sync_RX_condition.release()
             #Print_Sync_Header(metadata)
             
             
@@ -570,89 +761,140 @@ def Sync_RX():
             data = ""
             try:
                 old_len = 0
+                
                 while((old_len<8*metadata['length']) and internal_status):
                     data += USRP_data_socket.recv(min(8*metadata['length'], 8*metadata['length']-old_len))
+                    
                     if(len(data) == old_len):
                         data_timeout_counter+=1
                     old_len = len(data)
                     
                     if data_timeout_counter > data_timeout_limit:
                         print_error("Tiemout condition reached for buffer acquisition")
-                        Sync_RX_condition.acquire()
                         internal_status = False
-                        Sync_RX_condition.release()
+                        
+                
                     
             except socket.error as msg:
                 print_error(msg)
-                Sync_RX_condition.acquire()
                 internal_status = False
-                Sync_RX_condition.release()
         if(internal_status):
             try:
-                formatted_data = np.fromstring(data, dtype=data_type, count=metadata['length'])
-            
+                formatted_data = np.fromstring(data[:], dtype=data_type, count=metadata['length'])
+
             except ValueError:
                 print_error("Packet number "+str(metadata['packet_number'])+" has a length of "+str(len(data)/float(8))+"/"+str(metadata['length']))
                 internal_status = False
             else:
+                #USRP_data_queue.put((metadata,formatted_data))
                 fill_queue(metadata,formatted_data)
-        '''        
-        if(internal_status):
-            R = USRP_data_queue.get()
-            print "Received packet No. "+str((R[0])['packet_number'])
-            gc.collect()
-            del R
-        '''
+    '''                
+    except KeyboardInterrupt:
+            print_warning("Keyboard interrupt aborting connection...")
+            internal_status = False
+            CLIENT_STATUS['Sync_RX_status'] = False
+    '''
     try:        
+        USRP_data_socket.shutdown(1)
         USRP_data_socket.close()
+        del USRP_data_socket
+        gc.collect()
     except socket.error:
         print_warning("Sounds like the server was down when the API tried to close the connection")
     
- 
-Sync_RX_loop = Thread(target=Sync_RX, name="Sync_RX", args=(), kwargs={})
+    #print "Sync client thread id down"
+    
+
+Sync_RX_loop = multiprocessing.Process(target=Sync_RX, name="Sync_RX", args=(CLIENT_STATUS,Sync_RX_condition,USRP_data_queue), kwargs={})
 Sync_RX_loop.daemon = True
+
+def signal_handler(sig, frame):
+        if CLIENT_STATUS["measure_running_now"]:
+            if CLIENT_STATUS["keyboard_disconnect"] == False:
+                print_warning('Got Ctrl+C, Disconnecting and saving last chunk of data.')
+                CLIENT_STATUS["keyboard_disconnect"] = True
+                CLIENT_STATUS["keyboard_disconnect_attemp"] = 0
+            else:
+                print_debug("Already disconnecting...")
+                CLIENT_STATUS["keyboard_disconnect_attemp"] += 1
+                if CLIENT_STATUS["keyboard_disconnect_attemp"] > 2:
+                    print_warning("Forcing quit")
+                    force_ternimate();
+                    exit();
+        else:
+            force_ternimate();
+            exit();
+        
+Signal.signal(Signal.SIGINT, signal_handler)
 
         
 def Start_Sync_RX():
-    global Sync_RX_loop
+    global Sync_RX_loop,USRP_data_socket,USRP_data_queue
     try:
+        try:
+            del USRP_data_socket
+            reinit_data_socket()
+            USRP_data_queue = multiprocessing.Queue()
+        except socket.error as msg:
+            print msg
+            pass
+        Sync_RX_loop = multiprocessing.Process(target=Sync_RX, name="Sync_RX", args=(CLIENT_STATUS,Sync_RX_condition,USRP_data_queue), kwargs={})
+        Sync_RX_loop.daemon = True
         Sync_RX_loop.start()
     except RuntimeError:
+        print_warning("Falling back to threading interface for Sync RX thread. Network could be slow")
         Sync_RX_loop = Thread(target=Sync_RX, name="Sync_RX", args=(), kwargs={})
         Sync_RX_loop.daemon = True
         Sync_RX_loop.start()
-    print "Thread launched"
     
-def Stop_Sync_RX():
-    global Sync_RX_loop,Sync_RX_condition,Sync_RX_status
-    Sync_RX_condition.acquire()
+def Stop_Sync_RX(CLIENT_STATUS=CLIENT_STATUS):
+    global Sync_RX_loop,Sync_RX_condition
+    #Sync_RX_condition.acquire()
     print_line("Closing Sync RX thread...")
-    Sync_RX_status = False
-    Sync_RX_condition.release()
-    Sync_RX_loop.join()
-    print_warning("Sync RX stopped")
+    #print_line(" reading "+str(CLIENT_STATUS['Sync_RX_status'])+" from thread.. ")
+    CLIENT_STATUS['Sync_RX_status'] = False
+    time.sleep(.1)
+    #Sync_RX_condition.release()
+    #print "Process is alive? "+str(Sync_RX_loop.is_alive())
+    if Sync_RX_loop.is_alive():
+        Sync_RX_loop.terminate() #I do not know why it's alive even if it exited all the loops
+        #Sync_RX_loop.join(timeout = 5)
+    print "Sync RX stopped"
     
 def bound_open(filename):
 
     try:
-        f = h5py.File(filename+".h5",'r')
+        filename = format_filename(filename)
+        f = h5py.File(filename,'r')
     except IOError as msg:
         print_error("Cannot open the specified file: "+str(msg))
         f = None
     return f
     
 def chk_multi_usrp(h5file):
-    return len(h5file.keys())
+    n = 0
+    for i in range(len(h5file.keys())):
+        if h5file.keys()[i][:8] == 'raw_data':
+            n+=1
+    return n
 
 def get_receivers(h5group):
     receivers = []
-    for i in range( len(h5group.keys()) ):
-        mode = h5group[h5group.keys()[i]].attrs.get("mode")
+    subs = h5group.keys()
+    for i in range( len(subs) ):
+        mode = (h5group[subs[i]]).attrs.get("mode")
         if mode == "RX":
             receivers.append(str(h5group.keys()[i]))
     return receivers    
+
+
+def openH5file(filename, ch_list= None, start_sample = None, last_sample = None, usrp_number = None, front_end = None, verbose = False, error_coord = False):
+    '''
+    Arguments:
+        error_coord: if True returns (samples, err_coord) where err_coord is a list of tuples containing start and end sample of each faulty packet.
+        
+    '''
     
-def openH5file(filename, ch_list= None, start_sample = None, last_sample = None, usrp_number = None, front_end = None, verbose = False):
     try:
         filename = filename.split(".")[0]
     except:
@@ -660,18 +902,15 @@ def openH5file(filename, ch_list= None, start_sample = None, last_sample = None,
         return None
         
     if(verbose):
-        sys.stdout.write("Opening file \"" +filename+".h5\"... ")
-        sys.stdout.flush()
+        print_debug("Opening file \"" +filename+".h5\"... ")
+
         
     f = bound_open(filename)
     if not f:
         return np.asarray([])
         
-    if(verbose):print "Done!"
-    
     if(verbose):
-        sys.stdout.write("Checking openH5 file function args... ")
-        sys.stdout.flush()
+        print_debug("Checking openH5 file function args... ")
     
     
     if chk_multi_usrp(f) == 0:
@@ -684,7 +923,7 @@ def openH5file(filename, ch_list= None, start_sample = None, last_sample = None,
         group_name = "raw_data"+str((f.keys()[0]).split("ata")[1])
         
     if (not usrp_number) and chk_multi_usrp(f) == 1:
-        group_name = f.keys()[0]
+        group_name = "raw_data0"#f.keys()[0]
         
     if (usrp_number != None):
         group_name = "raw_data"+str(int(usrp_number))
@@ -720,8 +959,9 @@ def openH5file(filename, ch_list= None, start_sample = None, last_sample = None,
     n_chan = sub_group.attrs.get("n_chan")
     
     if n_chan == None:
-        print_warning("There is no attribute n_chan in the data group, cannot execute checks. Number of channels will be deducted from dataset")
-        n_chan = np.shape(sub_group["dataset_1"])[0]
+        #print_warning("There is no attribute n_chan in the data group, cannot execute checks. Number of channels will be deducted from the freq attribute")
+        n_chan = len(sub_group.attrs.get("wave_type"))
+        print_debug("Getting number of cannels from wave_type attribute shape: %d channel(s) found"%n_chan)
 
 
         
@@ -740,45 +980,109 @@ def openH5file(filename, ch_list= None, start_sample = None, last_sample = None,
     if start_sample < 0:
         print_warning("Start sample selected in open file function < 0: setting it to 0")
         start_sample = 0
+    else:
+        start_sample = int(start_sample)
         
     if last_sample == None:
-        last_sample = sys.maxint    
+        last_sample = sys.maxint  
+    else:
+        last_sample = int(last_sample)   
         
     if last_sample < 0 or last_sample < start_sample:
         print_warning("Last sample selected in open file function < 0 or < Start sample: setting it to maxint")
         last_sample = sys.maxint
     
-    if(verbose):print "Done!"
-    
     if(verbose):
-        sys.stdout.write("Collecting samples...")
-        sys.stdout.flush()
-    
-    z = ()
+        print_debug("Collecting samples...")
+
+
+    z = []
+    err_index = []
     sample_index = 0
-    sample_count = 0
-    for i in range(len(sub_group.keys())):
-        dataset_name = "dataset_"+str(int(1+i))
-        current_len = np.shape(sub_group[dataset_name])[1]
-        sample_index += current_len
-        
-        truncate_final = min(last_sample,last_sample - sample_index)
-        if(last_sample>=sample_index):
-            truncate_final = current_len
-        elif(last_sample<sample_index):
-            truncate_final = current_len - (sample_index - last_sample)
-        
-
-        if (sample_index > start_sample) and (truncate_final > 0):
+    errors = 0
+    
+    #check if the opening mode is from the old server or the new one
+    try:
+        test = sub_group["dataset_1"]
+        old_mode = True
+    except KeyError:
+        old_mode = False
+    
+    if old_mode:
+        skip_warning = True
+        print_debug("Using old dataset mode to open file \'%s\'"%filename)
+        #data are contained in multiple dataset
             
-            truncate_initial = max(0,current_len - (sample_index - start_sample))
-            z += ((sub_group[dataset_name])[ch_list, truncate_initial:truncate_final],)
-            sample_count += len((sub_group[dataset_name])[ch_list, truncate_initial:truncate_final])
+        if verbose:
+            widgets = [progressbar.Percentage(), progressbar.Bar()]
+            bar = progressbar.ProgressBar(widgets=widgets, max_value=len(sub_group.keys())).start()
+            read = 0
+        
+        current_len = np.shape(sub_group["dataset_1"])[1]
+        N_dataset = len(sub_group.keys())
 
+        print_warning("Raw amples inside "+filename+" have not been rearranged: the read from file can be slow for big files due to dataset reading overhead")
+         
+        for i in range(N_dataset):
+            try:
+                dataset_name = "dataset_"+str(int(1+i))
+                
+                sample_index += current_len
+                
+                truncate_final = min(last_sample,last_sample - sample_index)
+                if(last_sample>=sample_index):
+                    truncate_final = current_len
+                elif(last_sample<sample_index):
+                    truncate_final = current_len - (sample_index - last_sample)
+                
+                
+                if (sample_index > start_sample) and (truncate_final > 0):
+                    present_error = sub_group[dataset_name].attrs.get('errors')
+                    errors += int(present_error)
+                    if present_error !=0:
+                        err_index.append( ( sample_index-current_len, sample_index+current_len))
+                    truncate_initial = max(0,current_len - (sample_index - start_sample))
+                    
+                    z.append(sub_group[dataset_name][ch_list, truncate_initial:truncate_final])
+            except KeyError:
+                if skip_warning:
+                    print_warning("Cannot find one or more datasets in the h5 file")
+                    skip_warning = False
+                
+                
+            if verbose:
+                try:
+                    bar.update(read)
+                except:
+                    print_debug("decrease samples in progeressbar")
+                read+=1
+        if errors > 0: print_warning("The measure opened contains %d erorrs!"%errors)
+        if(verbose):print "Done!" 
+        f.close()
+    
+        if error_coord:
+            return np.concatenate(tuple(z),1),err_index
+        return np.concatenate(tuple(z),1)
+        
+    else:
+        samples = sub_group["data"].attrs.get("samples")
+        if samples is None:
+            print_warning("Non samples attrinut found: data extracted from file could include zero padding")
+            samples = last_sample
+        if len(sub_group["errors"])>0:
+            print_warning("The measure opened contains %d erorrs!"%len(sub_group["errors"]))
+        if error_coord:
+            errors,data = sub_group["errors"][:],sub_group["data"][ch_list,start_sample:min(last_sample,samples)]
 
+            if errors is None:
+                errors = []
+            f.close()
+            return data,errors
             
-    if(verbose):print "Done!"  
-    return np.concatenate(z,1)
+        data = sub_group["data"][ch_list,start_sample:last_sample]  
+        f.close()
+        return data
+            
         
 class global_parameter(object):
     '''
@@ -813,7 +1117,7 @@ class global_parameter(object):
         empty_spec['swipe_s'] = [0]
         empty_spec['chirp_t'] = [0]
         empty_spec['fft_tones'] = 0
-        empty_spec['pf_average'] = 0
+        empty_spec['pf_average'] = 4
         prop = {}
         prop['A_TXRX'] = empty_spec.copy()
         prop['B_TXRX'] = empty_spec.copy()
@@ -822,6 +1126,20 @@ class global_parameter(object):
         prop['device'] = 0
         self.parameters = prop.copy()
         
+    def get(self,ant,param_name):
+        if not self.initialized:
+            print_error("Retriving parameters %s from an uninitialized global_parameter object"%param_name)
+            return None
+        try:
+            test = self.parameters[ant]
+        except KeyError:     
+            print_error("The antenna \'"+ant+"\' is not an accepted frontend name or is not present.")
+            return None
+        try:   
+            return test[param_name] 
+        except KeyError:
+            print_error("The parameter \'"+param_name+"\' is not an accepted parameter or is not present.")
+            return None
         
     def set(self,ant,param_name, val):
         '''
@@ -968,10 +1286,34 @@ class global_parameter(object):
                         self.parameters[ant_key]['swipe_s'][j] = int(self.parameters[ant_key]['swipe_s'][j])
                     for j in range(len(self.parameters[ant_key]['chirp_f'])):
                         self.parameters[ant_key]['chirp_f'][j] = int(self.parameters[ant_key]['chirp_f'][j])
+                        
+                    self.parameters[ant_key]['samples'] = int(self.parameters[ant_key]['samples'])
+                #case in which it is OFF:
+                else:
+                    self.parameters[ant_key]['mode'] = "OFF"
+                    self.parameters[ant_key]['rate'] = 0
+                    self.parameters[ant_key]['rf'] = 0
+                    self.parameters[ant_key]['gain'] = 0
+                    self.parameters[ant_key]['bw'] = 0
+                    self.parameters[ant_key]['samples'] = 0
+                    self.parameters[ant_key]['delay'] = 1
+                    self.parameters[ant_key]['burst_on'] = 0
+                    self.parameters[ant_key]['burst_off'] = 0
+                    self.parameters[ant_key]['buffer_len'] = 0
+                    self.parameters[ant_key]['freq'] = [0]
+                    self.parameters[ant_key]['wave_type'] = [0]
+                    self.parameters[ant_key]['ampl'] = [0]
+                    self.parameters[ant_key]['decim'] = 0
+                    self.parameters[ant_key]['chirp_f'] = [0]
+                    self.parameters[ant_key]['swipe_s'] = [0]
+                    self.parameters[ant_key]['chirp_t'] = [0]
+                    self.parameters[ant_key]['fft_tones'] = 0
+                    self.parameters[ant_key]['pf_average'] = 4
+                    
         else:
             return False
         
-        print_warning("check function partially implemented yet")
+        print_debug("check function is not complete yet. In case something goes unexpected, double check parameters.")
         return True
         
     def from_dict(self,ant,dictionary):
@@ -1067,7 +1409,7 @@ class global_parameter(object):
     def retrive_prop_from_file(self, filename, usrp_number = None):     
         def read_prop(group, sub_group_name):
             def missing_attr_warning(att_name, att):
-                if att.all() == None:
+                if att == None:
                     print_warning("Parameter \""+str(att_name)+"\" is not defined")
 
             sub_prop = {}
@@ -1107,22 +1449,22 @@ class global_parameter(object):
             sub_prop['buffer_len'] = sub_group.attrs.get('buffer_len')
             missing_attr_warning('buffer_len', sub_prop['buffer_len'])
 
-            sub_prop['freq'] = sub_group.attrs.get('freq')
+            sub_prop['freq'] = sub_group.attrs.get('freq').tolist()
             missing_attr_warning('freq', sub_prop['freq'])
 
-            sub_prop['wave_type'] = sub_group.attrs.get('wave_type')
+            sub_prop['wave_type'] = sub_group.attrs.get('wave_type').tolist()
             missing_attr_warning('wave_type', sub_prop['wave_type'])
 
-            sub_prop['ampl'] = sub_group.attrs.get('ampl')
+            sub_prop['ampl'] = sub_group.attrs.get('ampl').tolist()
             missing_attr_warning('ampl', sub_prop['ampl'])
 
             sub_prop['decim'] = sub_group.attrs.get('decim')
             missing_attr_warning('decim', sub_prop['decim'])
 
-            sub_prop['chirp_t'] = sub_group.attrs.get('chirp_t')
+            sub_prop['chirp_t'] = sub_group.attrs.get('chirp_t').tolist()
             missing_attr_warning('chirp_t', sub_prop['chirp_t'])
 
-            sub_prop['swipe_s'] = sub_group.attrs.get('swipe_s')
+            sub_prop['swipe_s'] = sub_group.attrs.get('swipe_s').tolist()
             missing_attr_warning('swipe_s', sub_prop['swipe_s'])
 
             sub_prop['fft_tones'] = sub_group.attrs.get('fft_tones')
@@ -1134,16 +1476,16 @@ class global_parameter(object):
             return sub_prop
       
         f = bound_open(filename)
-        if not f:
+        if f is None:
             return None
             
         if (not usrp_number) and chk_multi_usrp(f) != 1:
             this_warning = "Multiple usrp found in the file but no preference given to get prop function. Assuming usrp "+str((f.keys()[0]).split("ata")[1])
             print_warning(this_warning)
-            group_name = "raw_data"+str((f.keys()[0]).split("ata")[1])
+            group_name = "raw_data0"#+str((f.keys()[0]).split("ata")[1])
             
         if (not usrp_number) and chk_multi_usrp(f) == 1:
-            group_name = f.keys()[0]
+            group_name = "raw_data0"#f.keys()[0]
             
         if (usrp_number != None):
             group_name = "raw_data"+str(int(usrp_number))
@@ -1164,60 +1506,6 @@ class global_parameter(object):
     
 
     
-def spec_from_samples(samples, param = None, welch = None): 
-  
-    '''
-    Calculate real and immaginary part of the dBc spectra of a complex array using the Welch method.
-    
-    Arguments:
-        - Samples: complex array representing samples.
-        - param: dictionary containing the ANTENNA parameter relative to the samples
-        - welch: in how many segment to divide the samples given for applying the Welch method
-        
-    Returns:
-        - Frequency array,
-        - Immaginary spectrum array
-        - Real spectrum array
-    '''
-
-    try:
-        L = len(samples)
-    except TypeError:
-        print_error("Expecting complex array for dBc spectra calculation, got something esle.")
-        return None, None ,None
-        
-    if np.median(samples) == 0:
-        print_error("Median of the data resulted 0 in dBc spectra calculation.")
-        return None, None ,None
-        
-    if welch == None:
-        welch = L
-    else:
-        welch = L/welch
-        
-    if param == None:
-        sampling_rate = 1
-    else:
-        try:
-            sampling_rate = param['rate']/param['fft_tones']
-            
-        except TypeError:
-            print_warning("Parameters passed to dbc spectrum evaluation are not valid. Sampling rate = 1")
-            sampling_rate = 1
-        
-        except ZeroDivisionError:
-            print_warning("Parameters passed to dbc spectrum evaluation are not valid. Sampling rate = 1")
-            sampling_rate = 1
-    
-    samples = samples  / np.mean(samples)
-    samples = samples - np.mean(samples)
-    #samples = samples * (np.abs(np.mean(samples))/np.mean(samples))
-    
-    Frequencies , RealPart      = signal.welch( samples.real ,nperseg=welch, fs=sampling_rate ,detrend='linear',scaling='density')
-    Frequencies , ImaginaryPart = signal.welch( samples.imag ,nperseg=welch, fs=sampling_rate ,detrend='linear',scaling='density')
-
-    return Frequencies, RealPart, ImaginaryPart
-
 
 def Device_chk(device):
     '''
@@ -1283,6 +1571,31 @@ def Param_to_H5(H5fp, parameters_class,tag):
    
         for ant_name in rx_names: 
             rx_group = usrp_group.create_group(ant_name)
+            #Avoid dynamical disk space allocation by forecasting the size of the measure
+            try:
+                n_chan = len(parameters_class.parameters[ant_name]['wave_type'])
+            except KeyError:
+                print_warning("Cannot extract number of channel from signal processing descriptor")
+                n_chan = 0
+            
+            if parameters_class.parameters[ant_name]['wave_type'][0] == "TONES":
+                data_len = int(np.ceil(parameters_class.parameters[ant_name]['samples'] / (parameters_class.parameters[ant_name]['fft_tones']*  max(parameters_class.parameters[ant_name]['decim'],1))))
+            elif parameters_class.parameters[ant_name]['wave_type'][0] == "CHIRP":
+                if parameters_class.parameters[ant_name]['decim'] < 1:
+                    data_len = parameters_class.parameters[ant_name]['samples']
+                else:
+                    data_len = 0
+            elif parameters_class.parameters[ant_name]['wave_type'][0] == "NOISE":  
+                data_len = int(np.ceil(parameters_class.parameters[ant_name]['samples'] / max(parameters_class.parameters[ant_name]['decim'],1)))
+            else:
+                print_warning("No file size could be determined from DSP descriptor: \'%s\'"%str(parameters_class.parameters[ant_name]['wave_type'][0]))
+                data_len = 0
+                
+            data_shape_max = (n_chan,data_len)
+            data_shape = (0,0)
+            print "dataset initial length is %d"%data_len
+            rx_group.create_dataset("data",data_shape_max , dtype = np.complex64, maxshape = (None,None), chunks=True)#, compression = H5PY_compression
+            rx_group.create_dataset("errors",(0,0) ,dtype = np.dtype(np.int64), maxshape = (None,None))#, compression = H5PY_compression
             for param_name in parameters_class.parameters[ant_name]:
                 rx_group.attrs.create(name = param_name, data=parameters_class.parameters[ant_name][param_name])
             
@@ -1299,6 +1612,8 @@ def Packets_to_variable(max_sample, average = None):
     '''
     global DATA_ACCUMULATOR, USRP_data_queue, END_OF_MEASURE
 
+def format_filename(filename):
+    return os.path.splitext(filename)[0]+".h5"
 
 def to_list_of_str(user_input):
     '''
@@ -1354,6 +1669,62 @@ def Packets_to_file(parameters, timeout = None, filename = None, meas_tag = None
         - if the \"End of measurement\" async signal is received from the GPU server the timeout mode becomes active.
     '''
     
+    global dynamic_alloc_warning
+    
+    def write_ext_H5_packet(metadata,data,h5fp,index):
+        '''
+        Write a single packet inside an already opened and formatted H5 file as an ordered dataset.
+        
+        Arguments:
+            - metadata: the metadata describing the packet directly coming from the GPU sevrer.
+            - data: the data to be written inside the dataset.
+            - dataset: file pointer to the h5 file. extensible dataset has to be already created.
+            - index: dictionary containg the accumulated length of the dataset.
+        
+        Returns:
+            - The updated index dictionaty.    
+            
+        Notes:
+            - The way this function write the packets inside the h5 file is strictly related to the metadata type in decribed in USRP_server_setting.hpp as RX_wrapper struct.
+        '''
+        
+        global dynamic_alloc_warning
+        dev_name = "raw_data"+str(int(metadata['usrp_number']))
+        group_name = metadata['front_end_code']
+        samples_per_channel = metadata['length']/metadata['channels']
+        dataset = h5fp[dev_name][group_name]["data"]
+        errors = h5fp[dev_name][group_name]["errors"]
+        data_shape = np.shape(dataset)
+        data_start = index
+        data_end = data_start + samples_per_channel
+        
+        try:
+            if data_shape[0] < metadata['channels']:
+                print_warning("Main dataset in H5 file not initialized.")
+                dataset.resize(metadata['channels'],0)
+            
+            if data_end > data_shape[1]:
+                if dynamic_alloc_warning:
+                    print_warning("Main dataset in H5 file not correctly sized. Dynamically extending dataset...")
+                    #print_debug("File writing thread is dynamically extending datasets.")
+                    dynamic_alloc_warning = False
+                dataset.resize(data_end,1)
+            
+            dataset[:,data_start:data_end] = np.reshape(data,(metadata['channels'],samples_per_channel))
+            dataset.attrs.__setitem__("samples", data_end)
+            
+            if metadata['errors'] != 0:
+                print_warning("The server encounterd an error")
+                err_shape = np.shape(errors)
+                err_len = err_shape[1]
+                if err_shape[0] == 0:
+                    errors.resize(2,0)
+                errors.resize(err_len+1,1)
+                errors[:,err_len] = [data_start,data_end]
+        except RuntimeError as err:
+            print_error("A packet has not been written because of a problem: "+str(err))
+
+            
     def write_single_H5_packet(metadata,data,h5fp):
         '''
         Write a single packet inside an already opened and formatted H5 file as an ordered dataset.
@@ -1373,13 +1744,18 @@ def Packets_to_file(parameters, timeout = None, filename = None, meas_tag = None
         dev_name = "raw_data"+str(int(metadata['usrp_number']))
         group_name = metadata['front_end_code']
         dataset_name = "dataset_"+str(int(metadata['packet_number']))
-        
-        shaped_data = np.reshape(data,(metadata['channels'],metadata['length']/metadata['channels']))
-        ds = h5fp[dev_name][group_name].create_dataset(dataset_name, data = shaped_data )
-        ds.attrs.create(name = "errors", data=metadata['errors'])
-        if metadata['errors'] != 0:
-            print_warning("The server encounterd a transmission error: "+str(metadata['errors']))
-        
+        try:
+            ds = h5fp[dev_name][group_name].create_dataset(
+                dataset_name,
+                data = np.reshape(data,(metadata['channels'],metadata['length']/metadata['channels']))
+                #compression = H5PY_compression
+            )
+            ds.attrs.create(name = "errors", data=metadata['errors'])
+            if metadata['errors'] != 0:
+                print_warning("The server encounterd a transmission error: "+str(metadata['errors']))
+        except RuntimeError as err:
+            print_error("A packet has not been written because of a problem: "+str(err))
+            
     
     def create_h5_file(filename):
         '''
@@ -1418,8 +1794,8 @@ def Packets_to_file(parameters, timeout = None, filename = None, meas_tag = None
                 else:
                     count += 1
         
-    global USRP_data_queue, END_OF_MEASURE, EOM_cond
-    
+    global USRP_data_queue, END_OF_MEASURE, EOM_cond, CLIENT_STATUS
+    more_sample_than_expected_WARNING = True
     accumulated_timeout = 0
     sleep_time = 0.1
     
@@ -1427,66 +1803,642 @@ def Packets_to_file(parameters, timeout = None, filename = None, meas_tag = None
     
     spc_acc = 0
     
+    #this variable disciminate between a timeout condition generated on purpose to wait the queue and one reached because of an error
+    legit_off = False
+    
     if filename == None:
         filename = "USRP_DATA_"+get_timestamp()
         print "Writing data on disk with filename: \""+filename+".h5\""
     
     H5_file_pointer = create_h5_file(str(filename))
     Param_to_H5(H5_file_pointer, parameters, tag = meas_tag)
+    CLIENT_STATUS["measure_running_now"] = True
     if dpc_expected!=None:
         widgets = [progressbar.Percentage(), progressbar.Bar()]
-        bar = progressbar.ProgressBar(widgets=widgets, max_value=max_samp).start()
+        bar = progressbar.ProgressBar(widgets=widgets, max_value=dpc_expected).start()
     else:
         widgets = [progressbar.FormatLabel(
-            'Processed: %(value)d samples per channel (in: %(elapsed)s)')]
+            '\033[7;1;32mReceived: %(value)d samples per channel in: %(elapsed)s\033[0m')]
         bar = progressbar.ProgressBar(widgets=widgets)
     data_warning = True
 
     while(not acquisition_end_flag):
         try:
-            try:
-                meta_data, data = USRP_data_queue.get(timeout = 0.1)
-                USRP_data_queue.task_done()
-                accumulated_timeout = 0
-                if meta_data == None:
-                    acquisition_end_flag = True
-                else:
-                    write_single_H5_packet(meta_data, data, H5_file_pointer)
-                    spc_acc += meta_data['length']/meta_data['channels']
-                    try:
-                        bar.update(spc_acc)
-                    except:
-                        if data_warning:
-                            bar.update(dpc_expected)
-                            print_warning("Sync rx is receiving more data than expected.")
-                            data_warning = False
-                
-            except Empty:
-                time.sleep(sleep_time)
-                if timeout:
-                    accumulated_timeout+=sleep_time
-                    if accumulated_timeout>timeout:
-                        print_warning("Sync data receiver timeout condition reached. Closing file...")
-                        acquisition_end_flag = True
-                        break
-        except KeyboardInterrupt:
-            print_warning("keyboard interrupt received. closing file...")
-            acquisition_end_flag = True
+            meta_data, data = USRP_data_queue.get(timeout = 0.1)
+            #USRP_data_queue.task_done()
+            accumulated_timeout = 0
+            if meta_data == None:
+                acquisition_end_flag = True
+            else:
+                #write_single_H5_packet(meta_data, data, H5_file_pointer)
+                write_ext_H5_packet(meta_data, data, H5_file_pointer,spc_acc)
+                spc_acc += meta_data['length']/meta_data['channels']
+                try:
+                    bar.update(spc_acc)
+                except:
+                    if data_warning:
+                        bar.update(dpc_expected)
+                        if(more_sample_than_expected_WARNING):
+                            print_warning("Sync rx is receiving more data than expected...")
+                            more_sample_than_expected_WARNING = False
+                        data_warning = False
             
+        except Empty:
+            time.sleep(sleep_time)
+            if timeout:
+                accumulated_timeout+=sleep_time
+                if accumulated_timeout>timeout:
+                    if not legit_off: print_warning("Sync data receiver timeout condition reached. Closing file...")
+                    acquisition_end_flag = True
+                    break
+        if CLIENT_STATUS["keyboard_disconnect"] == True:
+            Disconnect()
+            acquisition_end_flag = True
+            CLIENT_STATUS["keyboard_disconnect"]  = False
+
+        try:
+            bar.update(spc_acc)
+        except:
+            if(more_sample_than_expected_WARNING): print_debug("Sync RX received more data than expected.")
+        bar.finish    
         EOM_cond.acquire()             
         if END_OF_MEASURE:
-            timeout = 1
+            timeout = .5
+            legit_off = True
         EOM_cond.release()
         
-    print "Setting EOM mutex"
     EOM_cond.acquire()
     END_OF_MEASURE = False
     EOM_cond.release()   
+    
+    if clean_data_queue() != 0:
+        print_warning("Residual elements in the libUSRP data queue are being lost!")
              
     H5_file_pointer.close()
-    print "H5 file closed succesfully."
+    print "\033[7;1;32mH5 file closed succesfully.\033[0m"
+    CLIENT_STATUS["measure_running_now"] = False
     return filename
 
+def linear_phase(phase):
+    '''
+    Unwrap the pgase and subtract linear and constrant offset.
+    '''
+    phase = np.unwrap(phase)
+    x =np.arange(len(phase))
+    m,q = np.polyfit(x, phase, 1)
+    
+    linear_phase = m*x +q
+    phase -= linear_phase
+
+    return phase
+    
+def spec_from_samples(samples, sampling_rate = 1, welch = None, dbc = False, rotate = False, verbose = True): 
+  
+    '''
+    Calculate real and immaginary part of the spectra of a complex array using the Welch method.
+    
+    Arguments:
+        - Samples: complex array representing samples.
+        - sampling_rate: sampling_rate
+        - welch: in how many segment to divide the samples given for applying the Welch method
+        - dbc: scales samples to calculate dBc spectra.
+        - rotate: if True rotate the IQ plane
+    Returns:
+        - Frequency array,
+        - Immaginary spectrum array
+        - Real spectrum array
+    '''
+    if verbose: print_debug("[Welch worker]")
+    try:
+        L = len(samples)
+    except TypeError:
+        print_error("Expecting complex array for spectra calculation, got something esle.")
+        return None, None ,None
+        
+    if welch == None:
+        welch = L
+    else:
+        welch = int(L/welch)
+        
+    if dbc:
+        samples = samples  / np.mean(samples)
+        samples = samples - np.mean(samples)
+    
+    if rotate:    
+        samples = samples * (np.abs(np.mean(samples))/np.mean(samples))
+    
+    Frequencies , RealPart      = signal.welch( samples.real ,nperseg=welch, fs=sampling_rate ,detrend='linear',scaling='density')
+    Frequencies , ImaginaryPart = signal.welch( samples.imag ,nperseg=welch, fs=sampling_rate ,detrend='linear',scaling='density')
+
+    return Frequencies, RealPart, ImaginaryPart
+    
+def calculate_noise_spec(filename, welch = None, dbc = False, rotate = False, usrp_number = 0, ant = None, verbose = True, clip = 0.5):
+    '''
+    Generates the FFT of each channel stored in the .h5 file and stores the results in the same file.
+    '''
+    
+    if verbose: print_debug("Calculating noise spectra for "+filename)
+    
+    if verbose: print_debug("Reading attributes...")
+    
+    filename = format_filename(filename)
+    parameters = global_parameter()
+    parameters.retrive_prop_from_file(filename)
+    
+    if ant is None:
+        ant = parameters.get_active_rx_param()
+    else:
+        ant = to_list_of_str(ant)
+    
+    if len(ant) > 1:
+        print_error("multiple RX devices not yet supported")
+        return
+    
+    active_RX_param = parameters.parameters[ant[0]]
+
+    try:
+        sampling_rate = active_RX_param['rate']/active_RX_param['fft_tones']
+        
+    except TypeError:
+        print_warning("Parameters passed to spectrum evaluation are not valid. Sampling rate = 1")
+        sampling_rate = 1
+    
+    except ZeroDivisionError:
+        print_warning("Parameters passed to spectrum evaluation are not valid. Sampling rate = 1")
+        sampling_rate = 1
+    
+    if sampling_rate != 1:
+        clip_samples = clip * sampling_rate
+    else:
+        clip_samples = None
+    
+    if verbose: print_debug("Opening file...")
+    
+    samples, errors = openH5file(
+        filename,
+        ch_list= None,
+        start_sample = clip_samples ,
+        last_sample = None,
+        usrp_number = usrp_number,
+        front_end = None, # this will change for double RX
+        verbose = True,
+        error_coord = True
+    )
+    if len(errors)>0:
+        print_error("Cannot evaluate spectra of samples containing transmission error")
+        return
+    
+    if verbose: print_debug("Calculating spectra...")
+        
+    Results = Parallel(n_jobs=N_CORES,verbose=1 ,backend  = parallel_backend)(
+        delayed(spec_from_samples)(
+            samples[i], sampling_rate = sampling_rate, welch = welch, dbc = dbc, rotate = rotate, verbose = verbose
+        ) for i in range(len(samples))
+    )
+    
+    if verbose: print_debug("Saving result on file "+filename+" ...")
+    
+    fv = h5py.File(filename,'r+')
+    
+    noise_group_name = "Noise"+str(int(usrp_number))
+    
+    try:
+        noise_group = fv.create_group(noise_group_name)
+    except ValueError:
+        noise_group = fv[noise_group_name]
+        
+    try:  
+        noise_subgroup = noise_group.create_group(ant[0]) 
+    except ValueError:     
+        if verbose: print_debug("Overwriting Noise subgroup %s in h5 file"%ant[0])
+        del noise_group[ant[0]]
+        noise_subgroup = noise_group.create_group(ant[0])
+        
+    noise_subgroup.attrs.create(name = "welch", data=welch)
+    noise_subgroup.attrs.create(name = "dbc", data=dbc)
+    noise_subgroup.attrs.create(name = "rotate", data=rotate)
+    noise_subgroup.attrs.create(name = "rate", data=sampling_rate)
+    noise_subgroup.attrs.create(name = "n_chan", data=len(Results))
+    
+    noise_subgroup.create_dataset("freq", data = Results[0][0], compression = H5PY_compression)
+    
+    for i in range(len(Results)):
+        tone_freq = active_RX_param['rf']+active_RX_param['freq'][i]
+        ds = noise_subgroup.create_dataset("real_"+str(i), data = Results[i][1], compression=H5PY_compression ,dtype=np.dtype('Float32'))
+        ds.attrs.create(name = "tone", data=tone_freq)
+        ds = noise_subgroup.create_dataset("imag_"+str(i), data = Results[i][2], compression=H5PY_compression ,dtype=np.dtype('Float32'))
+        ds.attrs.create(name = "tone", data=tone_freq)
+        
+    if verbose: print_debug("calculate_noise_spec() has done.")
+    fv.close()
+    
+def get_noise(filename, usrp_number = 0, front_end = None, channel_list = None):
+    '''
+    Get the noise samples froma a pre-analized H5 file.
+    
+    Argumers:
+        - filename: [string] the name of the file.
+        - usrp_number: the server number of the usrp device. default is 0.
+        - front_end: [string] name of the front end. default is extracted from data.
+        - channel_list: [listo of int] specifies the channels from which to get samples
+    Returns:
+        - Noise info, Frequency axis, real axis, imaginary axis
+    
+    Note:
+        Noise info is a dictionary containing the following parameters [whelch, dbc, rotate, rate, tone].
+        The first four give inforamtion about the fft done to extract the noise; the last one is a list coherent with channel list containing the acquisition frequency of each tone in Hz.
+    '''
+    if usrp_number is None:
+        usrp_number = 0
+    
+    filename = format_filename(filename)
+    fv = h5py.File(filename,'r')
+    noise_group = fv["Noise"+str(int(usrp_number))]
+    if front_end is not None:
+        ant = front_end
+    else:
+        if len(noise_group.keys())>0:
+            ant = noise_group.keys()[0]
+        else:
+            print_error("get_noise() cannot find valid front end names in noise group!")
+            raise IndexError
+                    
+    noise_subgroup = noise_group[ant]
+    
+    info = {}
+    info['welch'] = noise_subgroup.attrs.get("welch")
+    info['dbc'] = noise_subgroup.attrs.get("dbc")
+    info['rotate'] = noise_subgroup.attrs.get("rotate")
+    info['rate'] = noise_subgroup.attrs.get("rate")
+    info['n_chan'] = noise_subgroup.attrs.get("n_chan")
+    
+    if channel_list is None:
+        channel_list = range(info['n_chan'])
+    
+    info['tones'] = []
+    
+    frequency_axis = np.asarray(noise_subgroup['freq'])
+    real = []
+    imag = []
+    for i in channel_list:
+       real.append(np.asarray(noise_subgroup['real_'+str(int(i))]))
+       imag.append(np.asarray(noise_subgroup['imag_'+str(int(i))]))
+       info['tones'].append(noise_subgroup['imag_'+str(int(i))].attrs.get("tone"))
+       
+    fv.close()
+    
+    return info, frequency_axis, real, imag
+    
+def get_readout_power(filename, channel, front_end = None, usrp_number = 0):
+    '''
+    Get the readout power for a given single tone channel.
+    '''
+    global USRP_power
+    if usrp_number is None:
+        usrp_number = 0
+    filename = format_filename(filename)
+    parameters = global_parameter()
+    parameters.retrive_prop_from_file(filename)
+    if front_end is None:
+        ant = parameters.get_active_tx_param()
+    else:
+        ant = [front_end]
+    try:
+        ampl = parameters.get(ant[0],'ampl')[channel]
+    except IndexError:
+        print_error("Channel %d is not present in file %s front end %s"%(channel,filename,front_end))
+        raise IndexError
+        
+    gain = parameters.get(ant[0],'gain')
+    
+    return gain + USRP_power + 20*np.log10(ampl)
+    
+def plot_noise_spec(filenames, channel_list = None, max_frequency = None, title_info = None, backend = 'matplotlib', cryostat_attenuation = 0, auto_open = True, output_filename = None, **kwargs):
+    '''
+    Plot the noise spectra of given, pre-analized, H5 files.
+    
+    Arguments:
+        - filenames: list of strings containing the filenames.
+        - channel_list:
+        - max_frequency: maximum frequency to plot.
+        - title_info: add a custom line to the plot title
+        - backend: see plotting backend section for informations.
+        - auto_open: open the plot in default system browser if plotly backend is selected (non-blocking) or open the matplotlib figure (blocking). Default is True.
+        - output_filename: string: if given the function saves the plot (in png for matplotlib backend and html for plotly backend) with the given name.
+        - **kwargs: usrp_number and front_end can be passed to the openH5file() function. tx_front_end can be passed to manually determine the tx frontend to calculate the readout power.
+    '''
+    filenames = to_list_of_str(filenames)
+    
+    
+    plot_title = 'USRP Noise spectra from '
+    if len(filenames)<2:
+        plot_title+="file: "+filenames[0]+"."
+    else:
+        plot_title+= "multiple files."
+        
+        
+    if backend == 'matplotlib':
+        fig, ax = pl.subplots(nrows=1, ncols=1)
+        try:
+            fig.set_size_inches(kwargs['size'][0],kwargs['size'][1])
+        except KeyError:
+            pass
+        ax.set_xlabel("Frequency [Hz]")
+        
+    y_name_set = True
+    rate_tag_set = True
+    
+    try:
+        usrp_number = kwargs['usrp_number']
+    except KeyError:
+        usrp_number = None
+    try:
+        front_end = kwargs['front_end']
+    except KeyError:
+        front_end = None
+    try:
+        tx_front_end = kwargs['tx_front_end']
+    except KeyError:
+        tx_front_end = None
+        
+    for filename in filenames:
+        info, freq, real, imag = get_noise(
+            filename,
+            usrp_number = usrp_number,
+            front_end = front_end,
+            channel_list = channel_list
+        )
+        if y_name_set:
+            y_name_set = False
+            
+            if backend == 'matplotlib':
+                if info['dbc']:
+                    ax.set_ylabel("PSD [dBc]")
+                else:
+                    ax.set_ylabel("PSD [dBm/sqrt(Hz)]")
+                    
+        if rate_tag_set:
+            rate_tag_set = False
+            if info['rate']/1e6 > 1.:
+                plot_title+= "Effective rate: %.2f Msps"%(info['rate']/1e6)
+            else: 
+                plot_title+= "Effective rate: %.2f ksps"%(info['rate']/1e3)
+            
+        for i in range(len(info['tones'])):
+            readout_power = get_readout_power(filename, i, tx_front_end, usrp_number)-cryostat_attenuation
+            label = "%.2f MHz"%(info['tones'][i]/1e6)
+            R = 10*np.log10(real[i])
+            I = 10*np.log10(imag[i])
+            if backend == 'matplotlib':
+                label+= "\nReadout pwr %.1f dBm"%(readout_power)
+                ax.semilogx(freq, R, '--', color = get_color(i), label = "Real "+label)
+                ax.semilogx(freq, I, color = get_color(i), label = "Imag "+label)
+        
+        if backend == 'matplotlib':
+            if title_info is not None:
+                plot_title+= "\n"+title_info
+            fig.suptitle(plot_title)
+            handles, labels = ax.get_legend_handles_labels()
+            fig.legend(handles, labels, loc=7)
+            ax.grid(True)   
+            if output_filename is not None:
+                fig.savefig(output_filename+'.png')
+            if auto_open:
+                pl.show()
+            else:
+                pl.close()
+        
+    
+def plot_raw_data(filenames, decimation = None, low_pass = None, backend = 'matplotlib', output_filename = None, channel_list = None, mode = 'IQ', start_time = None, end_time = None, auto_open = True, **kwargs):
+    '''
+    Plot raw data group from given H5 files.
+    
+    Arguments:
+        - a list of strings containing the files to plot.
+        - decimation: eventually deciamte the signal before plotting.
+        - low pass: floating point number controlling the cut-off frequency of a low pass filter that is eventually applied to the data.
+        - backend: [string] choose the return type of the plot. Allowed backends for now are:
+            * matplotlib: creates a matplotlib figure, plots in non-blocking mode and return the matplotlib figure object. **kwargs in this case accept:
+                - size: size of the plot in the form of a tuple (inches,inches). Default is matplotlib default.
+            * plotly: plot using plotly and webgl interface, returns the html code descibing the plot. **kwargs in this case accept:
+                - size: size of the plot. Default is plotly default.
+        - output_filename: string: if given the function saves the plot (in png for matplotlib backend and html for plotly backend) with the given name.
+        - channel_list: select only al list of channels to plot.
+        - mode: [string] how to print the IQ signals. Allowed modes are:
+            * IQ: default. Just plot the IQ signal with no processing.
+            * PM: phase and magnitude. The fase will be unwrapped and the offset will be removed.
+        - start_time: time where to start plotting. Default is 0.
+        - end_time: time where to stop plotting. Default is end of the measure.
+        - auto_open: open the plot in default system browser if plotly backend is selected (non-blocking) or open the matplotlib figure (blocking). Default is True.
+        - **kwargs: usrp_number and front_end can be passed to the openH5file() function.
+    Returns:
+        - the return is up tho the backend choosen and could be a matplotlib figure or a html string.
+        
+    Note:
+        - Possible errors are signaled on the plot.
+    '''
+    plot_title = 'USRP raw data acquisition. '
+    if backend == 'matplotlib':
+        fig, ax = pl.subplots(nrows=2, ncols=1, sharex=True)
+        try:
+            fig.set_size_inches(kwargs['size'][0],kwargs['size'][1])
+        except KeyError:
+            pass
+        ax[1].set_xlabel("Time [s]")
+        
+        if mode == 'IQ':
+            ax[0].set_ylabel("I [fp ADC]")
+            ax[1].set_ylabel("Q [fp ADC]")
+        elif mode == 'PM':
+            ax[0].set_ylabel("Magnitude [abs(ADC)]")
+            ax[1].set_ylabel("Phase [Rad]")
+
+    filenames = to_list_of_str(filenames)
+    
+    print_debug("Plotting from files:")
+    for i in range(len(filenames)):
+        print_debug("%d) %s"%(i,filenames[i]))
+    try:
+        usrp_number = kwargs['usrp_number']
+    except KeyError:
+        usrp_number = None
+    try:
+        front_end = kwargs['front_end']
+    except KeyError:
+        front_end = None
+        
+    for filename in filenames:
+        
+        filename = format_filename(filename)
+        parameters = global_parameter()
+        parameters.retrive_prop_from_file(filename)
+        ant = parameters.get_active_rx_param()
+        
+        if len(ant) > 1:
+            print_error("multiple RX devices not yet supported")
+            return
+        
+        if parameters.get(ant[0],'wave_type')[0] == "TONES":
+            decimation_factor = parameters.get(ant[0],'fft_tones')
+                   
+            if parameters.get(ant[0],'decim') != 0:
+                decimation_factor*=parameters.get(ant[0],'decim')
+                
+            effective_rate = parameters.get(ant[0],'rate') / float(decimation_factor)
+            
+        elif parameters.get(ant[0],'wave_type')[0] == "CHIRP":
+            decimation_factor = 1
+            if parameters.get(ant[0],'decim') !=0:
+                decimation_factor *= parameters.get(ant[0],'decim') * parameters.get(ant[0],'chirp_t')[0]/parameters.get(ant[0],'swipe_s')[0]
+            effective_rate = parameters.get(ant[0],'rate') / float(decimation_factor)
+            
+        else:
+            decimation_factor = max(1,parameters.get(ant[0],'fft_tones'))
+                   
+            if parameters.get(ant[0],'decim') != 0:
+                decimation_factor*=parameters.get(ant[0],'decim')
+                
+            effective_rate = parameters.get(ant[0],'rate') / float(decimation_factor)   
+                
+                
+        if start_time is not None:
+            start_time *= effective_rate
+        else:
+            start_time = 0
+        if end_time is not None:
+            end_time *= effective_rate     
+        
+        samples, errors = openH5file(
+            filename,
+            ch_list= channel_list,
+            start_sample = start_time,
+            last_sample = end_time,
+            usrp_number = usrp_number,
+            front_end = front_end,
+            verbose = False,
+            error_coord = True
+        )
+        print_debug("plot_raw_data() found %d channels each long %d samples"%(len(samples),len(samples[0])))
+        if channel_list == None:
+            ch_list  = range(len(samples))
+        else:
+            if max(channel_list) > len(samples):
+                print_warning("Channel list selected in plot_raw_data() is bigger than avaliable channels. plotting all available channels")
+                ch_list  = range(len(samples))
+            else:
+                ch_list = channel_list
+                
+        #prepare samples TODO
+        for i in ch_list:
+        
+            if mode == 'IQ':
+                Y1 = samples[i].real
+                Y2 = samples[i].imag
+            elif mode == 'PM':
+                Y1 = np.abs(samples[i])
+                Y2 = np.angle(samples[i]) 
+            
+            if decimation is not None and decimation > 1:
+                decimation = int(np.abs(decimation))
+                Y1 = signal.decimate(Y1,decimation,ftype = 'fir')
+                Y2 = signal.decimate(Y2,decimation,ftype = 'fir')
+            else:
+                decimation = 1.
+            
+            X = np.arange(len(Y1))/float(effective_rate/decimation) + start_time
+        
+            if effective_rate/1e6 > 1:
+                rate_tag = 'DAQ rate: %.2f Msps'%(effective_rate/1e6)
+            else:
+                rate_tag = 'DAQ rate: %.2f ksps'%(effective_rate/1e3)
+                
+            if backend == 'matplotlib':
+                ax[0].plot(X,Y1, color = get_color(i), label = "channel %d"%i)
+                ax[1].plot(X,Y2, color = get_color(i))
+    
+    if backend == 'matplotlib':
+        for error in errors:
+            err_start_coord = (error[0]-decimation/2)/float(effective_rate) + start_time
+            err_end_coord = (error[1] + decimation/2 )/float(effective_rate) + start_time
+            ax[0].axvspan(err_start_coord, err_end_coord, facecolor='yellow', alpha=0.4)
+            ax[1].axvspan(err_start_coord, err_end_coord, facecolor='yellow', alpha=0.4)
+        fig.suptitle(plot_title+"\n"+rate_tag)
+        handles, labels = ax[0].get_legend_handles_labels()
+        if len(errors)>0:
+            yellow_patch = mpatches.Patch(color='yellow', label='ERRORS')
+            handles.append(yellow_patch)
+            labels.append('ERRORS')
+        fig.legend(handles, labels, loc=7)
+        ax[0].grid(True)   
+        ax[1].grid(True)   
+        if output_filename is not None:
+            fig.savefig(output_filename+'.png')
+        if auto_open:
+            pl.show()
+        else:
+            pl.close()
+        
+def plot_all_pfb(filename, decimation = None, low_pass = None, backend = 'matplotlib', output_filename = None, start_time = None, end_time = None, auto_open = True, **kwargs):
+    '''
+    Plot the output of a PFB acquisition as an heatmap.
+    '''      
+    filename = format_filename(filename)
+    parameters = global_parameter()
+    parameters.retrive_prop_from_file(filename)
+    ant = parameters.get_active_rx_param()
+    try:
+        usrp_number = kwargs['usrp_number']
+    except KeyError:
+        usrp_number = None
+    if len(ant) > 1:
+        print_error("multiple RX devices not yet supported")
+        return
+    
+    if parameters.get(ant[0],'wave_type')[0] != "NOISE":
+        print_warning("The file selected does not have the PFB acquisition tag. Errors may occour")
+        
+    fft_tones = parameters.get(ant[0],'fft_tones')
+    rate = parameters.get(ant[0],'rate')
+    x_label = (np.arange(fft_tones)-fft_tones/2)*(rate/fft_tones)
+    
+    if start_time is not None:
+        start_time *= effective_rate
+    else:
+        start_time = 0
+    if end_time is not None:
+        end_time *= effective_rate 
+        
+    try:
+        front_end = kwargs['front_end']
+    except KeyError:
+        front_end = None
+    samples, errors = openH5file(
+            filename,
+            ch_list= None,
+            start_sample = start_time,
+            last_sample = end_time,
+            usrp_number = usrp_number,
+            front_end = front_end,
+            verbose = False,
+            error_coord = True
+        )
+        
+    y_label = np.arange(len(samples[0])/fft_tones)/(rate/fft_tones)
+        
+    z = 20*np.log10(np.abs(samples[0]))
+    if backend == 'matplotlib':
+        fig, ax = pl.subplots(nrows=1, ncols=1, sharex=True)
+        try:
+            fig.set_size_inches(kwargs['size'][0],kwargs['size'][1])
+        except KeyError:
+            pass
+        ax.set_xlabel("Channel [Hz]")
+        ax.set_ylabel("Time [s]")
+        
+        ax.imshow(np.roll(np.reshape(z,(len(z)/fft_tones,fft_tones)),fft_tones/2,axis = 1),aspect = 'auto',interpolation = 'nearest',extent=[min(x_label),max(x_label),min(y_label),max(y_label)])
+        
+        pl.show()()    
+        
 def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decimation = True, RF = None, Front_end = None, Device = None, filename = None, Multitone_compensation = None, Iterations = 1, verbose = False):
 
     '''
@@ -1550,7 +2502,6 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
         decimation = 0
         
     number_of_samples = Rate* measure_t
-       
         
     vna_command = global_parameter()
     

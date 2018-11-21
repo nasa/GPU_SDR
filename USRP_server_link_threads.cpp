@@ -54,7 +54,7 @@ class TXRX{
             tx_buffer_len = settings->default_tx_buffer_len;
             
             //initialize all the possible RX memory
-            std::cout<<"initializing "<<(rx_buffer_len *  RX_QUEUE_LENGTH * sizeof(float2))/(1024.*1024.)<<"MB of memory... "<<std::flush;
+            std::cout<<"initializing "<<(rx_buffer_len *  RX_QUEUE_LENGTH * sizeof(float2))/(1024.*1024.)<<"MB of memory... "<<std::endl;
             rx_memory = new preallocator<float2>(rx_buffer_len,RX_QUEUE_LENGTH);
             
             //TX memory do not have autorefill
@@ -75,7 +75,7 @@ class TXRX{
             //allocation depends on parameters
             output_memory_size = 0;
             
-            std::cout<<"\tdone."<<std::endl;
+            std::cout<<"Memory initialization done."<<std::endl;
             
             //initialize the conditional waiting classes
             rx_conditional_waiting = new threading_condition();
@@ -212,7 +212,7 @@ class TXRX{
 
         //start the threads
         void start(usrp_param* global_param){
-        
+            
             //current_tx_param is NULL if no param struct in global_param has TX mode
             if(current_tx_param){
                 if(not TX_status and not hardware->check_tx_status()){
@@ -266,7 +266,9 @@ class TXRX{
                         print_debug("starting write",0) ;
                     }
                     if(tcp_streaming){
-                        TCP_streamer->start(current_rx_param);
+                        if(not TCP_streamer->start(current_rx_param)){
+                            stop(true);
+                        }
                         print_debug("starting net",0) ;
                     }
             
@@ -292,7 +294,7 @@ class TXRX{
                 data_output_status = (file_writing or tcp_streaming)?true:false;
                 //give the stop command to the filewriter and streamer only if the hardware and dsp are done
                 bool hw_status = RX_status or hardware->check_rx_status();
-                bool tcp_status = tcp_streaming?(hw_status?true:TCP_streamer->stop()):false;
+                bool tcp_status = tcp_streaming?(hw_status?true:TCP_streamer->stop(force)):false;
                 bool wrt_status = file_writing?(tcp_status?true:(hw_status?true:H5_writer->stop())):false;
                 data_output_status = tcp_status or wrt_status;
                 if(diagnostic){
@@ -317,7 +319,7 @@ class TXRX{
                     
                     //force close data output threads                    
                     if(file_writing)H5_writer->stop(true);
-                    if(tcp_streaming)TCP_streamer->stop(true);
+                    //if(tcp_streaming)TCP_streamer->stop(true);
                     
                     //everything's fine for rx
                     status = status and true;
@@ -325,12 +327,10 @@ class TXRX{
                 //if the threads are still running
                 }else{status = status and false;}
                 
-                
             }
             
             if(current_tx_param){
                 if((not TX_status and not hardware->check_tx_status()) or force){
-
                     //close the rx interface thread
                     hardware->close_tx();
                     
@@ -360,7 +360,7 @@ class TXRX{
             preallocator<float2>* memory, //the custom memory allocator to use in case of dynamically denerated buffer
             TX_buffer_generator* generator, //source of the buffer
             tx_queue* queue_tx, //holds the pointer to the queue
-            long int total_samples, //how many sample to produce and push
+            size_t total_samples, //how many sample to produce and push
             bool dynamic, //true if the preallocation requires dynamic memory
             int preallocated // how many samples have been preallocate
         ){
@@ -375,19 +375,19 @@ class TXRX{
             
             //thread loop controller
             bool active = true;
-            
+            printf("SAMPLES AT thread LEVEL %lu\n", total_samples);
             //main loading loop
             while((sent_samples < total_samples) and active){
                 try{
                     boost::this_thread::interruption_point();
                     sent_samples+=tx_buffer_len;
-                    
                     if(dynamic)tx_vector = memory->get();
                     generator->get(&tx_vector);
                     //print_debug("pushing..",sent_samples);
                     bool insert = false;
                     while(not insert){
                         insert = queue_tx->push(tx_vector);
+                        
                         //print_debug("response..",insert);
                         boost::this_thread::sleep_for(boost::chrono::milliseconds{1});
                     }
@@ -395,6 +395,7 @@ class TXRX{
 
                 }
             }
+            
             //notify that the tx worker is off
             TX_status = false;
         }
@@ -405,7 +406,7 @@ class TXRX{
             preallocator<float2>* output_memory,
             RX_buffer_demodulator* demodulator,
             hardware_manager* rx_thread,
-            long int max_samples,
+            size_t max_samples,
             rx_queue* stream_q    //pointer to the queue to transport the buffer wrapper structure from the analysis to the streaming thread
         ){
             //notify that the rx worker is on
@@ -421,7 +422,10 @@ class TXRX{
             bool active = true;
             
             //counter of samples to acquire
-            long int recv_samples = 0;
+            size_t recv_samples = 0;
+            
+            //saturation warning will only be displayed once.
+            bool queue_saturnation_warning = true;
             
             //analysis cycle
             while(active and (recv_samples < max_samples)){
@@ -451,9 +455,16 @@ class TXRX{
                         //point to the right buffer in the wrapper
                         rx_buffer.buffer = output_buffer;
                         
-                        
                         //push the buffer in the output queue
-                        stream_q->push(rx_buffer);
+                        short att = 0;
+                        while (not stream_q->push(rx_buffer)){
+                            att++;
+                            boost::this_thread::sleep_for(boost::chrono::microseconds{5});
+                            if(queue_saturnation_warning and att>10){
+                                print_warning("Network streaming queue saturated");
+                                queue_saturnation_warning = false;
+                            }
+                        }
                         
                     //if no packet is present sleep for some time, there is no criticality here
                     }else{boost::this_thread::sleep_for(boost::chrono::milliseconds{2});}
@@ -471,7 +482,7 @@ class TXRX{
             RX_status = false;
         }
         
-        //pointer to current tx parameters. for double transmission still unclear //TODO
+        //pointer to current tx parameters.
         param* current_tx_param;
         param* current_rx_param;
         

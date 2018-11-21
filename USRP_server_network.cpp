@@ -17,11 +17,11 @@ using boost::asio::ip::address;
 #define MSG_LENGHT 1e4  //Lenght og the buffer string of the server, should not influent since is in a loop
 
 std::atomic<bool> reconnect_data; //when th async server detects a disconnection of the API make the sync thread reconnect
+std::atomic<bool> reconnect_async; // same thing used whe the exception is caught on the sync thread
 
 class Sync_server{
 
     public:
-    
         
         //true if the udp socket is connected
         std::atomic<bool> NET_IS_CONNECTED;
@@ -60,33 +60,38 @@ class Sync_server{
         
         void connect(int init_tcp_port){
             boost::asio::socket_base::reuse_address ciao(true);
-            if(verbose)std::cout<<"Waiting for TCP data connection on port: "<< init_tcp_port<<" ..."<<std::flush;
+            
+            if(verbose)std::cout<<"Waiting for TCP data connection on port: "<< init_tcp_port<<" ..."<<std::endl;
             acceptor = new tcp::acceptor(*io_service, tcp::endpoint(tcp::v4(), init_tcp_port),true);
             acceptor->set_option(ciao);
             socket = new tcp::socket(*io_service);
+            //socket->set_option(tcp::no_delay(true));
             acceptor->accept(*socket);
-            if(verbose)std::cout<<"Connected."<< std::endl;
+            if(verbose)std::cout<<"TCP data connection status update: Connected."<< std::endl;
             NET_IS_CONNECTED = true;
+            NEED_RECONNECT = false;
+            reconnect_data = false;
         }
         
         void reconnect(int init_tcp_port){
-        
-            stop();
+            stop(true);
             boost::asio::socket_base::reuse_address ciao(true);
             delete acceptor;
             delete socket;
-            if(verbose)std::cout<<"Waiting for TCP data connection on port: "<< init_tcp_port<<" ..."<<std::flush;
+            if(verbose)std::cout<<"Waiting for TCP data connection on port: "<< init_tcp_port<<" ..."<<std::endl;
             acceptor = new tcp::acceptor(*io_service, tcp::endpoint(tcp::v4(), init_tcp_port),true);
             acceptor->set_option(ciao);
             socket = new tcp::socket(*io_service);
+            //socket->set_option(tcp::no_delay(true));
             acceptor->accept(*socket);
-            if(verbose)std::cout<<"Connected."<< std::endl;
-            NET_IS_CONNECTED = true;
+            if(verbose)std::cout<<"TCP data connection status update: Connected."<< std::endl;
             NEED_RECONNECT = false;
+            NET_IS_CONNECTED = true;
+            
             
         }
         
-        void start(param* current_settings){
+        bool start(param* current_settings){
             if (NEED_RECONNECT){
                 print_warning("Before start streaming, data soket has to be reconnected.");
                 while(NEED_RECONNECT)std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -96,17 +101,23 @@ class Sync_server{
                 if(not virtual_pinger_online){
                     virtual_pinger_thread = new boost::thread(boost::bind(&Sync_server::virtual_pinger,this));
                 }
+            }else{
+                print_error("Cannot stream data without a connected socket!");
+                return false;
             }
+            return true;
         }
         
         //gracefully stop streaming or check streaming status
-        bool stop(bool force = true){
+        bool stop(bool force = false){
             if(NET_IS_CONNECTED and force){
                 force_close = true;
                 TCP_worker->interrupt();
                 TCP_worker->join();
+                print_debug("force_stopping TCP");
                 return NET_IS_STREAMING;
             }else if(NET_IS_CONNECTED){
+                print_debug("stopping TCP");
                 force_close = false;
                 TCP_worker->interrupt();
                 if(not NET_IS_STREAMING)TCP_worker->join();
@@ -152,6 +163,7 @@ class Sync_server{
                 std::this_thread::sleep_for(std::chrono::milliseconds(1000));
                 try{
                     if(reconnect_data){
+                        reconnect_data = false; //twice to avoid data race with async
                         NEED_RECONNECT = true;
                         NET_IS_CONNECTED = false;
                         reconnect_thread = new boost::thread(boost::bind(&Sync_server::reconnect,this,TCP_SYNC_PORT));
@@ -164,6 +176,7 @@ class Sync_server{
             }
             virtual_pinger_online = false;
         }
+        //size_t ilen = 0;
         //This function serialize a net_buffer struct into a boost buffer.
         void format_net_buffer(RX_wrapper input_packet, char* __restrict__ output_buffer){
 
@@ -189,6 +202,8 @@ class Sync_server{
             offset += sizeof(input_packet.channels);
             
             memcpy(&output_buffer[offset], input_packet.buffer, input_packet.length * 2 * sizeof(float));
+            //ilen+=input_packet.length/input_packet.channels;
+            //std::cout<<"Streaming packet: "<< input_packet.packet_number <<" acc_samp: "<< ilen<<std::endl;
 
         }
         
@@ -197,8 +212,6 @@ class Sync_server{
         
         //THIS FUNCTION IS INTENDED TO BE LUNCHED AS A SEPARATE THREAD
         void tcp_streamer(param* current_settings){
-        
-            
         
             //Packet to be serialized and sent
             RX_wrapper incoming_packet;
@@ -225,31 +238,48 @@ class Sync_server{
             
             NET_IS_STREAMING = true;
             
-            while(active and finishing){
+            stop_watch timer;
+            
+            while(active or finishing){
                 try{
                     boost::this_thread::interruption_point();
                     if(stream_queue->pop(incoming_packet)){
-                        
                         //calculate total size to be transmitted
                         int total_size = header_size + incoming_packet.length * 2 * sizeof(float);
                         
+                        
+                        
                         //setrialize data structure in a char buffer
                         format_net_buffer(incoming_packet, fullData);
+                        
+                        
+                        
                         if(not NEED_RECONNECT){
                             try{
                                 //send data structure         
+                                timer.start();
                                 boost::asio::write(*socket, boost::asio::buffer(fullData,total_size),boost::asio::transfer_all(), ignored_error);
+                                timer.cycle();
+
+                                
                             }catch(std::exception &e){
+                                std::stringstream ss;
+                                ss<<"Sync data thread: "<<e.what();
+                                print_error(ss.str());
                                 active = false;
                                 NET_IS_STREAMING = false;
+                                //reconnect_data = true;
                                 std::cout<<e.what()<<std::endl;
                             }
-                            if (ignored_error!=boost::system::errc::success){
+                            if (ignored_error!=boost::system::errc::success and ignored_error){
                                 std::stringstream ss;
+                                ss<<std::string("Sync data thread: ")<<std::string(ignored_error.message());
                                 print_error(ss.str());
                                 NEED_RECONNECT = true;
                                 NET_IS_CONNECTED = false;
-                                reconnect_thread = new boost::thread(boost::bind(&Sync_server::reconnect,this,TCP_SYNC_PORT));
+                                //reconnect_data = true;
+                                active = false;
+                                //reconnect_thread = new boost::thread(boost::bind(&Sync_server::reconnect,this,TCP_SYNC_PORT));
                             }
                         }
                         //print_debug("Packet length is:",incoming_packet.length);
@@ -258,23 +288,37 @@ class Sync_server{
                         }else{
                             memory->trash(incoming_packet.buffer);
                         }
-
+                        
                     }else{
                         //else wait for packets
-                        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                        //print_warning("TCP streamer in hold");
                     }
                     
                     if(not active)finishing = not stream_queue->empty();
-                    
+                    /*
+                    //recheck: the empty method can lead to false positives.
+                    if(not finishing){
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                        std::cout<<"DEBUG re-checking"<<std::endl;
+                        finishing = true; //not stream_queue->empty();
+                    }
+                    std::cout<<"DEBUG queue finished: "<<finishing<<std::endl;
+                    */
                 }catch(boost::thread_interrupted &){
                     active = false;
                     if (not force_close){
-                        finishing = not stream_queue->empty();
-                    }else finishing = false;
+                        //finishing = not stream_queue->empty();
+                        
+                    }else{
+                        finishing = false;
+                        //was outside the if else statement
+                    }
                 }
             }
             free(fullData);
             NET_IS_STREAMING = false;
+            std::cout<<"time elapsed in boost::asio::write: "<<timer.get_average()<<std::endl;
         }
 };
 
@@ -356,7 +400,7 @@ class Async_server{
         }
         
         Async_server(bool init_verbose = false){
-        
+            reconnect_async = false;
             verbose = init_verbose;
         
             //connect the async server
@@ -383,6 +427,9 @@ class Async_server{
         void send_async(std::string* message){
             if(ASYNC_SERVER_CONNECTED){
                 while(not response_queue->push(message))std::this_thread::sleep_for(std::chrono::microseconds(25));
+            }else{
+                print_warning("Cannot sent async message, interface disconnected.");
+                delete message;
             }
         };
         
@@ -410,7 +457,6 @@ class Async_server{
             }
         }
     
-
     private:
         
         //determine if the threads foreward messages to the std out    
@@ -433,7 +479,8 @@ class Async_server{
     
         //connect to the async server
         void connect(int init_tcp_port){
-                if(verbose)std::cout<<"Waiting for TCP async data connection on port: "<< init_tcp_port<<" ..."<<std::flush;
+                reconnect_async = false;
+                if(verbose)std::cout<<"Waiting for TCP async data connection on port: "<< init_tcp_port<<" ..."<<std::endl;;
                 boost::asio::socket_base::reuse_address ciao(true);
                 io_service = new boost::asio::io_service();
                 acceptor = new tcp::acceptor(*io_service, tcp::endpoint(tcp::v4(), init_tcp_port),true);
@@ -443,7 +490,7 @@ class Async_server{
                 
                 acceptor->accept(*socket);
                 //socket->set_option(ciao);
-                if(verbose)std::cout<<"Connected."<< std::endl;
+                if(verbose)std::cout<<"Async TCP connection update: Connected."<< std::endl;
                 ASYNC_SERVER_CONNECTED = true;
             }
             
@@ -455,7 +502,8 @@ class Async_server{
         }    
             
         void Reconnect(){
-            reconnect_data = true;
+            //reconnect_data = true;
+            reconnect_async = false;
             ASYNC_SERVER_CONNECTED = false;
             connect(TCP_ASYNC_PORT);
             TCP_async_worker_RX = new boost::thread(boost::bind(&Async_server::rx_async,this,command_queue));
@@ -540,6 +588,7 @@ class Async_server{
                         }else{
                             std::stringstream ss;
                             ss<<"Async RX server side encountered a payload problem: "<<error.message()<<std::endl;
+                            reconnect_data = true;
                             print_warning(ss.str());
                             active = false;
                             ASYNC_SERVER_CONNECTED = false;
@@ -551,11 +600,19 @@ class Async_server{
                     
                             std::stringstream ss;
                             ss<<"Async RX server side encountered a header problem: "<<error.message()<<std::endl;
+                            reconnect_data = true;
                             print_warning(ss.str());
                             active = false;
                             ASYNC_SERVER_CONNECTED = false;
                             Disconnect();
                             Reconnect();
+                    
+                    }
+                    if(reconnect_async){
+                        active = false;
+                        ASYNC_SERVER_CONNECTED = false;
+                        Disconnect();
+                        Reconnect();
                     
                     }
                     if(not ASYNC_SERVER_CONNECTED)active = false;

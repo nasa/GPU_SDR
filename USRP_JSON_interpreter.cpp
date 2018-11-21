@@ -100,10 +100,10 @@ bool string2param(std::string data, usrp_param &my_parameter){
     }
     
     try{ 
-        my_parameter.A_TXRX.samples = parameters.get_child("A_TXRX").get<float>("samples");
-        my_parameter.B_TXRX.samples = parameters.get_child("B_TXRX").get<float>("samples");
-        my_parameter.A_RX2.samples  = parameters.get_child("A_RX2").get<float>("samples");
-        my_parameter.B_RX2.samples  = parameters.get_child("B_RX2").get<float>("samples");
+        my_parameter.A_TXRX.samples = parameters.get_child("A_TXRX").get<size_t>("samples");
+        my_parameter.B_TXRX.samples = parameters.get_child("B_TXRX").get<size_t>("samples");
+        my_parameter.A_RX2.samples  = parameters.get_child("A_RX2").get<size_t>("samples");
+        my_parameter.B_RX2.samples  = parameters.get_child("B_RX2").get<size_t>("samples");
      }catch(std::exception& error){
         std::cout << error.what()<<std::endl;
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"samples\" match the specifications!");

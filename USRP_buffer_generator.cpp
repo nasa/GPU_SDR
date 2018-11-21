@@ -90,6 +90,7 @@ class TX_buffer_generator{
                     break;
                     
                 case CHIRP:
+                    
                     //set the correct function pointers for get() and close() methods
                     get_ptr = &TX_buffer_generator::get_from_chirp;
                     clr_ptr = &TX_buffer_generator::close_device_chirp;
@@ -208,7 +209,7 @@ class TX_buffer_generator{
         
         //effective function to get the chirp buffer
         void get_from_chirp(float2** __restrict__ target){
-        
+            
             //generate the chirp signal on gpu
             chirp_gen<<<1024,32,0,internal_stream>>>(base_buffer,buffer_len,d_parameter,last_index,scale);
             

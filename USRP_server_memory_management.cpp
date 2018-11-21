@@ -407,7 +407,6 @@ class preallocator{
                     }catch (boost::thread_interrupted&){active=(bool)false;}
                 }
             }else{
-                //print_debug("Queue activated without prefill",1);
                 while(active){
                     try{
                         boost::this_thread::interruption_point();

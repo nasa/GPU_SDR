@@ -488,20 +488,20 @@ class hardware_manager{
                     if(config.A_TXRX.mode == TX or config.A_RX2.mode == TX){
                         channel_num.resize(1);
                         channel_num[0] = 0;
-                        stream_args.channels = channel_num;
+                        stream_args.channels = {0};//channel_num;
                         if(not sw_loop)tx_stream = main_usrp->get_tx_stream(stream_args);
                     }
                     if(config.B_TXRX.mode == TX or config.B_RX2.mode == TX){
                         channel_num.resize(1);
                         channel_num[0] = 1;
-                        stream_args.channels = channel_num;
+                        stream_args.channels = {1};//channel_num;
                         if(not sw_loop)tx_stream = main_usrp->get_tx_stream(stream_args);
                     }
                 }else{
                     channel_num.resize(2);
                     channel_num[0] = 0;
                     channel_num[1] = 1;
-                    stream_args.channels = channel_num;
+                    stream_args.channels = {0,1};//channel_num;
                     if(not sw_loop)tx_stream = main_usrp->get_tx_stream(stream_args);
                 }
             }
@@ -779,10 +779,11 @@ class hardware_manager{
             //needed to change metadata only once
             bool first_packet = true;
             bool active = true;
-            long int sent_samp = 0;       //total number of samples sent
+            bool started = false; //Only needed for warning purposes
+            size_t sent_samp = 0;       //total number of samples sent
             float2* tx_buffer;  //the buffer pointer
             
-            //boost::thread* metadata_thread = new boost::thread(boost::bind(&hardware_manager::async_stream,this));
+            boost::thread* metadata_thread = new boost::thread(boost::bind(&hardware_manager::async_stream,this));
             
             float timeout = 0.1f;   //timeout in seconds(will be used to sync the recv calls)
             tx_thread_operation = true; //class variable to account for thread activity
@@ -826,22 +827,22 @@ class hardware_manager{
                         
                         if(current_settings->burst_off!=0){
                             first_packet = false;
-                            uhd::async_metadata_t async_md;
-                            //loop through all messages for the ACK packet (may have underflow messages in queue)
-                            /*
-                            while (tx_stream->recv_async_msg(async_md)){
-                                get_tx_error(&async_md,true);
-                            }
-                            */
-                            
+                            //uhd::async_metadata_t async_md;
+
+                        /*
+                        tx_stream->recv_async_msg(async_md);
+                        int errs = get_tx_error(&async_md,true);
+                        if(errs>0) tx_error_queue->push(1);
+                        */
                         }else if(first_packet){
+                            started = true;
                             metadata_tx.start_of_burst = false;
                             metadata_tx.has_time_spec = false;
                             first_packet = false;
                             timeout = 0.1f;
 
                         }
-                            
+                        
                         //elegant but not working yet    
                         //std::future<bool> foo = std::async (std::launch::async,&uhd::tx_streamer::recv_async_msg,this,async_md,(double)0);
 
@@ -852,13 +853,13 @@ class hardware_manager{
                         //print_debug("tx process: ",(tf-ti).count()/1.e6);
 
                         //send returns immediately even if the time was longer.. manually wait residual time
-                        double wait_correction = (metadata_tx.time_spec -main_usrp->get_time_now()).get_real_secs() +
-                                                 (double)current_settings->buffer_len/current_settings->rate;
-                        if(wait_correction>0)std::this_thread::sleep_for(std::chrono::nanoseconds(long(wait_correction*1e9)));
+                        //double wait_correction = (metadata_tx.time_spec -main_usrp->get_time_now()).get_real_secs() +
+                        //                         (double)current_settings->buffer_len/current_settings->rate;
+                        //if(wait_correction>0)std::this_thread::sleep_for(std::chrono::nanoseconds(long(wait_correction*1e9)));
                     }else{
                         std::this_thread::sleep_for(std::chrono::microseconds(10));
 
-                        if(active)print_error("TX queue is empty, cannot transmit buffer!");
+                        if(active and started)print_error("TX queue is empty, cannot transmit buffer!");
                         //should I push an error?
                     }
                 }catch (boost::thread_interrupted &){
@@ -877,8 +878,8 @@ class hardware_manager{
             if(not active){
                 print_warning("TX thread was taken down without transmitting the specified samples");
             }
-            //metadata_thread->interrupt();
-            //metadata_thread->join();
+            metadata_thread->interrupt();
+            metadata_thread->join();
             
             //set check the condition to false
             tx_thread_operation = false;
@@ -896,11 +897,11 @@ class hardware_manager{
                     boost::this_thread::interruption_point();
                     if(tx_thread_operation){
                         errors = 0;
-                        tx_stream->recv_async_msg(async_md);
-                        errors = get_tx_error(&async_md,0.5f);
+                        if(tx_stream->recv_async_msg(async_md)){
+                            errors = get_tx_error(&async_md,true);
+                        }
                         if(errors>0 and tx_thread_operation){
-                            tx_error_queue->push(true);
-                            print_debug("Got a TX error!!",0);
+                            tx_error_queue->push(1);
                         }
                         
                     }else{ active = false; }
@@ -972,15 +973,15 @@ class hardware_manager{
             bool active = true;         //control the interruption of the thread
 
             float2* rx_buffer;      //pointer to the receiver buffer
-            int num_rx_samps = 0;   //number of samples received in a single loop
-            long int acc_samp = 0;  //total number of samples received
-            int frag_count = 0;     //fragmentation count used for very long buffer
-            float timeout = 0.2f;   //timeout in seconds(will be used to sync the recv calls)
-            int counter = 0;        //internal packet number
-            int errors = 0;         //error counter (per loop)
-            int samples_remaining;  //internal loop samples counter
-            int push_counter;       //number of pushing attempts
-            int push_timer = 1;     //interval between queue pushing attempts
+            size_t num_rx_samps = 0;   //number of samples received in a single loop
+            size_t acc_samp = 0;  //total number of samples received
+            size_t frag_count = 0;     //fragmentation count used for very long buffer
+            //float timeout = 0.2f;   //timeout in seconds(will be used to sync the recv calls)
+            size_t counter = 0;        //internal packet number
+            size_t errors = 0;         //error counter (per loop)
+            size_t samples_remaining;  //internal loop samples counter
+            size_t push_counter;       //number of pushing attempts
+            size_t push_timer = 1;     //interval between queue pushing attempts
             
             //packet wrapping structure
             RX_wrapper warapped_buffer;
@@ -1031,7 +1032,7 @@ class hardware_manager{
 
 
             while(active and acc_samp < current_settings->samples){
-            
+                std::cout<<"samples: "<<acc_samp<<"/"<< current_settings->samples<<std::endl;
                 try{
                     
                     boost::this_thread::interruption_point();
@@ -1060,19 +1061,19 @@ class hardware_manager{
                         samples_remaining = std::min(current_settings->buffer_len,current_settings->buffer_len-num_rx_samps);
                         
                         //how long to wait for new samples //TODO not adapting the timeout can produce O
-                        timeout = std::max((float)samples_remaining/(float)current_settings->rate,0.2f);
+                        //timeout = std::max((float)samples_remaining/(float)current_settings->rate,0.2f);
 
-                        if(first_packet)std::this_thread::sleep_for(std::chrono::microseconds(int(1.e6*current_settings->delay)));
+                        if(first_packet)std::this_thread::sleep_for(std::chrono::nanoseconds(size_t(1.e9*current_settings->delay)));
 
                         //receive command
-                        num_rx_samps += rx_stream->recv(rx_buffer + num_rx_samps, samples_remaining, metadata_rx,timeout);//TODO
+                        num_rx_samps += rx_stream->recv(rx_buffer + num_rx_samps, samples_remaining, metadata_rx,0.1f);
                         
                         //interpret errors
-                        errors = get_rx_errors(&metadata_rx, true);
+                        if(get_rx_errors(&metadata_rx, true)>0)errors++;
                         
                         //get errors from tx thread if present
-                        if(tx_error_queue->pop(tmp) and tx_thread_operation)errors++;
-                        
+                        while(tx_error_queue->pop(tmp) and tx_thread_operation)errors++;
+
                         //change metadata for continuous streaming or burst mode
                         if(first_packet){
                             metadata_rx.start_of_burst = current_settings->samples <= current_settings->buffer_len ? true : false;
@@ -1080,7 +1081,9 @@ class hardware_manager{
                             metadata_rx.time_spec = uhd::time_spec_t(current_settings->burst_off);
                             first_packet = false;
                         }
-                        
+                        if(++frag_count>1){
+                            std::cout<< "Sample remaining: " << samples_remaining<<std::endl;
+                        }
                         //fragmentation handling (intended as: the USRP is not keeping up with the host thread)
                         if(++frag_count>4){
                             std::stringstream ss;
@@ -1113,6 +1116,7 @@ class hardware_manager{
                     push_counter = 0;
                     while(not Rx_queue->push(warapped_buffer)){
                         std::this_thread::sleep_for(std::chrono::microseconds(push_timer));
+                        if(push_counter>1)print_warning("RX queue is experencing some delay. This may cause troubles in real time acquisition.");
                         push_counter++;
                         if(push_timer * push_counter > 1e3*current_settings->buffer_len/current_settings->rate){
                             print_warning("RX queue is experencing some delay. This may cause troubles in real time acquisition.");
