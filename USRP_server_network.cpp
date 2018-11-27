@@ -70,24 +70,29 @@ class Sync_server{
             if(verbose)std::cout<<"TCP data connection status update: Connected."<< std::endl;
             NET_IS_CONNECTED = true;
             NEED_RECONNECT = false;
-            reconnect_data = false;
+            if(not virtual_pinger_online){
+                //std::cout<<"launching virtual pinger..."<<std::endl;
+                virtual_pinger_thread = new boost::thread(boost::bind(&Sync_server::virtual_pinger,this));
+            }else{
+                //std::cout<<"NO virtual pinger..."<<std::endl;
+            }
         }
         
         void reconnect(int init_tcp_port){
             stop(true);
-            boost::asio::socket_base::reuse_address ciao(true);
             delete acceptor;
             delete socket;
+            connect(init_tcp_port);
+            /*
             if(verbose)std::cout<<"Waiting for TCP data connection on port: "<< init_tcp_port<<" ..."<<std::endl;
             acceptor = new tcp::acceptor(*io_service, tcp::endpoint(tcp::v4(), init_tcp_port),true);
             acceptor->set_option(ciao);
             socket = new tcp::socket(*io_service);
-            //socket->set_option(tcp::no_delay(true));
             acceptor->accept(*socket);
             if(verbose)std::cout<<"TCP data connection status update: Connected."<< std::endl;
             NEED_RECONNECT = false;
             NET_IS_CONNECTED = true;
-            
+            */
             
         }
         
@@ -98,9 +103,6 @@ class Sync_server{
             }
             if (NET_IS_CONNECTED){
                 TCP_worker = new boost::thread(boost::bind(&Sync_server::tcp_streamer,this, current_settings));
-                if(not virtual_pinger_online){
-                    virtual_pinger_thread = new boost::thread(boost::bind(&Sync_server::virtual_pinger,this));
-                }
             }else{
                 print_error("Cannot stream data without a connected socket!");
                 return false;
@@ -114,10 +116,10 @@ class Sync_server{
                 force_close = true;
                 TCP_worker->interrupt();
                 TCP_worker->join();
-                print_debug("force_stopping TCP");
+                //print_debug("force_stopping TCP");
                 return NET_IS_STREAMING;
             }else if(NET_IS_CONNECTED){
-                print_debug("stopping TCP");
+                //print_debug("stopping TCP");
                 force_close = false;
                 TCP_worker->interrupt();
                 if(not NET_IS_STREAMING)TCP_worker->join();
@@ -160,9 +162,11 @@ class Sync_server{
             bool active = true;
             virtual_pinger_online = true;
             while(active){
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                std::this_thread::sleep_for(std::chrono::milliseconds(700));
                 try{
+                    //std::cout<<"Testing"<<std::endl;
                     if(reconnect_data){
+                        std::this_thread::sleep_for(std::chrono::milliseconds(300));
                         reconnect_data = false; //twice to avoid data race with async
                         NEED_RECONNECT = true;
                         NET_IS_CONNECTED = false;
@@ -238,9 +242,13 @@ class Sync_server{
             
             NET_IS_STREAMING = true;
             
-            stop_watch timer;
+            //stop_watch timer;
             
             while(active or finishing){
+                if(reconnect_data){
+                    active = false;
+                    finishing = false;
+                }
                 try{
                     boost::this_thread::interruption_point();
                     if(stream_queue->pop(incoming_packet)){
@@ -252,14 +260,12 @@ class Sync_server{
                         //setrialize data structure in a char buffer
                         format_net_buffer(incoming_packet, fullData);
                         
-                        
-                        
                         if(not NEED_RECONNECT){
                             try{
                                 //send data structure         
-                                timer.start();
+                                //timer.start();
                                 boost::asio::write(*socket, boost::asio::buffer(fullData,total_size),boost::asio::transfer_all(), ignored_error);
-                                timer.cycle();
+                                //timer.cycle();
 
                                 
                             }catch(std::exception &e){
@@ -288,6 +294,7 @@ class Sync_server{
                         }else{
                             memory->trash(incoming_packet.buffer);
                         }
+                        
                         
                     }else{
                         //else wait for packets
@@ -318,7 +325,7 @@ class Sync_server{
             }
             free(fullData);
             NET_IS_STREAMING = false;
-            std::cout<<"time elapsed in boost::asio::write: "<<timer.get_average()<<std::endl;
+            //std::cout<<"time elapsed in boost::asio::write: "<<timer.get_average()<<std::endl;
         }
 };
 
@@ -502,7 +509,7 @@ class Async_server{
         }    
             
         void Reconnect(){
-            //reconnect_data = true;
+            reconnect_data = true;
             reconnect_async = false;
             ASYNC_SERVER_CONNECTED = false;
             connect(TCP_ASYNC_PORT);

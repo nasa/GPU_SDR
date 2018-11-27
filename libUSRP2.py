@@ -887,6 +887,26 @@ def get_receivers(h5group):
             receivers.append(str(h5group.keys()[i]))
     return receivers    
 
+def get_rx_info(filename, ant = None):
+    '''
+    Retrive RX information from file. 
+    
+    Arguments:
+        - optional ant string to specify receiver. Default is the first found.
+    
+    Return:
+        Parameter dictionary
+    '''
+    filename = format_filename(filename)
+    parameters = global_parameter()
+    parameters.retrive_prop_from_file(filename)
+    if ant is None:
+        ant = parameters.get_active_rx_param()[0]
+    else:
+        ant = str(ant)
+        
+    return parameters.parameters[ant]
+    
 
 def openH5file(filename, ch_list= None, start_sample = None, last_sample = None, usrp_number = None, front_end = None, verbose = False, error_coord = False):
     '''
@@ -1072,14 +1092,15 @@ def openH5file(filename, ch_list= None, start_sample = None, last_sample = None,
         if len(sub_group["errors"])>0:
             print_warning("The measure opened contains %d erorrs!"%len(sub_group["errors"]))
         if error_coord:
-            errors,data = sub_group["errors"][:],sub_group["data"][ch_list,start_sample:min(last_sample,samples)]
-
+            data = sub_group["data"][ch_list,start_sample:last_sample]  
+            errors = sub_group["errors"][:]
             if errors is None:
                 errors = []
             f.close()
             return data,errors
             
         data = sub_group["data"][ch_list,start_sample:last_sample]  
+        print np.shape(data)
         f.close()
         return data
             
@@ -1118,6 +1139,7 @@ class global_parameter(object):
         empty_spec['chirp_t'] = [0]
         empty_spec['fft_tones'] = 0
         empty_spec['pf_average'] = 4
+        empty_spec['tuning_mode'] = 0
         prop = {}
         prop['A_TXRX'] = empty_spec.copy()
         prop['B_TXRX'] = empty_spec.copy()
@@ -1277,7 +1299,23 @@ class global_parameter(object):
                     except ValueError:
                         print_error("parameter \'ampl\' should be a list of numerical values, not a string")
                         return False
-                        
+                    try:
+                        if self.parameters[ant_key]['tuning_mode'] is None: 
+                            self.parameters[ant_key]['tuning_mode'] = 0
+                        else:
+                            try:
+                                int(self.parameters[ant_key]['tuning_mode'])
+                            except ValueError:
+                                try:
+                                    if "int" in str(self.parameters[ant_key]['tuning_mode']):
+                                        self.parameters[ant_key]['tuning_mode'] = 0
+                                    elif "frac" in str(self.parameters[ant_key]['tuning_mode']):
+                                        self.parameters[ant_key]['tuning_mode'] = 1
+                                except:
+                                    print_warning("Cannot recognize tuning mode\'%s\' setting to integer mode."%str(self.parameters[ant_key]['tuning_mode']))
+                                    self.parameters[ant_key]['tuning_mode'] = 0
+                    except KeyError:
+                        self.parameters[ant_key]['tuning_mode'] = 0    
                         
                     #matching the integers conversion
                     for j in range(len(self.parameters[ant_key]['freq'])):
@@ -1309,6 +1347,7 @@ class global_parameter(object):
                     self.parameters[ant_key]['chirp_t'] = [0]
                     self.parameters[ant_key]['fft_tones'] = 0
                     self.parameters[ant_key]['pf_average'] = 4
+                    self.parameters[ant_key]['tuning_mode'] = 1 # fractional
                     
         else:
             return False
@@ -1472,6 +1511,9 @@ class global_parameter(object):
 
             sub_prop['pf_average'] = sub_group.attrs.get('pf_average')
             missing_attr_warning('pf_average', sub_prop['pf_average'])
+            
+            sub_prop['tuning_mode'] = sub_group.attrs.get('tuning_mode')
+            missing_attr_warning('tuning_mode', sub_prop['tuning_mode'])
 
             return sub_prop
       
@@ -1919,20 +1961,21 @@ def spec_from_samples(samples, sampling_rate = 1, welch = None, dbc = False, rot
         welch = L
     else:
         welch = int(L/welch)
+    
+    if rotate:    
+        samples = samples * (np.abs(np.mean(samples))/np.mean(samples))
         
     if dbc:
         samples = samples  / np.mean(samples)
         samples = samples - np.mean(samples)
     
-    if rotate:    
-        samples = samples * (np.abs(np.mean(samples))/np.mean(samples))
     
     Frequencies , RealPart      = signal.welch( samples.real ,nperseg=welch, fs=sampling_rate ,detrend='linear',scaling='density')
     Frequencies , ImaginaryPart = signal.welch( samples.imag ,nperseg=welch, fs=sampling_rate ,detrend='linear',scaling='density')
-
+    
     return Frequencies, RealPart, ImaginaryPart
     
-def calculate_noise_spec(filename, welch = None, dbc = False, rotate = False, usrp_number = 0, ant = None, verbose = True, clip = 0.5):
+def calculate_noise(filename, welch = None, dbc = False, rotate = False, usrp_number = 0, ant = None, verbose = True, clip = 0.5):
     '''
     Generates the FFT of each channel stored in the .h5 file and stores the results in the same file.
     '''
@@ -1989,13 +2032,17 @@ def calculate_noise_spec(filename, welch = None, dbc = False, rotate = False, us
         return
     
     if verbose: print_debug("Calculating spectra...")
-        
+    
     Results = Parallel(n_jobs=N_CORES,verbose=1 ,backend  = parallel_backend)(
         delayed(spec_from_samples)(
-            samples[i], sampling_rate = sampling_rate, welch = welch, dbc = dbc, rotate = rotate, verbose = verbose
-        ) for i in range(len(samples))
+            np.asarray(i), sampling_rate = sampling_rate, welch = welch, dbc = dbc, rotate = rotate, verbose = verbose
+        ) for i in samples
     )
-    
+    '''
+    Results = spec_from_samples(
+            samples, sampling_rate = sampling_rate, welch = welch, dbc = dbc, rotate = rotate, verbose = verbose
+        )
+    '''
     if verbose: print_debug("Saving result on file "+filename+" ...")
     
     fv = h5py.File(filename,'r+')
@@ -2125,10 +2172,15 @@ def plot_noise_spec(filenames, channel_list = None, max_frequency = None, title_
         - backend: see plotting backend section for informations.
         - auto_open: open the plot in default system browser if plotly backend is selected (non-blocking) or open the matplotlib figure (blocking). Default is True.
         - output_filename: string: if given the function saves the plot (in png for matplotlib backend and html for plotly backend) with the given name.
-        - **kwargs: usrp_number and front_end can be passed to the openH5file() function. tx_front_end can be passed to manually determine the tx frontend to calculate the readout power.
+        - **kwargs: usrp_number and front_end can be passed to the openH5file() function. tx_front_end can be passed to manually determine the tx frontend to calculate the readout power. add_info could be a list of the same length og filenames containing additional leggend informations.
     '''
     filenames = to_list_of_str(filenames)
     
+    add_info_labels = None
+    try:
+        add_info_labels = kwargs['add_info']
+    except KeyError:
+        pass
     
     plot_title = 'USRP Noise spectra from '
     if len(filenames)<2:
@@ -2145,6 +2197,11 @@ def plot_noise_spec(filenames, channel_list = None, max_frequency = None, title_
             pass
         ax.set_xlabel("Frequency [Hz]")
         
+    elif backend == 'plotly':
+        fig = tools.make_subplots(rows=1, cols=1)
+        fig['layout']['xaxis1'].update(title="Frequency [Hz]",type='log')
+        
+        
     y_name_set = True
     rate_tag_set = True
     
@@ -2160,7 +2217,7 @@ def plot_noise_spec(filenames, channel_list = None, max_frequency = None, title_
         tx_front_end = kwargs['tx_front_end']
     except KeyError:
         tx_front_end = None
-        
+    f_count = 0    
     for filename in filenames:
         info, freq, real, imag = get_noise(
             filename,
@@ -2177,6 +2234,12 @@ def plot_noise_spec(filenames, channel_list = None, max_frequency = None, title_
                 else:
                     ax.set_ylabel("PSD [dBm/sqrt(Hz)]")
                     
+            elif backend == 'plotly':
+                if info['dbc']:
+                    fig['layout']['yaxis1'].update(title="PSD [dBc]")
+                else:
+                    fig['layout']['yaxis1'].update(title="PSD [dBm/sqrt(Hz)]")
+                    
         if rate_tag_set:
             rate_tag_set = False
             if info['rate']/1e6 > 1.:
@@ -2191,23 +2254,56 @@ def plot_noise_spec(filenames, channel_list = None, max_frequency = None, title_
             I = 10*np.log10(imag[i])
             if backend == 'matplotlib':
                 label+= "\nReadout pwr %.1f dBm"%(readout_power)
-                ax.semilogx(freq, R, '--', color = get_color(i), label = "Real "+label)
-                ax.semilogx(freq, I, color = get_color(i), label = "Imag "+label)
+                if add_info_labels is not None:
+                    label+="\n"+add_info_labels[f_count]
+                ax.semilogx(freq, R, '--', color = get_color(f_count+i), label = "Real "+label)
+                ax.semilogx(freq, I, color = get_color(f_count+i), label = "Imag "+label)
+            elif backend == 'plotly':    
+                label+= "<br>Readout pwr %.1f dBm"%(readout_power)
+                if add_info_labels is not None:
+                    label+="<br>"+add_info_labels[f_count]
+                fig.append_trace(go.Scatter(
+                    x = freq,
+                    y = R,
+                    name = "Real "+label,
+                    legendgroup = "group" +str(f_count+i),
+                    line = dict(color = get_color(f_count+i)),
+                    mode = 'lines'
+                ), 1, 1)
+                fig.append_trace(go.Scatter(
+                    x = freq,
+                    y = I,
+                    name = "Imag " + label,
+                    legendgroup = "group" +str(f_count+i),
+                    line = dict(color = get_color(f_count+i),dash = 'dot'),
+                    mode = 'lines'
+                ), 1, 1)
+        #increase file counter
+        f_count+=1
         
-        if backend == 'matplotlib':
-            if title_info is not None:
-                plot_title+= "\n"+title_info
-            fig.suptitle(plot_title)
-            handles, labels = ax.get_legend_handles_labels()
-            fig.legend(handles, labels, loc=7)
-            ax.grid(True)   
-            if output_filename is not None:
-                fig.savefig(output_filename+'.png')
-            if auto_open:
-                pl.show()
-            else:
-                pl.close()
-        
+    if backend == 'matplotlib':
+        if title_info is not None:
+            plot_title+= "\n"+title_info
+        fig.suptitle(plot_title)
+        handles, labels = ax.get_legend_handles_labels()
+        fig.legend(handles, labels, loc=7)
+        ax.grid(True)   
+        if output_filename is not None:
+            fig.savefig(output_filename+'.png')
+        if auto_open:
+            pl.show()
+        else:
+            pl.close()
+            
+    elif backend == 'plotly':
+        if title_info is not None:
+            plot_title+= "<br>"+title_info
+            
+        fig['layout'].update( title=plot_title)
+        if output_filename is None:
+            output_filename = "raw_data_plot"
+
+        plotly.offline.plot(fig, filename=output_filename+".html",auto_open=auto_open)
     
 def plot_raw_data(filenames, decimation = None, low_pass = None, backend = 'matplotlib', output_filename = None, channel_list = None, mode = 'IQ', start_time = None, end_time = None, auto_open = True, **kwargs):
     '''
@@ -2230,13 +2326,21 @@ def plot_raw_data(filenames, decimation = None, low_pass = None, backend = 'matp
         - start_time: time where to start plotting. Default is 0.
         - end_time: time where to stop plotting. Default is end of the measure.
         - auto_open: open the plot in default system browser if plotly backend is selected (non-blocking) or open the matplotlib figure (blocking). Default is True.
-        - **kwargs: usrp_number and front_end can be passed to the openH5file() function.
+        - **kwargs:
+            * usrp_number and front_end can be passed to the openH5file() function.
+            * size: the size of matplotlib figure.
+            * add_info: list of strings as long as the file list to add info to the legend.
     Returns:
         - the return is up tho the backend choosen and could be a matplotlib figure or a html string.
         
     Note:
         - Possible errors are signaled on the plot.
     '''
+    add_info_labels = None
+    try:
+        add_info_labels = kwargs['add_info']
+    except KeyError:
+        pass
     plot_title = 'USRP raw data acquisition. '
     if backend == 'matplotlib':
         fig, ax = pl.subplots(nrows=2, ncols=1, sharex=True)
@@ -2245,14 +2349,25 @@ def plot_raw_data(filenames, decimation = None, low_pass = None, backend = 'matp
         except KeyError:
             pass
         ax[1].set_xlabel("Time [s]")
-        
         if mode == 'IQ':
             ax[0].set_ylabel("I [fp ADC]")
             ax[1].set_ylabel("Q [fp ADC]")
         elif mode == 'PM':
             ax[0].set_ylabel("Magnitude [abs(ADC)]")
             ax[1].set_ylabel("Phase [Rad]")
-
+            
+    elif backend == 'plotly':   
+        if mode == 'IQ':
+            fig = tools.make_subplots(rows=2, cols=1,subplot_titles=('I timestream', 'Q timestream'),shared_xaxes=True)
+            fig['layout']['yaxis1'].update(title='I [fp ADC]')
+            fig['layout']['yaxis2'].update(title='Q [fp ADC]')
+        elif mode == 'PM':
+            fig = tools.make_subplots(rows=2, cols=1,subplot_titles=('Magnitude', 'Phase'),shared_xaxes=True)
+            fig['layout']['yaxis1'].update(title='Magnitude [abs(ADC)]')
+            fig['layout']['yaxis2'].update(title='Phase [Rad]')
+            
+        fig['layout']['xaxis1'].update(title='Time [s]')    
+        
     filenames = to_list_of_str(filenames)
     
     print_debug("Plotting from files:")
@@ -2266,7 +2381,7 @@ def plot_raw_data(filenames, decimation = None, low_pass = None, backend = 'matp
         front_end = kwargs['front_end']
     except KeyError:
         front_end = None
-        
+    file_count = 0    
     for filename in filenames:
         
         filename = format_filename(filename)
@@ -2277,10 +2392,10 @@ def plot_raw_data(filenames, decimation = None, low_pass = None, backend = 'matp
         if len(ant) > 1:
             print_error("multiple RX devices not yet supported")
             return
-        
+        freq = None
         if parameters.get(ant[0],'wave_type')[0] == "TONES":
             decimation_factor = parameters.get(ant[0],'fft_tones')
-                   
+            freq =  np.asarray(parameters.get(ant[0],'freq')) + parameters.get(ant[0],'rf')
             if parameters.get(ant[0],'decim') != 0:
                 decimation_factor*=parameters.get(ant[0],'decim')
                 
@@ -2300,19 +2415,20 @@ def plot_raw_data(filenames, decimation = None, low_pass = None, backend = 'matp
                 
             effective_rate = parameters.get(ant[0],'rate') / float(decimation_factor)   
                 
-                
         if start_time is not None:
-            start_time *= effective_rate
+            file_start_time = start_time* effective_rate
         else:
-            start_time = 0
+            file_start_time = 0
         if end_time is not None:
-            end_time *= effective_rate     
+            file_end_time = end_time * effective_rate
+        else:
+            file_end_time = None
         
         samples, errors = openH5file(
             filename,
             ch_list= channel_list,
-            start_sample = start_time,
-            last_sample = end_time,
+            start_sample = file_start_time,
+            last_sample = file_end_time,
             usrp_number = usrp_number,
             front_end = front_end,
             verbose = False,
@@ -2345,21 +2461,49 @@ def plot_raw_data(filenames, decimation = None, low_pass = None, backend = 'matp
             else:
                 decimation = 1.
             
-            X = np.arange(len(Y1))/float(effective_rate/decimation) + start_time
+            X = np.arange(len(Y1))/float(effective_rate/decimation) + file_start_time
         
             if effective_rate/1e6 > 1:
                 rate_tag = 'DAQ rate: %.2f Msps'%(effective_rate/1e6)
             else:
                 rate_tag = 'DAQ rate: %.2f ksps'%(effective_rate/1e3)
+            
+            
+            if freq is None:
+                label = "Channel %d"%i
+            else:
+                label = "Channel %.2f MHz"%(freq[i]/1.e6)
                 
             if backend == 'matplotlib':
-                ax[0].plot(X,Y1, color = get_color(i), label = "channel %d"%i)
-                ax[1].plot(X,Y2, color = get_color(i))
-    
+                if add_info_labels is not None:
+                    label+="\n"+add_info_labels[f_count]
+                ax[0].plot(X,Y1, color = get_color(i+file_count), label = label)
+                ax[1].plot(X,Y2, color = get_color(i+file_count))
+            elif backend == 'plotly':
+                if add_info_labels is not None:
+                    label+="<br>"+add_info_labels[f_count]
+                fig.append_trace(go.Scatter(
+                    x = X,
+                    y = Y1,
+                    name = label,
+                    legendgroup = "group" +str(i+file_count),
+                    line = dict(color = get_color(i+file_count)),
+                    mode = 'lines'
+                ), 1, 1)
+                fig.append_trace(go.Scatter(
+                    x = X,
+                    y = Y2,
+                    #name = "channel %d"%i,
+                    showlegend = False,
+                    legendgroup = "group" +str(i+file_count),
+                    line = dict(color = get_color(i+file_count)),
+                    mode = 'lines'
+                ), 2, 1)
+        file_count+=1
     if backend == 'matplotlib':
         for error in errors:
-            err_start_coord = (error[0]-decimation/2)/float(effective_rate) + start_time
-            err_end_coord = (error[1] + decimation/2 )/float(effective_rate) + start_time
+            err_start_coord = (error[0]-decimation/2)/float(effective_rate) + file_start_time
+            err_end_coord = (error[1] + decimation/2 )/float(effective_rate) + file_start_time
             ax[0].axvspan(err_start_coord, err_end_coord, facecolor='yellow', alpha=0.4)
             ax[1].axvspan(err_start_coord, err_end_coord, facecolor='yellow', alpha=0.4)
         fig.suptitle(plot_title+"\n"+rate_tag)
@@ -2377,6 +2521,14 @@ def plot_raw_data(filenames, decimation = None, low_pass = None, backend = 'matp
             pl.show()
         else:
             pl.close()
+            
+    if backend == 'plotly':
+
+        fig['layout'].update( title=plot_title+"<br>"+rate_tag)
+
+        if output_filename is None:
+            output_filename = "PFB_waterfall"
+        plotly.offline.plot(fig, filename=output_filename+".html",auto_open=auto_open)
         
 def plot_all_pfb(filename, decimation = None, low_pass = None, backend = 'matplotlib', output_filename = None, start_time = None, end_time = None, auto_open = True, **kwargs):
     '''
@@ -2399,8 +2551,10 @@ def plot_all_pfb(filename, decimation = None, low_pass = None, backend = 'matplo
         
     fft_tones = parameters.get(ant[0],'fft_tones')
     rate = parameters.get(ant[0],'rate')
-    x_label = (np.arange(fft_tones)-fft_tones/2)*(rate/fft_tones)
-    
+    channel_width = rate/fft_tones
+    decimation = parameters.get(ant[0],'decim')
+    integ_time = fft_tones*max(decimation,1)/rate
+    rf = parameters.get(ant[0],'rf')
     if start_time is not None:
         start_time *= effective_rate
     else:
@@ -2423,21 +2577,69 @@ def plot_all_pfb(filename, decimation = None, low_pass = None, backend = 'matplo
             error_coord = True
         )
         
-    y_label = np.arange(len(samples[0])/fft_tones)/(rate/fft_tones)
-        
+    y_label = np.arange(len(samples[0])/fft_tones)/(rate/(fft_tones*max(1,decimation)))
+    x_label = (rf+(np.arange(fft_tones)-fft_tones/2)*(rate/fft_tones))/1e6
+    title = "PFB acquisition form file %s"%filename
+    subtitle = "Channel width %.2f kHz; Frame integration time: %.2e s"%(channel_width/1.e3, integ_time)
     z = 20*np.log10(np.abs(samples[0]))
+    try:
+        z_shaped = np.roll(np.reshape(z,(len(z)/fft_tones,fft_tones)),fft_tones/2,axis = 1)
+    except ValueError as msg:
+        print_warning("Error while plotting pfb spectra: "+str(msg))
+        cut = len(z) - len(z)/fft_tones*fft_tones
+        z = z[:-cut]
+        print_debug("Cutting last data (%d samples) to fit"%cut)
+        #z_shaped = np.roll(np.reshape(z,(len(z)/fft_tones,fft_tones)),fft_tones/2,axis = 1)
+        z_shaped = np.roll(np.reshape(z,(len(z)/fft_tones,fft_tones)),fft_tones/2,axis = 1)
+    
+    #pl.plot(z_shaped.T, alpha = 0.1, color = "k")
+    #pl.show()
+    
     if backend == 'matplotlib':
-        fig, ax = pl.subplots(nrows=1, ncols=1, sharex=True)
+        fig, ax = pl.subplots(nrows=2, ncols=1, sharex=True)
         try:
             fig.set_size_inches(kwargs['size'][0],kwargs['size'][1])
         except KeyError:
             pass
-        ax.set_xlabel("Channel [Hz]")
-        ax.set_ylabel("Time [s]")
+        ax[0].set_xlabel("Channel [MHz]")
+        ax[0].set_ylabel("Time [s]")
+        ax[0].set_title(title+"\n"+subtitle)
+        imag = ax[0].imshow(z_shaped,aspect = 'auto',interpolation = 'nearest',extent=[min(x_label),max(x_label),min(y_label),max(y_label)])
+        #fig.colorbar(imag)#,ax=ax[0]
+        for zz in z_shaped[::100]:
+            ax[1].plot(x_label,zz, color = 'k', alpha = 0.1)
+        ax[1].set_xlabel("Channel [MHz]")
+        ax[1].set_ylabel("Power [dBm]")
+        #ax[1].set_title("Trace stack")
         
-        ax.imshow(np.roll(np.reshape(z,(len(z)/fft_tones,fft_tones)),fft_tones/2,axis = 1),aspect = 'auto',interpolation = 'nearest',extent=[min(x_label),max(x_label),min(y_label),max(y_label)])
         
-        pl.show()()    
+        if output_filename is not None:
+            fig.savefig(output_filename+'.png')
+        if auto_open:
+            pl.show()
+        else:
+            pl.close()
+            
+    if backend == 'plotly':
+        data = [
+            go.Heatmap(
+                z=z_shaped,
+                x=x_label,
+                y=y_label,
+                colorscale='Viridis',
+            )
+        ]
+
+        layout = go.Layout(
+            title=title+"<br>"+subtitle,
+            xaxis = dict(title = "Channel [MHz]"),
+            yaxis = dict(title = "Time [s]")
+        )
+
+        fig = go.Figure(data=data, layout=layout)
+        if output_filename is None:
+            output_filename = "PFB_waterfall"
+        plotly.offline.plot(fig, filename=output_filename+".html",auto_open=auto_open)
         
 def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decimation = True, RF = None, Front_end = None, Device = None, filename = None, Multitone_compensation = None, Iterations = 1, verbose = False):
 

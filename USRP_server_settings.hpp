@@ -188,7 +188,7 @@ struct param{
     float burst_on;  //time length of the bursts in seconds
     float burst_off; //time between bursts in seconds
     size_t buffer_len;  //length of the transport buffer (both GPU and USRP). SET to 0 for default.
-    
+    bool tuning_mode;   //0 for integer and 1 for fractional
     //software signal parameters
     std::vector<int> freq;
     std::vector<w_type> wave_type;

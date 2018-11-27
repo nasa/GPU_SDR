@@ -77,10 +77,14 @@ int main(int argc, char **argv){
                 thread_manager.set(&global_parameters);
                 thread_manager.start(&global_parameters);
                 bool done = false;
+                std::cout<< "DAq in progress:" <<std::flush;
                 while(not done){
-                    std::cout<<"below will check..."<<std::endl;
                     done = thread_manager.stop();
-                    print_debug("check if done... ",done);
+                    if(not done){
+                        std::cout<<"."<<std::flush;
+                    }else{
+                        std::cout<<"*Measure complete"<<std::endl;
+                    }
                     boost::this_thread::sleep_for(boost::chrono::milliseconds{500});
                     //if (async.chk_new_command())done = thread_manager.stop(true); //this is not working
                 }

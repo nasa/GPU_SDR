@@ -85,7 +85,6 @@ int get_tx_error(uhd::async_metadata_t *async_md, bool verbose = false){
             break;
 
         case uhd::async_metadata_t::EVENT_CODE_BURST_ACK:
-            if(verbose)print_debug("TX is fine",0);
             break;
 
         case uhd::async_metadata_t::EVENT_CODE_UNDERFLOW:
@@ -195,6 +194,19 @@ void print_params(usrp_param my_parameter){
     ss << (A_RX2?(position_formatting % (my_parameter.A_RX2.wave_type.size()/1.)).str():(std::string)"  -    ")   << "          ";
     ss << (B_TXRX?(position_formatting % (my_parameter.B_TXRX.wave_type.size()/1.)).str():(std::string)"  -    ") << "          ";
     ss << (B_RX2?(position_formatting % (my_parameter.B_RX2.wave_type.size()/1.)).str():(std::string)"  -    ") << "\t[#]"<<std::endl;
+    
+    ss << "\033[47;1;30m #samp \033[0m"<<"     ";
+    
+    ss << (A_TXRX?(position_formatting % (my_parameter.A_TXRX.samples/1.)).str():(std::string)"  -    ") << "          ";
+    ss << (A_RX2?(position_formatting % (my_parameter.A_RX2.samples/1.)).str():(std::string)"  -    ")   << "          ";
+    ss << (B_TXRX?(position_formatting % (my_parameter.B_TXRX.samples/1.)).str():(std::string)"  -    ") << "          ";
+    ss << (B_RX2?(position_formatting % (my_parameter.B_RX2.samples/1.)).str():(std::string)"  -    ") << "\t[#]"<<std::endl;
+    
+    ss << "\033[47;1;30m tun_m \033[0m"<<"     ";
+    ss << (A_TXRX?(my_parameter.A_TXRX.tuning_mode?"fractio":"integer"):(std::string)"  -    ") << "          ";
+    ss << (A_RX2?(my_parameter.A_TXRX.tuning_mode?"fractio":"integer"):(std::string)"  -    ")   << "          ";
+    ss << (B_TXRX?(my_parameter.A_TXRX.tuning_mode?"fractio":"integer"):(std::string)"  -    ") << "          ";
+    ss << (B_RX2?(my_parameter.A_TXRX.tuning_mode?"fractio":"integer"):(std::string)"  -    ") << "\t[-]"<<std::endl;
     
     ss << std::endl;
     ss << "\033[40;1;37m                  S I G N A L S    P A R A M E T E R S                  \033[0m"<<std::endl<<std::endl;

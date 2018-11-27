@@ -593,21 +593,41 @@ class hardware_manager{
                     parameters->rate = old_parameters->rate;
                 }
                 
-                if(old_parameters->mode == OFF or old_parameters->tone != parameters->tone){
+                if(old_parameters->mode == OFF or old_parameters->tone != parameters->tone or old_parameters->tuning_mode != parameters->tuning_mode){
                     changed = true;
                     uhd::tune_request_t tune_request(parameters->tone,0);    
+                    if(not parameters->tuning_mode){
+                        tune_request.args = uhd::device_addr_t("mode_n=integer");
+                    }
                     if(parameters->mode == RX) {
                         if(not sw_loop){
                             main_usrp->set_rx_freq(tune_request,chan);
                             old_parameters->tone = main_usrp->get_rx_freq(chan);
                         } else old_parameters->tone = parameters->tone;
-                        ss << boost::format("\tSetting RX central frequency: %f MHz. ") % (parameters->tone / 1e6) << std::flush;
+                        old_parameters->tuning_mode = parameters->tuning_mode;
+                        ss << boost::format("\tSetting RX central frequency: %f MHz. ") % (parameters->tone / 1e6);
+                        if(parameters->tuning_mode){
+                            ss<<" (fractional) ";
+                        }else{
+                            ss<<" (integer) ";
+                        }
+                        ss<< std::flush;
                     }else{
                         if(not sw_loop){
                             main_usrp->set_tx_freq(tune_request,chan);
                             old_parameters->tone = main_usrp->get_tx_freq(chan);
-                        } else old_parameters->tone = parameters->tone;
-                        ss << boost::format("\tSetting TX central frequency: %f MHz. ") % (parameters->tone / 1e6) << std::flush;
+                        }else{ 
+                            old_parameters->tone = parameters->tone;
+                        }
+                        old_parameters->tuning_mode = parameters->tuning_mode;
+                            
+                        ss << boost::format("\tSetting TX central frequency: %f MHz. ") % (parameters->tone / 1e6);
+                        if(parameters->tuning_mode){
+                            ss<<" (fractional) ";
+                        }else{
+                            ss<<" (integer) ";
+                        }
+                        ss<< std::flush;
                     }    
      
                     old_parameters->tone == parameters->tone?
@@ -785,7 +805,7 @@ class hardware_manager{
             
             boost::thread* metadata_thread = new boost::thread(boost::bind(&hardware_manager::async_stream,this));
             
-            float timeout = 0.1f;   //timeout in seconds(will be used to sync the recv calls)
+            //float timeout = 0.1f;   //timeout in seconds(will be used to sync the recv calls)
             tx_thread_operation = true; //class variable to account for thread activity
             
             uhd::tx_metadata_t metadata_tx;
@@ -813,59 +833,40 @@ class hardware_manager{
                             metadata_tx.end_of_burst   = (bool)true;
                             metadata_tx.start_of_burst = (bool)true;
                             metadata_tx.has_time_spec = (bool)true;
-                            timeout = 0.1f + current_settings->burst_off;
+                            //timeout = 0.1f + current_settings->burst_off;
                             metadata_tx.time_spec = main_usrp->get_time_now() + uhd::time_spec_t(current_settings->burst_off);
-                            //std::this_thread::sleep_for(std::chrono::nanoseconds(long(current_settings->burst_off*1e9-10000)));
                         }
                         
                         
-                        tx_stream->send(tx_buffer, current_settings->buffer_len, metadata_tx,timeout);
-                        //print_debug("sent",current_settings->buffer_len);
+                        tx_stream->send(tx_buffer, current_settings->buffer_len, metadata_tx,0.3f);//timeout
 
                         
                         sent_samp += current_settings->buffer_len;
                         
                         if(current_settings->burst_off!=0){
                             first_packet = false;
-                            //uhd::async_metadata_t async_md;
-
-                        /*
-                        tx_stream->recv_async_msg(async_md);
-                        int errs = get_tx_error(&async_md,true);
-                        if(errs>0) tx_error_queue->push(1);
-                        */
+       
                         }else if(first_packet){
                             started = true;
                             metadata_tx.start_of_burst = false;
                             metadata_tx.has_time_spec = false;
                             first_packet = false;
-                            timeout = 0.1f;
+                            //timeout = 0.1f;
 
                         }
                         
-                        //elegant but not working yet    
-                        //std::future<bool> foo = std::async (std::launch::async,&uhd::tx_streamer::recv_async_msg,this,async_md,(double)0);
-
-                        //buffer recycling in case of dynamic allocation mode
-                        
                         if(memory)memory->trash(tx_buffer);
-                    
-                        //print_debug("tx process: ",(tf-ti).count()/1.e6);
 
-                        //send returns immediately even if the time was longer.. manually wait residual time
-                        //double wait_correction = (metadata_tx.time_spec -main_usrp->get_time_now()).get_real_secs() +
-                        //                         (double)current_settings->buffer_len/current_settings->rate;
-                        //if(wait_correction>0)std::this_thread::sleep_for(std::chrono::nanoseconds(long(wait_correction*1e9)));
                     }else{
-                        std::this_thread::sleep_for(std::chrono::microseconds(10));
+                        std::this_thread::sleep_for(std::chrono::microseconds(1));
 
-                        if(active and started)print_error("TX queue is empty, cannot transmit buffer!");
+                        if(active and started){
+                            print_error("TX queue is empty, cannot transmit buffer!");
+                        }
                         //should I push an error?
                     }
                 }catch (boost::thread_interrupted &){
                     active = false;
-                    //metadata_tx.end_of_burst   = (bool)true;
-                    //tx_stream->send("000000000000000000000000000000000000000", 0, metadata_tx);
                 }
  
             }
@@ -976,7 +977,7 @@ class hardware_manager{
             size_t num_rx_samps = 0;   //number of samples received in a single loop
             size_t acc_samp = 0;  //total number of samples received
             size_t frag_count = 0;     //fragmentation count used for very long buffer
-            //float timeout = 0.2f;   //timeout in seconds(will be used to sync the recv calls)
+            //float timeout = 0.1f;   //timeout in seconds(will be used to sync the recv calls)
             size_t counter = 0;        //internal packet number
             size_t errors = 0;         //error counter (per loop)
             size_t samples_remaining;  //internal loop samples counter
@@ -1032,7 +1033,7 @@ class hardware_manager{
 
 
             while(active and acc_samp < current_settings->samples){
-                std::cout<<"samples: "<<acc_samp<<"/"<< current_settings->samples<<std::endl;
+                //std::cout<<"samples: "<<acc_samp<<"/"<< current_settings->samples<<std::endl;
                 try{
                     
                     boost::this_thread::interruption_point();
@@ -1066,7 +1067,7 @@ class hardware_manager{
                         if(first_packet)std::this_thread::sleep_for(std::chrono::nanoseconds(size_t(1.e9*current_settings->delay)));
 
                         //receive command
-                        num_rx_samps += rx_stream->recv(rx_buffer + num_rx_samps, samples_remaining, metadata_rx,0.1f);
+                        num_rx_samps += rx_stream->recv(rx_buffer + num_rx_samps, samples_remaining, metadata_rx);//,0.1f
                         
                         //interpret errors
                         if(get_rx_errors(&metadata_rx, true)>0)errors++;
@@ -1082,7 +1083,7 @@ class hardware_manager{
                             first_packet = false;
                         }
                         if(++frag_count>1){
-                            std::cout<< "Sample remaining: " << samples_remaining<<std::endl;
+                            std::cout<< "F" << frag_count<<std::flush;
                         }
                         //fragmentation handling (intended as: the USRP is not keeping up with the host thread)
                         if(++frag_count>4){

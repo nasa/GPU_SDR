@@ -338,9 +338,9 @@ __global__ void polyphase_filter(
                 acc.y += input[sample_index].y * (filter_info->window)[win_index].x;
             }
             
-            //last averaging step
-            acc.x = acc.x/filter_info->average_buffer;
-            acc.y = acc.y/filter_info->average_buffer;
+            //last averaging step NO because it's a normalized window
+            //acc.x = acc.x/filter_info->average_buffer;
+            //acc.y = acc.y/filter_info->average_buffer;
             
             //finally write the filtered sample to the output buffer
             output[offset] = acc;
@@ -511,6 +511,54 @@ __global__ void mix_buffers(
         output[offset].x = buffer1[offset].x + buffer2[offset].x;
         output[offset].y = buffer1[offset].y + buffer2[offset].y;
     }
+}
+
+
+__global__ void average_spectra(
+        float2* __restrict__ input,
+        float2* __restrict__ output,
+        int decim,
+        int nfft,
+        int input_len
+
+    ){
+    for(int offset = blockIdx.x * blockDim.x + threadIdx.x;
+        offset < input_len;
+        offset += gridDim.x*blockDim.x
+        ){
+        
+        int output_offset = offset%nfft + nfft*int(offset/(nfft*decim));
+        atomicAdd(&output[output_offset].x, input[offset].x);
+        atomicAdd(&output[output_offset].y, input[offset].y);
+        
+        
+    }
+    
+}
+
+void decimate_spectra(
+        float2* __restrict__ input, //output of the pfb
+        float2* __restrict__ output,//decimated output
+        int decim,                  //decimation factor (multiplicative to the pfb one)
+        int nfft,                   //length of the fft
+        int input_len,              //could be calculated inside but I wrote an apposite class for it
+        int output_len,
+        cudaStream_t stram_f        //stream on which to launch the decimator
+        ){
+    
+    //input len must be chopped to the exact amount of data
+        
+
+    average_spectra<<<1024, 32, 0, stram_f>>>(
+        input,
+        output,
+        decim,
+        nfft,
+        input_len
+    );
+        
+    scale_buffer<<<1024, 32>>>(output, output_len, 1./decim);
+    
 }
 
 //decimate the output of the fft without tone selection

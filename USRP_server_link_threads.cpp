@@ -263,13 +263,13 @@ class TXRX{
                     //eventually start streaming and writing    
                     if(file_writing){
                         H5_writer->start(global_param);
-                        print_debug("starting write",0) ;
+                        //print_debug("starting write",0) ;
                     }
                     if(tcp_streaming){
                         if(not TCP_streamer->start(current_rx_param)){
                             stop(true);
                         }
-                        print_debug("starting net",0) ;
+                        //print_debug("starting net",0) ;
                     }
             
                 }else{
@@ -338,6 +338,7 @@ class TXRX{
                     TX_worker->interrupt();
                     TX_worker->join();
                     
+                    tx_gen->close();
                     //reset the parameter pointer
                     current_tx_param = NULL;
                     
@@ -371,11 +372,10 @@ class TXRX{
             float2* tx_vector;
             
             //number of samples "sent" in to the tx queue
-            long int sent_samples = preallocated*tx_buffer_len;
+            size_t sent_samples = preallocated*tx_buffer_len;
             
             //thread loop controller
             bool active = true;
-            printf("SAMPLES AT thread LEVEL %lu\n", total_samples);
             //main loading loop
             while((sent_samples < total_samples) and active){
                 try{
@@ -383,14 +383,13 @@ class TXRX{
                     sent_samples+=tx_buffer_len;
                     if(dynamic)tx_vector = memory->get();
                     generator->get(&tx_vector);
-                    //print_debug("pushing..",sent_samples);
                     bool insert = false;
                     while(not insert){
                         insert = queue_tx->push(tx_vector);
-                        
-                        //print_debug("response..",insert);
-                        boost::this_thread::sleep_for(boost::chrono::milliseconds{1});
+                        boost::this_thread::sleep_for(boost::chrono::microseconds{1});
                     }
+                    //std::cout<<"Pushing buffer"<<std::endl;
+                    boost::this_thread::sleep_for(boost::chrono::microseconds{1});
                 }catch(boost::thread_interrupted &){ active = false; 
 
                 }
@@ -398,6 +397,8 @@ class TXRX{
             
             //notify that the tx worker is off
             TX_status = false;
+            
+            //generator->close();
         }
         
         //thread for taking a packet from the receive queue and pushing it into the analysis queue

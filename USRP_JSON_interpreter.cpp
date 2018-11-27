@@ -49,50 +49,60 @@ bool string2param(std::string data, usrp_param &my_parameter){
         return false;
     }
     try{     
-        my_parameter.A_TXRX.tone = parameters.get_child("A_TXRX").get<float>("rf");
-        my_parameter.B_TXRX.tone = parameters.get_child("B_TXRX").get<float>("rf");
-        my_parameter.A_RX2.tone  = parameters.get_child("A_RX2").get<float>("rf");
-        my_parameter.B_RX2.tone  = parameters.get_child("B_RX2").get<float>("rf");
+        my_parameter.A_TXRX.tone = parameters.get_child("A_TXRX").get<double>("rf");
+        my_parameter.B_TXRX.tone = parameters.get_child("B_TXRX").get<double>("rf");
+        my_parameter.A_RX2.tone  = parameters.get_child("A_RX2").get<double>("rf");
+        my_parameter.B_RX2.tone  = parameters.get_child("B_RX2").get<double>("rf");
     }catch(std::exception& error){
         std::cout << error.what()<<std::endl;
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"rf\" match the specifications!");
         return false;
     }
     try{ 
-        my_parameter.A_TXRX.rate = parameters.get_child("A_TXRX").get<float>("rate");
-        my_parameter.B_TXRX.rate = parameters.get_child("B_TXRX").get<float>("rate");
-        my_parameter.A_RX2.rate  = parameters.get_child("A_RX2").get<float>("rate");
-        my_parameter.B_RX2.rate  = parameters.get_child("B_RX2").get<float>("rate");
+        my_parameter.A_TXRX.tuning_mode = parameters.get_child("A_TXRX").get<size_t>("tuning_mode");
+        my_parameter.B_TXRX.tuning_mode = parameters.get_child("B_TXRX").get<size_t>("tuning_mode");
+        my_parameter.A_RX2.tuning_mode  = parameters.get_child("A_RX2").get<size_t>("tuning_mode");
+        my_parameter.B_RX2.tuning_mode  = parameters.get_child("B_RX2").get<size_t>("tuning_mode");
+     }catch(std::exception& error){
+        std::cout << error.what()<<std::endl;
+        print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"tuning_mode\" match the specifications!");
+        return false;
+    }
+    try{ 
+        my_parameter.A_TXRX.rate = parameters.get_child("A_TXRX").get<double>("rate");
+        my_parameter.B_TXRX.rate = parameters.get_child("B_TXRX").get<double>("rate");
+        my_parameter.A_RX2.rate  = parameters.get_child("A_RX2").get<double>("rate");
+        my_parameter.B_RX2.rate  = parameters.get_child("B_RX2").get<double>("rate");
      }catch(std::exception& error){
         std::cout << error.what()<<std::endl;
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"rate\" match the specifications!");
         return false;
     }
     try{ 
-        my_parameter.A_TXRX.decim = parameters.get_child("A_TXRX").get<float>("decim");
-        my_parameter.B_TXRX.decim = parameters.get_child("B_TXRX").get<float>("decim");
-        my_parameter.A_RX2.decim  = parameters.get_child("A_RX2").get<float>("decim");
-        my_parameter.B_RX2.decim  = parameters.get_child("B_RX2").get<float>("decim");
+        my_parameter.A_TXRX.decim = parameters.get_child("A_TXRX").get<double>("decim");
+        my_parameter.B_TXRX.decim = parameters.get_child("B_TXRX").get<double>("decim");
+        my_parameter.A_RX2.decim  = parameters.get_child("A_RX2").get<double>("decim");
+        my_parameter.B_RX2.decim  = parameters.get_child("B_RX2").get<double>("decim");
      }catch(std::exception& error){
         std::cout << error.what()<<std::endl;
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"decim\" match the specifications!");
         return false;
     }
     try{ 
-        my_parameter.A_TXRX.fft_tones = parameters.get_child("A_TXRX").get<float>("fft_tones");
-        my_parameter.B_TXRX.fft_tones = parameters.get_child("B_TXRX").get<float>("fft_tones");
-        my_parameter.A_RX2.fft_tones  = parameters.get_child("A_RX2").get<float>("fft_tones");
-        my_parameter.B_RX2.fft_tones  = parameters.get_child("B_RX2").get<float>("fft_tones");
+        my_parameter.A_TXRX.fft_tones = parameters.get_child("A_TXRX").get<double>("fft_tones");
+        my_parameter.B_TXRX.fft_tones = parameters.get_child("B_TXRX").get<double>("fft_tones");
+        my_parameter.A_RX2.fft_tones  = parameters.get_child("A_RX2").get<double>("fft_tones");
+        my_parameter.B_RX2.fft_tones  = parameters.get_child("B_RX2").get<double>("fft_tones");
      }catch(std::exception& error){
         std::cout << error.what()<<std::endl;
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"fft_tones\" match the specifications!");
         return false;
     }
     try{ 
-        my_parameter.A_TXRX.pf_average = parameters.get_child("A_TXRX").get<float>("pf_average");
-        my_parameter.B_TXRX.pf_average = parameters.get_child("B_TXRX").get<float>("pf_average");
-        my_parameter.A_RX2.pf_average  = parameters.get_child("A_RX2").get<float>("pf_average");
-        my_parameter.B_RX2.pf_average  = parameters.get_child("B_RX2").get<float>("pf_average");
+        my_parameter.A_TXRX.pf_average = parameters.get_child("A_TXRX").get<double>("pf_average");
+        my_parameter.B_TXRX.pf_average = parameters.get_child("B_TXRX").get<double>("pf_average");
+        my_parameter.A_RX2.pf_average  = parameters.get_child("A_RX2").get<double>("pf_average");
+        my_parameter.B_RX2.pf_average  = parameters.get_child("B_RX2").get<double>("pf_average");
      }catch(std::exception& error){
         std::cout << error.what()<<std::endl;
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"pf_average\" match the specifications!");
@@ -110,60 +120,60 @@ bool string2param(std::string data, usrp_param &my_parameter){
         return false;
     }
     try{ 
-        my_parameter.A_TXRX.buffer_len = parameters.get_child("A_TXRX").get<float>("buffer_len");
-        my_parameter.B_TXRX.buffer_len = parameters.get_child("B_TXRX").get<float>("buffer_len");
-        my_parameter.A_RX2.buffer_len  = parameters.get_child("A_RX2").get<float>("buffer_len");
-        my_parameter.B_RX2.buffer_len  = parameters.get_child("B_RX2").get<float>("buffer_len");
+        my_parameter.A_TXRX.buffer_len = parameters.get_child("A_TXRX").get<double>("buffer_len");
+        my_parameter.B_TXRX.buffer_len = parameters.get_child("B_TXRX").get<double>("buffer_len");
+        my_parameter.A_RX2.buffer_len  = parameters.get_child("A_RX2").get<double>("buffer_len");
+        my_parameter.B_RX2.buffer_len  = parameters.get_child("B_RX2").get<double>("buffer_len");
      }catch(std::exception& error){
         std::cout << error.what()<<std::endl;
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"buffer_len\" match the specifications!");
         return false;
     }
     try{ 
-        my_parameter.A_TXRX.burst_off = parameters.get_child("A_TXRX").get<float>("burst_off");
-        my_parameter.B_TXRX.burst_off = parameters.get_child("B_TXRX").get<float>("burst_off");
-        my_parameter.A_RX2.burst_off  = parameters.get_child("A_RX2").get<float>("burst_off");
-        my_parameter.B_RX2.burst_off  = parameters.get_child("B_RX2").get<float>("burst_off");
+        my_parameter.A_TXRX.burst_off = parameters.get_child("A_TXRX").get<double>("burst_off");
+        my_parameter.B_TXRX.burst_off = parameters.get_child("B_TXRX").get<double>("burst_off");
+        my_parameter.A_RX2.burst_off  = parameters.get_child("A_RX2").get<double>("burst_off");
+        my_parameter.B_RX2.burst_off  = parameters.get_child("B_RX2").get<double>("burst_off");
      }catch(std::exception& error){
         std::cout << error.what()<<std::endl;
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"burst_off\" match the specifications!");
         return false;
     }
     try{ 
-        my_parameter.A_TXRX.burst_on = parameters.get_child("A_TXRX").get<float>("burst_on");
-        my_parameter.B_TXRX.burst_on = parameters.get_child("B_TXRX").get<float>("burst_on");
-        my_parameter.A_RX2.burst_on  = parameters.get_child("A_RX2").get<float>("burst_on");
-        my_parameter.B_RX2.burst_on  = parameters.get_child("B_RX2").get<float>("burst_on");
+        my_parameter.A_TXRX.burst_on = parameters.get_child("A_TXRX").get<double>("burst_on");
+        my_parameter.B_TXRX.burst_on = parameters.get_child("B_TXRX").get<double>("burst_on");
+        my_parameter.A_RX2.burst_on  = parameters.get_child("A_RX2").get<double>("burst_on");
+        my_parameter.B_RX2.burst_on  = parameters.get_child("B_RX2").get<double>("burst_on");
      }catch(std::exception& error){
         std::cout << error.what()<<std::endl;
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"burst_on\" match the specifications!");
         return false;
     }
     try{ 
-        my_parameter.A_TXRX.bw = parameters.get_child("A_TXRX").get<float>("bw");
-        my_parameter.B_TXRX.bw = parameters.get_child("B_TXRX").get<float>("bw");
-        my_parameter.A_RX2.bw  = parameters.get_child("A_RX2").get<float>("bw");
-        my_parameter.B_RX2.bw  = parameters.get_child("B_RX2").get<float>("bw");
+        my_parameter.A_TXRX.bw = parameters.get_child("A_TXRX").get<double>("bw");
+        my_parameter.B_TXRX.bw = parameters.get_child("B_TXRX").get<double>("bw");
+        my_parameter.A_RX2.bw  = parameters.get_child("A_RX2").get<double>("bw");
+        my_parameter.B_RX2.bw  = parameters.get_child("B_RX2").get<double>("bw");
      }catch(std::exception& error){
         std::cout << error.what()<<std::endl;
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"bw\" match the specifications!");
         return false;
     }
     try{    
-        my_parameter.A_TXRX.delay = parameters.get_child("A_TXRX").get<float>("delay");
-        my_parameter.B_TXRX.delay = parameters.get_child("B_TXRX").get<float>("delay");
-        my_parameter.A_RX2.delay  = parameters.get_child("A_RX2").get<float>("delay");
-        my_parameter.B_RX2.delay  = parameters.get_child("B_RX2").get<float>("delay");
+        my_parameter.A_TXRX.delay = parameters.get_child("A_TXRX").get<double>("delay");
+        my_parameter.B_TXRX.delay = parameters.get_child("B_TXRX").get<double>("delay");
+        my_parameter.A_RX2.delay  = parameters.get_child("A_RX2").get<double>("delay");
+        my_parameter.B_RX2.delay  = parameters.get_child("B_RX2").get<double>("delay");
     }catch(std::exception& error){
         std::cout << error.what()<<std::endl;
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"delay\" match the specifications!");
         return false;
     }
     try{     
-        my_parameter.A_TXRX.gain = parameters.get_child("A_TXRX").get<float>("gain");
-        my_parameter.B_TXRX.gain = parameters.get_child("B_TXRX").get<float>("gain");
-        my_parameter.A_RX2.gain  = parameters.get_child("A_RX2").get<float>("gain");
-        my_parameter.B_RX2.gain  = parameters.get_child("B_RX2").get<float>("gain");
+        my_parameter.A_TXRX.gain = parameters.get_child("A_TXRX").get<double>("gain");
+        my_parameter.B_TXRX.gain = parameters.get_child("B_TXRX").get<double>("gain");
+        my_parameter.A_RX2.gain  = parameters.get_child("A_RX2").get<double>("gain");
+        my_parameter.B_RX2.gain  = parameters.get_child("B_RX2").get<double>("gain");
     }catch(std::exception& error){
         std::cout << error.what()<<std::endl;
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"gain\" match the specifications!");
@@ -229,6 +239,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"swipe_s\" match the specifications!");
         return false;
     }
+    
     std::cout<<"printing parameters..."<<std::endl;
     return true;
     

@@ -247,7 +247,8 @@ class RX_buffer_demodulator{
                     if(decimator_active){
                         
                         //the size used for this buffer it's bigger than expectes because the input size could variate.
-                        cudaMalloc((void **)&decim_output,sizeof(float2)*(2.*parameters->buffer_len)/(parameters->decim));
+                        //cudaMalloc((void **)&decim_output,sizeof(float2)*(2*parameters->buffer_len)/(parameters->decim));
+                        cudaMalloc((void **)&decim_output,sizeof(float2)*(2*parameters->buffer_len));
                         
                         //initialize the post demodulator decimation buffer manager
                         pfb_decim_helper = new pfb_decimator_helper(parameters->decim, parameters->fft_tones);
@@ -513,6 +514,8 @@ class RX_buffer_demodulator{
             
         }
         
+        int pfb_out = 0;
+        int output_len = 0;
         //same process as the pfb but there is no tone selection and the buffer is bully downloaded
         int process_pfb_spec(float2** __restrict__ input_buffer, float2** __restrict__ output_buffer){
         
@@ -529,7 +532,7 @@ class RX_buffer_demodulator{
             polyphase_filter<<<896*2,64,0,internal_stream>>>(raw_input,input,d_params);
             
             //execute the fft
-            cufftExecC2C(plan, input, output, CUFFT_FORWARD);
+            cufftExecC2C(plan, input, output+pfb_out, CUFFT_FORWARD);
             
             //move the part of the buffer that has already to be analyzed at the begin of the buffer
             move_buffer<<<1024,64,0,internal_stream>>>(
@@ -537,28 +540,38 @@ class RX_buffer_demodulator{
                 raw_input,  //to
                 buf_setting->spare_samples, //size
                 buf_setting->spare_begin,0); // destination offset
+                
             if(decimator_active){
                 
+                /*
                 pfb_decim_helper->update(buf_setting->current_batch);
                 spare_size = pfb_decim_helper->new_0;
                 //std::cout<<"new_0: "<<spare_size<<std::endl<< "current_batch"<<buf_setting->current_batch<<std::endl<<"out_size"<<pfb_decim_helper->out_size<<std::endl;
-                decimate_pfb(output,decim_output,parameters->fft_tones,parameters->decim,pfb_decim_helper->out_size,internal_stream);
+                decimate_pfb(output,decim_output,parameters->decim,parameters->fft_tones,pfb_decim_helper->out_size,internal_stream);
+                */
                 
+                std::cout<<"Input len is: "<<buf_setting->spare_begin<<std::endl;
+                output_len = parameters->fft_tones*int((buf_setting->spare_begin/parameters->fft_tones)/(float)parameters->decim);
+                int input_len = output_len * parameters->decim;
+                std::cout<<"Output len will be: "<<output_len<<std::endl;
+                decimate_spectra( output, decim_output, parameters->decim, parameters->fft_tones, input_len, output_len, internal_stream);
                 //move the spare buffer
+                std::cout<<"Resifual buffer is: "<<buf_setting->spare_begin - input_len    <<std::endl;
                 move_buffer<<<1024,64,0,internal_stream>>>(
                     output,  //from
                     output,  //to
-                    pfb_decim_helper->new_0, //size
-                    pfb_decim_helper->out_size,0); // destination offset
+                    buf_setting->spare_begin - input_len, //size
+                    input_len,0); // destination offset
                     
-                    
+                
                 //download the result in the host memory
-                cudaMemcpyAsync(*output_buffer,output,
+                cudaMemcpyAsync(*output_buffer,decim_output,
                     buf_setting->copy_size*sizeof(float2),
                     cudaMemcpyDeviceToHost,internal_stream);
 
                 //get the valid length for this buffer before updating the buffer helper but with decimation applied
-                output_buffer_valid_len = pfb_decim_helper->out_size;
+                //output_buffer_valid_len = pfb_decim_helper->out_size;
+                output_buffer_valid_len = output_len;
                     
             }else{
             

@@ -237,7 +237,9 @@ class TX_buffer_generator{
         void get_from_noise(){}
         
         //versions of the cleaning function
-        void close_host(){free(base_buffer);}
+        void close_host(){
+            free(base_buffer);
+        }
         
         void close_device_chirp(){
             cudaFree(base_buffer);
