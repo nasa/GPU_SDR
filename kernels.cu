@@ -1,8 +1,8 @@
-#include <cuda_runtime.h>
+//#include <cuda_runtime.h>
 #include <cufft.h>
 #include <cufftXt.h>
-#include <helper_functions.h>
-#include <helper_cuda.h>
+//#include <helper_functions.h>
+//#include <helper_cuda.h>
 #include "cublas_v2.h"
 #include <curand.h>
 #include <curand_kernel.h>

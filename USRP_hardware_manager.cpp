@@ -595,13 +595,20 @@ class hardware_manager{
                 
                 if(old_parameters->mode == OFF or old_parameters->tone != parameters->tone or old_parameters->tuning_mode != parameters->tuning_mode){
                     changed = true;
-                    uhd::tune_request_t tune_request(parameters->tone,0);    
-                    if(not parameters->tuning_mode){
-                        tune_request.args = uhd::device_addr_t("mode_n=integer");
-                    }
+                    
                     if(parameters->mode == RX) {
                         if(not sw_loop){
-                            main_usrp->set_rx_freq(tune_request,chan);
+                            if(not parameters->tuning_mode){
+                                
+                                uhd::tune_request_t tune_request(parameters->tone,0); 
+                                tune_request.args = uhd::device_addr_t("mode_n=integer");
+                                main_usrp->set_rx_freq(tune_request,chan);
+                            }else{
+                                uhd::tune_request_t tune_request(parameters->tone,0); 
+                                main_usrp->set_rx_freq(tune_request,chan);
+                                //main_usrp->set_rx_freq(parameters->tone,chan);
+                            }
+                            
                             old_parameters->tone = main_usrp->get_rx_freq(chan);
                         } else old_parameters->tone = parameters->tone;
                         old_parameters->tuning_mode = parameters->tuning_mode;
@@ -614,7 +621,16 @@ class hardware_manager{
                         ss<< std::flush;
                     }else{
                         if(not sw_loop){
-                            main_usrp->set_tx_freq(tune_request,chan);
+                            if(not parameters->tuning_mode){
+                                
+                                uhd::tune_request_t tune_request(parameters->tone,0); 
+                                tune_request.args = uhd::device_addr_t("mode_n=integer");
+                                main_usrp->set_tx_freq(tune_request,chan);
+                            }else{
+                                uhd::tune_request_t tune_request(parameters->tone,0); 
+                                main_usrp->set_tx_freq(tune_request,chan);
+                                //main_usrp->set_tx_freq(parameters->tone,chan);
+                            }
                             old_parameters->tone = main_usrp->get_tx_freq(chan);
                         }else{ 
                             old_parameters->tone = parameters->tone;

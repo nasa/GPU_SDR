@@ -47,11 +47,11 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/asio/basic_deadline_timer.hpp>
 
-#include <helper_functions.h>
-#include <helper_cuda.h>
+//#include <helper_functions.h>
+//#include <helper_cuda.h>
 #include <cuda_runtime.h>
 #include <cufft.h>
-#include <cufftXt.h>
+//#include <cufftXt.h>
 
 #include "USRP_server_diagnostic.cpp"
 

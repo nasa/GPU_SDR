@@ -1,3 +1,4 @@
+
 #include "USRP_server_diagnostic.cpp"
 #include "USRP_server_settings.hpp"
 #include "USRP_buffer_generator.cpp"
@@ -22,7 +23,7 @@ int main(int argc, char **argv){
     int port_async,port_sync;
     
     bool active = true;
-    
+    bool uhd_dbg = false;
     std::string* json_res;
     
     po::options_description desc("Allowed options");
@@ -36,6 +37,7 @@ int main(int argc, char **argv){
     ("clock", po::value<std::string>(&clock)->default_value("internal")->implicit_value("external"), "Clock selector")
     ("async", po::value<int>(&port_async)->default_value(22001), "Define ascynchronous TCP communication port")
     ("data", po::value<int>(&port_sync)->default_value(61360), "Define scynchronous TCP data streaming port")
+    ("uhd_dbg", po::value<bool>(&uhd_dbg)->default_value(false), "Enable UHD degug logging on console.")
     ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -46,7 +48,7 @@ int main(int argc, char **argv){
         return ~0;
     }
 
-    
+    if(uhd_dbg)uhd::log::set_console_level(uhd::log::severity_level::trace);	
     server_settings settings;
     settings.autoset();
     settings.TCP_streaming = net_streaming;
