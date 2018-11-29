@@ -1,26 +1,5 @@
-#ifndef USRP_DIAG_INCLUDED
-#define USRP_DIAG_INCLUDED 1
+#include "USRP_server_diagnostic.hpp"
 
-#include "USRP_server_settings.hpp"
-#include <uhd/types/metadata.hpp>
-#include <chrono>
-
-#ifndef WARNING_PRINTER
-#define WARNING_PRINTER
-
-void print_error(std::string text){
-    std::cout<<std::endl << "\033[1;31mERROR\033[0m: "<< text<<std::endl;
-}
-
-void print_warning(std::string text){
-    std::cout << "\033[40;1;33mWARNING\033[0m: "<< text<<std::endl;
-}
-
-void print_debug(std::string text, double value){
-    std::cout << "\033[40;1;34mDEBUG\033[0m: "<< text<< " " <<value<<std::endl;
-}
-
-#endif
 
 //print on screen error description
 void interptet_rx_error(uhd::rx_metadata_t::error_code_t error){
@@ -53,7 +32,7 @@ void interptet_rx_error(uhd::rx_metadata_t::error_code_t error){
 
 }
 
-int get_rx_errors(uhd::rx_metadata_t *metadata, bool verbose = false){
+int get_rx_errors(uhd::rx_metadata_t *metadata, bool verbose){
     
     //initialize error counter
     int error = 0;
@@ -72,7 +51,7 @@ int get_rx_errors(uhd::rx_metadata_t *metadata, bool verbose = false){
     return error;
 }
 
-int get_tx_error(uhd::async_metadata_t *async_md, bool verbose = false){
+int get_tx_error(uhd::async_metadata_t *async_md, bool verbose){
     int error = 0;
     switch(async_md->event_code){
         case 0 :
@@ -341,92 +320,68 @@ void print_params(usrp_param my_parameter){
 }
 
 
-class stop_watch{
-    //using namespace std::chrono;
-    typedef std::chrono::high_resolution_clock Time;
-    typedef std::chrono::duration<double> dsec;
-    public:
-        
-        stop_watch(){
-            start_t = boost::chrono::high_resolution_clock::now();
-        
-        }
-        
-        void start(){
-            start_t = boost::chrono::high_resolution_clock::now();
-            elapsed_time = get_time();
-            state = true;
-        }
-        
-        void stop(){
-            double y = get_time();
-            double x = y - elapsed_time;
-            if(state){
-                total_time+=x;
-                state = false;
-            }
-        }
-        
-        void reset(){
-            start_t = boost::chrono::high_resolution_clock::now();
-            total_time = 0;
-            state = false;
-        }
-        
-        double get(){
-            if(state){
-                print_warning("Getting a running stopwatch value");
-            }
-            return total_time;
-        }
-        
-        void store(){
-            acc.push_back(total_time);
-            if(state){
-                print_warning("Storing a running stopwatch value");
-            }
-        }
-        
-        double get_average(){
-            if(state){
-                    print_warning("Getting the average of a running stopwatch");
-                }
-            double avg = 0;
-            for(size_t i = 0; i < acc.size(); i++){
-                avg += acc[i];
-            }
-            avg/=acc.size();
-            return avg;
-        }
-        
-        void cycle(){
-            stop();
-            store();
-            reset();
-        }
-        
-    private:
-        
-        double get_time(){
-            boost::chrono::nanoseconds ns = boost::chrono::high_resolution_clock::now() - start_t;
-            return 1e-9 * ns.count();
-        }
-        
-        boost::chrono::high_resolution_clock::time_point start_t;
-        
-        double elapsed_time = 0;
-        
-        double total_time = 0;
-        
-        std::vector<double> acc;
-        
-        bool state = false;   
-        
-};
+stop_watch::stop_watch(){
+    start_t = boost::chrono::high_resolution_clock::now();
 
-#endif
+}
 
+void stop_watch::start(){
+    start_t = boost::chrono::high_resolution_clock::now();
+    elapsed_time = get_time();
+    state = true;
+}
 
+void stop_watch::stop(){
+    double y = get_time();
+    double x = y - elapsed_time;
+    if(state){
+        total_time+=x;
+        state = false;
+    }
+}
 
+void stop_watch::reset(){
+    start_t = boost::chrono::high_resolution_clock::now();
+    total_time = 0;
+    state = false;
+}
+
+double stop_watch::get(){
+    if(state){
+        print_warning("Getting a running stopwatch value");
+    }
+    return total_time;
+}
+
+void stop_watch::store(){
+    acc.push_back(total_time);
+    if(state){
+        print_warning("Storing a running stopwatch value");
+    }
+}
+
+double stop_watch::get_average(){
+    if(state){
+            print_warning("Getting the average of a running stopwatch");
+        }
+    double avg = 0;
+    for(size_t i = 0; i < acc.size(); i++){
+        avg += acc[i];
+    }
+    avg/=acc.size();
+    return avg;
+}
+
+void stop_watch::cycle(){
+    stop();
+    store();
+    reset();
+}
+
+double stop_watch::get_time(){
+    boost::chrono::nanoseconds ns = boost::chrono::high_resolution_clock::now() - start_t;
+    return 1e-9 * ns.count();
+}
+        
 
 

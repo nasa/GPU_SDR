@@ -1,13 +1,10 @@
-#include "USRP_server_settings.hpp"
-#include <boost/property_tree/json_parser.hpp>
-#ifndef USRP_JSON_INCLUDED
-#define USRP_JSON_INCLUDED 1
-#define MAX_MSG_LEN = 10000
+#include "USRP_JSON_interpreter.hpp"
+
 //this function will read the arrays inside a json file and put them in a std vector.
 template <typename T>
 std::vector<T> as_vector(boost::property_tree::ptree const& pt,
                          boost::property_tree::ptree::key_type const& key,
-                         boost::property_tree::ptree::key_type const& sub_key = "NULL"
+                         boost::property_tree::ptree::key_type const& sub_key
                          ){
     std::vector<T> r;
     if (sub_key == "NULL"){
@@ -444,5 +441,3 @@ std::string server_nack(std::string payload){
     boost::property_tree::write_json(res,response);
     return res.str();
 }
-
-#endif

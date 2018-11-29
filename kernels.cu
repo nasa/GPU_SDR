@@ -1,35 +1,9 @@
-//#include <cuda_runtime.h>
-#include <cufft.h>
-#include <cufftXt.h>
-//#include <helper_functions.h>
-//#include <helper_cuda.h>
-#include "cublas_v2.h"
-#include <curand.h>
-#include <curand_kernel.h>
+#include "kernels.cuh"
 
-#include "USRP_server_diagnostic.cpp"
-
-#ifndef GPU_KERNELS_INCUDED
-#define GPU_KERNELS_INCUDED 1
-
-#ifndef pi_f
-#define pi_f 3.14159265358979f
-#define _31_BIT_VALUE 2147483647.5
-#endif
-
-#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
-{
-   if (code != cudaSuccess) 
-   {
-      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
-      if (abort) exit(code);
-   }
-}
 //allocates memory on gpu and fills with a real hamming window. returns a pointer to the window on the device.
 //note that this is a host function that wraps some device calls
 template <typename T>
-T* make_hamming_window(int length, int side, bool diagnostic = false){
+T* make_hamming_window(int length, int side, bool diagnostic){
 
     T *d_win,*h_win = (T*)malloc(length*sizeof(T));
     
@@ -159,25 +133,6 @@ __global__ void make_rand(curandState *state, float2 *vector, int len, float sca
     }
 }
 
-//polyphase filter parameter wrapper + utility variables for buffer reminder
-struct filter_param {
-    float2* window; //pointer to an already initialized window.
-    int length; //total length of the device buffer
-    int n_tones; //how many points to calculate in the FFT
-    int average_buffer; //how many buffer are averaged (length of the window has to be average_buffer * n_tones)
-    int batching; //how many samples per each tone are present in the device buffer
-    int* tones; //Must be an array containing the fft bin number corresponding to the tone frequency
-    int eff_n_tones; //how many tones do you effectively want to download in the host buffer
-
-};
-
-struct chirp_parameter{
-    unsigned  long int num_steps; //number of frequency change in the chirp signal (1 means simple sinus).
-    unsigned  long int length; //total length of the each frequency in the chirp signal (in samples).
-    unsigned  int chirpness; //coefficient for quedratic phase calculation.
-    int f0; //start frequency
-    float freq_norm; //coefficient to adapt buffer samples to TX/RX frequency (deprecated).
-};
 
 void print_chirp_params(std::string comment, chirp_parameter cp){
     std::stringstream ss;
@@ -201,6 +156,21 @@ __device__ unsigned int round_index(unsigned int last_index, unsigned int offset
     
     return  (pos - ((pos/chirp_len) * chirp_len));//pos%chirp_len;
 
+}
+
+void chirp_gen_wrapper(
+
+    float2* __restrict__ output, //pointer to the gpu buffer
+    unsigned int output_size, //size of the buffer
+    chirp_parameter* __restrict__ info, //chirp information
+    unsigned long int last_index,
+    cudaStream_t internal_stream,
+    float scale = 1 //scale the amplitude of the chirp
+    
+    ){
+    
+    chirp_gen<<<1024,32,0,internal_stream>>>(output,output_size,info,last_index,scale);
+    
 }
 
 //generate a chirp waveform in a gpu buffer
@@ -244,6 +214,20 @@ __global__ void chirp_gen(
     }
     
 }
+
+void chirp_demodulator_wrapper(
+    float2* __restrict__ input,  //pointer to the input buffer
+    float2* __restrict__ output, //pointer to the gpu buffer
+    unsigned int output_size, //size of the buffers
+    unsigned long int last_index,
+    chirp_parameter* __restrict__ info, //chirp information
+    cudaStream_t internal_stream
+    ){
+    
+    chirp_demodulator<<<1024,32,0,internal_stream>>>(input,output,output_size,last_index,info);
+    
+} 
+
 __global__ void chirp_demodulator(
     float2* __restrict__ input,  //pointer to the input buffer
     float2* __restrict__ output, //pointer to the gpu buffer
@@ -286,6 +270,7 @@ __global__ void chirp_demodulator(
 __device__ float absolute(float2 number){return sqrt(number.x*number.x+number.y+number.y);}
 
 
+    
 __global__ void move_buffer(
     float2* __restrict__ from,
     float2* __restrict__ to,
@@ -302,7 +287,28 @@ __global__ void move_buffer(
         //if(absolute(from[offset])==0)printf("0 found in %d\n",offset);
     }
 }
-            
+void move_buffer_wrapper(
+    float2* __restrict__ from,
+    float2* __restrict__ to,
+    int size,
+    int from_offset,
+    int to_offset,
+    cudaStream_t internal_stream
+    ){
+    move_buffer<<<1024,64,0,internal_stream>>>(from,to,size,from_offset,to_offset);
+    
+}
+void polyphase_filter_wrapper(
+    float2* __restrict__ input,
+    float2* __restrict__ output,
+    filter_param* __restrict__ filter_info,
+    cudaStream_t internal_stream
+    ){
+    
+    polyphase_filter<<<896*2,64,0,internal_stream>>>(input,output,filter_info);
+}
+
+           
 //kernel used to apply the polyphase filter to a buffer using a window      
 __global__ void polyphase_filter(
     float2* __restrict__ input,
@@ -347,6 +353,18 @@ __global__ void polyphase_filter(
         }
     }       
 }
+void tone_select_wrapper(
+    float2* __restrict__ input, //must be the fft output
+    float2* __restrict__ output,//the buffer that will then be downloaded to host
+    filter_param* __restrict__ filter_info, //information about the filtering process
+    int effective_batching, //how many samples per tone have been effectively calculated
+    cudaStream_t internal_stream
+    ){
+    
+    tone_select<<<1024,64,0,internal_stream>>>(input,output,filter_info,effective_batching);
+    
+}
+
 
 //select the tones from the fft result and reorder them in a new buffer
 __global__ void tone_select(
@@ -392,20 +410,13 @@ __global__ void scale_buffer(
     }
 }
 
-//descriptor of the mutitone generation
-struct tone_parameters{
-    int tones_number; //how many tones to generate
-    int* tone_frquencies; //tones frequencies in Hz (frequency resolution will be 1Hz, host side)
-    float* tones_amplitudes; //tones amplitudes (linear, host side)
-};
-
 //generate a set of tones and return host pointer to the buffer unless the device option is true.
 //NOTE the length of the buffer is the sampling_rate
 float2* tone_gen(
     tone_parameters* info, //tone information (all host side)
     int sampling_rate,
-    float scale = 1., //scale the whole buffer (all tones) for a scalar
-    bool device = false //the function return device buffer instead
+    float scale, //scale the whole buffer (all tones) for a scalar
+    bool device //the function return device buffer instead
     ){
 
     //base for the fft. will be used as buffer recipient later.
@@ -415,7 +426,8 @@ float2* tone_gen(
     //set the cuda fft plan
     cufftHandle plan;
     if (cufftPlan1d(&plan, sampling_rate, CUFFT_C2C, 1) != CUFFT_SUCCESS){
-        print_error("Cannot allocate memory on the gpu for tone generation.");
+        //print_error("Cannot allocate memory on the gpu for tone generation.");
+        std::cout<<"CUDA ERROR IN cufftHandle"<<std::endl;
         return NULL;	
     }
     
@@ -459,7 +471,8 @@ float2* tone_gen(
 
     //execute the inverse FFT transform
     if (cufftExecC2C(plan, device_base, device_base, CUFFT_INVERSE) != CUFFT_SUCCESS){
-	    print_error("Cannot execute fft transform for tone generation.");
+	    //print_error("Cannot execute fft transform for tone generation.");
+	    std::cout<<"CUDA ERROR: Cannot execute fft transform for tone generation."<<std::endl;
         return NULL;	
     }
     
@@ -467,7 +480,7 @@ float2* tone_gen(
     scale_buffer<<<1024, 32>>>(device_base, sampling_rate, normalization);
     
     //if the user set a scale, apply scalar multiplication
-    if(scale>1.) print_warning("Maximum amplitude of the TX buffer is > 1.");
+    if(scale>1.) std::cout<<"CUDA WARNING: Maximum amplitude of the TX buffer is > 1."<<std::endl;//print_warning("Maximum amplitude of the TX buffer is > 1.");
     if(scale!=1.) scale_buffer<<<1024, 32>>>(device_base, sampling_rate, scale);
     
     //download the buffer from gpu to host
@@ -630,25 +643,32 @@ void _cudaGetErrorEnum(cublasStatus_t error)
     {
             
         case CUBLAS_STATUS_NOT_INITIALIZED:
-            print_error("CUBLAS_STATUS_NOT_INITIALIZED");
+            //print_error("CUBLAS_STATUS_NOT_INITIALIZED");
+            std::cout<<"CUBLAS ERROR: CUBLAS_STATUS_NOT_INITIALIZED"<<std::endl;
             break;
         case CUBLAS_STATUS_ALLOC_FAILED:
-            print_error( "CUBLAS_STATUS_ALLOC_FAILED");
+            //print_error( "CUBLAS_STATUS_ALLOC_FAILED");
+            std::cout<<"CUBLAS ERROR: CUBLAS_STATUS_ALLOC_FAILED"<<std::endl;
             break;
         case CUBLAS_STATUS_INVALID_VALUE:
-            print_error( "CUBLAS_STATUS_INVALID_VALUE");
+            //print_error( "CUBLAS_STATUS_INVALID_VALUE");
+            std::cout<<"CUBLAS ERROR: CUBLAS_STATUS_INVALID_VALUE"<<std::endl;
             break;
         case CUBLAS_STATUS_ARCH_MISMATCH:
-            print_error( "CUBLAS_STATUS_ARCH_MISMATCH");
+            //print_error( "CUBLAS_STATUS_ARCH_MISMATCH");
+            std::cout<<"CUBLAS ERROR: CUBLAS_STATUS_ARCH_MISMATCH"<<std::endl;
             break;
         case CUBLAS_STATUS_MAPPING_ERROR:
-            print_error( "CUBLAS_STATUS_MAPPING_ERROR");
+            //print_error( "CUBLAS_STATUS_MAPPING_ERROR");
+            std::cout<<"CUBLAS ERROR: CUBLAS_STATUS_MAPPING_ERROR"<<std::endl;
             break;
         case CUBLAS_STATUS_EXECUTION_FAILED:
-            print_error( "CUBLAS_STATUS_EXECUTION_FAILED");
+            //print_error( "CUBLAS_STATUS_EXECUTION_FAILED");
+            std::cout<<"CUBLAS ERROR: CUBLAS_STATUS_EXECUTION_FAILED"<<std::endl;
             break;
         case CUBLAS_STATUS_INTERNAL_ERROR:
-            print_error( "CUBLAS_STATUS_INTERNAL_ERROR");
+            //print_error( "CUBLAS_STATUS_INTERNAL_ERROR");
+            std::cout<<"CUBLAS ERROR: UBLAS_STATUS_INTERNAL_ERROR"<<std::endl;
             break;
     }
 }
@@ -675,9 +695,6 @@ void cublas_decim(
     _cudaGetErrorEnum(err);
 }
 
-
-//could be used to tune for other GPUs. NOTE: it also defines the shared memory
-#define PFB_DECIM_TPB 64. //Threads per block
 
 //wrapper for the previous fft decimation function. decimates the pfb output.
 //NOTE: this function does not take care of the reminder and suppose that calculation
@@ -749,8 +766,3 @@ __global__ void float2double(
         output[offset].y = input[offset].y;
     }
 }
-#endif
-
-
-
-

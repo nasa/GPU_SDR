@@ -1,15 +1,12 @@
 #ifndef USRP_SERVER_SETTING_IMPORTED
-#define USRP_SERVER_SETTING_IMPORTED 1
-#include <iostream>
+#define USRP_SERVER_SETTING_IMPORTED
+
 #include <fstream>
 #include <csignal>
 #include <memory>
 #include <sys/socket.h>
 #include <netdb.h>
-#include <stdio.h>
 #include <string.h>
-#include <unistd.h>
-#include <stdlib.h>
 #include <sched.h>
 #include <iterator>
 #include <algorithm>
@@ -17,9 +14,7 @@
 #include <mutex>
 #include <pthread.h>
 #include <thread>
-#include <iostream>
 #include <assert.h> 
-#include <sstream>
 #include <future>
 
 #include <uhd/utils/thread.hpp>
@@ -47,33 +42,10 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/asio/basic_deadline_timer.hpp>
 
-//#include <helper_functions.h>
-//#include <helper_cuda.h>
+#include "USRP_server_console_print.hpp"
+
 #include <cuda_runtime.h>
-#include <cufft.h>
-//#include <cufftXt.h>
-
-#include "USRP_server_diagnostic.cpp"
-
-#ifndef WARNING_PRINTER
-#define WARNING_PRINTER
-
-void print_error(std::string text){
-    std::cout<<std::endl << "\033[1;31mERROR\033[0m: "<< text<<std::endl;
-}
-
-void print_warning(std::string text){
-    std::cout << "\033[40;1;33mWARNING\033[0m: "<< text<<std::endl;
-}
-
-void print_debug(std::string text, double value = std::numeric_limits<double>::quiet_NaN()){
-    std::cout << "\033[40;1;34mDEBUG\033[0m: "<< text<< " " << isnan(value)?"":boost::lexical_cast<std::string>(value);
-    std::cout<<std::endl;
-}
-
-
-
-#endif
+//#include <cufft.h>
 
 //length of the TX and RX queue. for non real time application longer queue are needed to stack up data
 
