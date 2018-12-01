@@ -1,3 +1,4 @@
+#pragma once
 #ifndef USRP_BUFFER_GEN_INCLUDED
 #define USRP_BUFFER_GEN_INCLUDED
 
@@ -22,7 +23,7 @@ class TX_buffer_generator{
         void close();
         
         //pre-fill the queue with some packets. WARNING: for some reason it doesn't update the index parameter inside the called function
-        //causing the waveform to restart when get() method is called outside the class (why?)
+        //causing the waveform to restart when get() method is called outside the class (TODO: why?)
         int prefill_queue(tx_queue* queue, preallocator<float2>* memory, param* parameter_tx);
         
     private:

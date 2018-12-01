@@ -1,5 +1,8 @@
 #include "USRP_server_network.hpp"
 
+std::atomic<bool> reconnect_data; //when th async server detects a disconnection of the API make the sync thread reconnect
+std::atomic<bool> reconnect_async; // same thing used whe the exception is caught on the sync thread
+
 Sync_server::Sync_server(rx_queue* init_stream_queue, preallocator<float2>* init_memory,bool init_passthrough){
     passthrough = init_passthrough;
     stream_queue = init_stream_queue;

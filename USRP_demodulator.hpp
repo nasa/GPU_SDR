@@ -1,3 +1,4 @@
+#pragma once
 #ifndef USRP_DEMODULATOR_INCLUDED
 #define USRP_DEMODULATOR_INCLUDED
 

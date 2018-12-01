@@ -1,3 +1,4 @@
+#pragma once
 #ifndef USRP_PRINT_INCLUDED
 #define USRP_PRINT_INCLUDED
 #include <iostream>

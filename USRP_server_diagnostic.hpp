@@ -1,3 +1,4 @@
+#pragma once
 #ifndef USRP_DIAG_INCLUDED
 #define USRP_DIAG_INCLUDED
 

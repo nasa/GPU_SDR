@@ -1,3 +1,4 @@
+#pragma once
 #ifndef USRP_NET_INCLUDED
 #define USRP_NET_INCLUDED
 
@@ -11,8 +12,8 @@ using boost::asio::ip::address;
 
 #define MSG_LENGHT 1e4  //Lenght og the buffer string of the server, should not influent since is in a loop
 
-std::atomic<bool> reconnect_data; //when th async server detects a disconnection of the API make the sync thread reconnect
-std::atomic<bool> reconnect_async; // same thing used whe the exception is caught on the sync thread
+extern std::atomic<bool> reconnect_data; //when th async server detects a disconnection of the API make the sync thread reconnect
+extern std::atomic<bool> reconnect_async; // same thing used whe the exception is caught on the sync thread
 
 class Sync_server{
 

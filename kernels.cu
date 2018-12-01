@@ -2,6 +2,8 @@
 
 //allocates memory on gpu and fills with a real hamming window. returns a pointer to the window on the device.
 //note that this is a host function that wraps some device calls
+//TODO: the window function should be made in a class not in a function. Once we have the class we can put the class template directly in the header file to avoid undefined reference to specialized templates during linking.
+
 template <typename T>
 T* make_hamming_window(int length, int side, bool diagnostic){
 
@@ -30,16 +32,6 @@ T* make_hamming_window(int length, int side, bool diagnostic){
         scale += h_win[i+side].x;
         
     }
-    /*
-    for(int i = 0; i < length; i++){
-        h_win[i].y = 0; 
-        
-        //make hamming
-        h_win[i].x = 1;//(0.54-0.46*cos(2.f*pi_f*i/((length)-1)));
-        scale += h_win[i].x;
-        
-    }
-    */
     //normalize the window
     for(int i = 0; i < length; i++) h_win[i].x /= scale;
 
@@ -51,6 +43,55 @@ T* make_hamming_window(int length, int side, bool diagnostic){
         //TODO there hsould be a single hdf5 file containing all the diagnostic informations
         FILE* window_diagnostic = fopen("USRP_hamming_filter_window.dat", "wb");
         fwrite(static_cast<void*>(h_win), length, sizeof(T), window_diagnostic);
+        fclose(window_diagnostic);
+    }
+    
+    //cleanup
+    free(h_win);
+    cudaDeviceSynchronize();
+    return d_win;
+}
+//specializing the template to avoid error during the linking process
+template <>
+float2* make_hamming_window<float2>(int length, int side, bool diagnostic){
+
+    float2 *d_win,*h_win = (float2*)malloc(length*sizeof(float2));
+    
+    //allocate some memory on the GPU
+    cudaMalloc((void **)&d_win, length*sizeof(float2));
+    
+    
+    //initialize the accumulator used for normalization
+    float scale = 0;
+    
+    for(int i = 0; i < side; i++){
+        h_win[i].y = 0;
+        h_win[i].x = 0;  
+    }
+    for(int i = length - side; i < length; i++){
+        h_win[i].y = 0;
+        h_win[i].x = 0;  
+    }
+    for(int i = 0; i < length - side; i++){
+        h_win[i+side].y = 0; 
+        
+        //make hamming
+        h_win[i+side].x = (0.54-0.46*cos(2.f*pi_f*i/((length-side)-1)));
+        scale += h_win[i+side].x;
+        
+    }
+
+    //normalize the window
+    for(int i = 0; i < length; i++) h_win[i].x /= scale;
+
+    //upload the window on the GPU
+    cudaMemcpy(d_win, h_win, length*sizeof(float2),cudaMemcpyHostToDevice);
+    
+    if(diagnostic){
+        //write a diagnostic binary file containing the window.
+        //TODO there hsould be a single hdf5 file containing all the diagnostic informations
+        FILE* window_diagnostic = fopen("USRP_hamming_filter_window.dat", "wb");
+        fwrite(static_cast<void*>(h_win), length, sizeof(float2), window_diagnostic);
         fclose(window_diagnostic);
     }
     
@@ -135,13 +176,7 @@ __global__ void make_rand(curandState *state, float2 *vector, int len, float sca
 
 
 void print_chirp_params(std::string comment, chirp_parameter cp){
-    std::stringstream ss;
-    ss<< "Chirp parameter for " << comment<< std::endl;
-    ss<<"num_steps "<<cp.num_steps <<std::endl;
-    ss<<"length "<<cp.length <<std::endl;
-    ss<<"chirpness "<< cp.chirpness<<std::endl;
-    ss<<"f0 "<< cp.f0<<std::endl;
-    std::cout<<ss.str();
+
 }
 
 __device__ float modulus(float number, float modulus){
@@ -158,20 +193,6 @@ __device__ unsigned int round_index(unsigned int last_index, unsigned int offset
 
 }
 
-void chirp_gen_wrapper(
-
-    float2* __restrict__ output, //pointer to the gpu buffer
-    unsigned int output_size, //size of the buffer
-    chirp_parameter* __restrict__ info, //chirp information
-    unsigned long int last_index,
-    cudaStream_t internal_stream,
-    float scale = 1 //scale the amplitude of the chirp
-    
-    ){
-    
-    chirp_gen<<<1024,32,0,internal_stream>>>(output,output_size,info,last_index,scale);
-    
-}
 
 //generate a chirp waveform in a gpu buffer
 __global__ void chirp_gen(
@@ -214,19 +235,21 @@ __global__ void chirp_gen(
     }
     
 }
+void chirp_gen_wrapper(
 
-void chirp_demodulator_wrapper(
-    float2* __restrict__ input,  //pointer to the input buffer
     float2* __restrict__ output, //pointer to the gpu buffer
-    unsigned int output_size, //size of the buffers
-    unsigned long int last_index,
+    unsigned int output_size, //size of the buffer
     chirp_parameter* __restrict__ info, //chirp information
-    cudaStream_t internal_stream
+    unsigned long int last_index,
+    cudaStream_t internal_stream,
+    float scale = 1 //scale the amplitude of the chirp
+    
     ){
     
-    chirp_demodulator<<<1024,32,0,internal_stream>>>(input,output,output_size,last_index,info);
+    chirp_gen<<<1024,32,0,internal_stream>>>(output,output_size,info,last_index,scale);
     
-} 
+}
+
 
 __global__ void chirp_demodulator(
     float2* __restrict__ input,  //pointer to the input buffer
@@ -269,6 +292,18 @@ __global__ void chirp_demodulator(
 }
 __device__ float absolute(float2 number){return sqrt(number.x*number.x+number.y+number.y);}
 
+void chirp_demodulator_wrapper(
+    float2* __restrict__ input,  //pointer to the input buffer
+    float2* __restrict__ output, //pointer to the gpu buffer
+    unsigned int output_size, //size of the buffers
+    unsigned long int last_index,
+    chirp_parameter* __restrict__ info, //chirp information
+    cudaStream_t internal_stream
+    ){
+    
+    chirp_demodulator<<<1024,32,0,internal_stream>>>(input,output,output_size,last_index,info);
+    
+} 
 
     
 __global__ void move_buffer(
@@ -297,15 +332,6 @@ void move_buffer_wrapper(
     ){
     move_buffer<<<1024,64,0,internal_stream>>>(from,to,size,from_offset,to_offset);
     
-}
-void polyphase_filter_wrapper(
-    float2* __restrict__ input,
-    float2* __restrict__ output,
-    filter_param* __restrict__ filter_info,
-    cudaStream_t internal_stream
-    ){
-    
-    polyphase_filter<<<896*2,64,0,internal_stream>>>(input,output,filter_info);
 }
 
            
@@ -353,17 +379,17 @@ __global__ void polyphase_filter(
         }
     }       
 }
-void tone_select_wrapper(
-    float2* __restrict__ input, //must be the fft output
-    float2* __restrict__ output,//the buffer that will then be downloaded to host
-    filter_param* __restrict__ filter_info, //information about the filtering process
-    int effective_batching, //how many samples per tone have been effectively calculated
+
+void polyphase_filter_wrapper(
+    float2* __restrict__ input,
+    float2* __restrict__ output,
+    filter_param* __restrict__ filter_info,
     cudaStream_t internal_stream
     ){
     
-    tone_select<<<1024,64,0,internal_stream>>>(input,output,filter_info,effective_batching);
-    
+    polyphase_filter<<<896*2,64,0,internal_stream>>>(input,output,filter_info);
 }
+
 
 
 //select the tones from the fft result and reorder them in a new buffer
@@ -391,6 +417,19 @@ __global__ void tone_select(
             //printf("index: %d, value %f\n",index,input[index].x);
     }
 }
+
+void tone_select_wrapper(
+    float2* __restrict__ input, //must be the fft output
+    float2* __restrict__ output,//the buffer that will then be downloaded to host
+    filter_param* __restrict__ filter_info, //information about the filtering process
+    int effective_batching, //how many samples per tone have been effectively calculated
+    cudaStream_t internal_stream
+    ){
+    
+    tone_select<<<1024,64,0,internal_stream>>>(input,output,filter_info,effective_batching);
+    
+}
+
 
 //scale a float2 buffer for a float scalar
 __global__ void scale_buffer(

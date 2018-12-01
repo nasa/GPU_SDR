@@ -1,3 +1,4 @@
+#pragma once
 #ifndef USRP_JSON_INCLUDED
 #define USRP_JSON_INCLUDED
 #include "USRP_server_settings.hpp"

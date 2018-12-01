@@ -1,3 +1,4 @@
+#pragma once
 #ifndef USRP_MEMORY_INCLUDED
 #define USRP_MEMORY_INCLUDED
 
@@ -99,7 +100,6 @@ class buffer_helper{
         int simulate_batching();
 };
 
-
 template <typename vector_type>
 class preallocator{
 
@@ -113,13 +113,74 @@ class preallocator{
     
         bool prefil;//if fals the queue will not adjust automatically
         
-        preallocator(int init_vector_size, int init_pipe_size, bool prefill_init = true);
-  
-        vector_type* get();
+        preallocator(int init_vector_size, int init_pipe_size, bool prefill_init = true){
+            counter = 0;
+            prefil = prefill_init; //controls the prefill mechanism
+            vector_size = init_vector_size;
+            wait_on_full = 5;    
+            pipe_size = init_pipe_size;    
+            allocated = new  boost::lockfree::queue< intptr_t ,boost::lockfree::fixed_sized<(bool)true>> (init_pipe_size);       
+            deallocated = new  boost::lockfree::queue< intptr_t ,boost::lockfree::fixed_sized<(bool)false>>(0);        
+            filler = new boost::thread(boost::bind(&preallocator::queue_filler,this));         
+            deallocator = new boost::thread(boost::bind(&preallocator::queue_deallocator,this));      
+            while(counter<pipe_size-1)boost::this_thread::sleep_for(boost::chrono::milliseconds{200});
+                    
+        }
+                 /*
+                if (counter<pipe_size/4 and count > 2){
+                    vector_type* h_aPinned;
+                    cudaError_t status = cudaMallocHost((void**)&h_aPinned, vector_size*sizeof(vector_type));
+                    if (status != cudaSuccess){
+                        print_error("Error allocating pinned host memory!");
+                    }else{
+                        if(warning)print_warning("Buffer reciclyng mechanism failed. Consider increasing the number of preallocated buffers.");
+                        return h_aPinned;
+                    }
+                }
+                */       
+        vector_type* get(){
+
+            
+            intptr_t thatvalue_other;
+            
+            //int count = 0;
+            while(not allocated->pop(thatvalue_other))boost::this_thread::sleep_for(boost::chrono::microseconds{10});
+            /*
+            while(not allocated->pop(thatvalue_other)){
+                count++;
+                boost::this_thread::sleep_for(boost::chrono::microseconds{1});
+
+            }
+            if(count>10 and warning){
+                print_debug("Cannot allocate memory fast enough. Timing mismatch: [usec] ",count);
+                //warning = (bool)false;
+            }*/
+            counter--;
+            return reinterpret_cast<vector_type*>(thatvalue_other);
+            
+        }
         
-        void trash(vector_type* trash_vector);
+        void trash(vector_type* trash_vector){
         
-        void close();
+            while(not deallocated->push(reinterpret_cast<intptr_t>(trash_vector)))boost::this_thread::sleep_for(boost::chrono::microseconds{10});
+            counter++;
+
+        }
+        
+        void close(){
+
+            deallocator->interrupt();
+            deallocator->join();
+
+            filler->interrupt();
+            filler->join();
+
+            delete allocated;
+            delete deallocated;
+            delete filler;
+            delete deallocator;
+            
+        }
         
     private:
         bool warning = (bool)true;
@@ -127,9 +188,103 @@ class preallocator{
         boost::thread* deallocator;
         std::atomic<int> counter;
         
-        void queue_deallocator();
-        
-        void queue_filler();
-};
+        void queue_deallocator(){
+            bool active = (bool)true;
+            while(active){
+                try{
+                    boost::this_thread::interruption_point();
+                    intptr_t trash_vector;
+                    if(deallocated->pop(trash_vector)){
+                        int err_counter = 0;
+                        //try to recicle or cancel
+                        intptr_t thatvalue = reinterpret_cast<intptr_t>(trash_vector);
+                        while (not allocated->push(thatvalue) or err_counter){
+                            err_counter++;
+                            boost::this_thread::sleep_for(boost::chrono::microseconds{wait_on_full});
+                        }
+                        boost::this_thread::sleep_for(boost::chrono::milliseconds{3});
+                        
+                        
+                        counter++;
+                    }else boost::this_thread::sleep_for(boost::chrono::microseconds{wait_on_full});
+                }catch (boost::thread_interrupted&){active=(bool)false;}
+            }
+            
+            while(not deallocated->empty()){
 
+                intptr_t trash_vector;
+                if(deallocated->pop(trash_vector)){
+                    cudaFreeHost(static_cast<vector_type*>(reinterpret_cast<void*>(trash_vector)));
+                }else{
+                    boost::this_thread::sleep_for(boost::chrono::milliseconds{3});
+                }
+
+            }
+        }
+        
+        void queue_filler(){
+            bool active = (bool)true;
+            vector_type* h_aPinned;
+            intptr_t thatvalue = 1;
+            int debug_counter = 0;
+            //bool warning = true;
+            //initially fill the preallocated queue
+            while(counter<pipe_size-1){
+            
+                cudaError_t status = cudaMallocHost((void**)&h_aPinned, vector_size*sizeof(vector_type));
+                if (status != cudaSuccess){
+                    print_error("Memory manager cannot allocate pinned host memory!");
+                    exit(-1);
+                }
+                thatvalue = reinterpret_cast<intptr_t>(h_aPinned);
+                while(not allocated->push(thatvalue))boost::this_thread::sleep_for(boost::chrono::microseconds{10*wait_on_full});
+                counter++;
+            
+            }
+            if(prefil){
+                //print_debug("Queue activated with prefill",0);
+                while(active){
+                    try{
+                        boost::this_thread::interruption_point(); 
+                        if(counter < pipe_size/10.){
+                            cudaError_t status = cudaMallocHost((void**)&h_aPinned, vector_size*sizeof(vector_type));
+                            if (status != cudaSuccess){
+                                print_error("Memory manager cannot allocate pinned host memory!");
+                                exit(-1);
+                            }
+                            thatvalue = reinterpret_cast<intptr_t>(h_aPinned);
+                            while(not allocated->push(thatvalue))boost::this_thread::sleep_for(boost::chrono::microseconds{10*wait_on_full});
+                            counter++;
+                            debug_counter++;
+                        }else if(debug_counter>0 ){//and warning
+                            pipe_size+=debug_counter;
+                            print_debug("Internal memory manager had to adjust pipe size to ",pipe_size);
+                            
+                            debug_counter = 0;
+                            //warning = false;
+                        }
+                        boost::this_thread::sleep_for(boost::chrono::microseconds{10*wait_on_full});
+                    }catch (boost::thread_interrupted&){active=(bool)false;}
+                }
+            }else{
+                while(active){
+                    try{
+                        boost::this_thread::interruption_point();
+                        boost::this_thread::sleep_for(boost::chrono::microseconds{1000*wait_on_full});
+                    }catch (boost::thread_interrupted&){active=(bool)false;}
+                }
+            }
+            
+
+            while(not allocated->empty()){
+
+                intptr_t trash_vector;
+                if(allocated->pop(trash_vector)){
+                    cudaFreeHost(static_cast<vector_type*>(reinterpret_cast<void*>(trash_vector)));
+                }else{
+                    boost::this_thread::sleep_for(boost::chrono::milliseconds{1});
+                }
+            }
+        }
+};
 #endif

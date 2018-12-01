@@ -1,3 +1,4 @@
+#pragma once
 #ifndef USRP_HW_MANAGER
 #define USRP_HW_MANAGER
 

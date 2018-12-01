@@ -1,3 +1,4 @@
+#pragma once
 #ifndef FILE_WRITER_INCLUDED
 #define FILE_WRITER_INCLUDED
 #include "USRP_server_settings.hpp"

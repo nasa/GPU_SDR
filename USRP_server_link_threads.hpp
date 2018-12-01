@@ -1,3 +1,4 @@
+#pragma once
 #ifndef SYNC_CLASS_INCLUDED
 #define SYNC_CLASS_INCLUDED
 #include "USRP_server_settings.hpp"
