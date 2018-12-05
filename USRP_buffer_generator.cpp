@@ -1,6 +1,10 @@
 #include "USRP_buffer_generator.hpp"
 
 TX_buffer_generator::TX_buffer_generator(param* init_parameters){
+    
+    
+    //!@brief Initialization method for the server signal generator class.
+    //!The initialization of the class assign the get() and close() methods to the private functions capable of handling and closing the resources needed for buffer generation.
     parameters = init_parameters;
     buffer_len = parameters->buffer_len;
 
@@ -130,14 +134,31 @@ TX_buffer_generator::TX_buffer_generator(param* init_parameters){
 }
         
 //wrapper to the correct get function
-void TX_buffer_generator::get(float2** __restrict__ in){ (this->*get_ptr)(in); }
+void TX_buffer_generator::get(float2** __restrict__ in){
+    //!@brief Write a portion of the buffer in a memory location pointed by the argument.
+    /*!The argument has to be a pointer to the pointer because the effective method used when this function is called depends on the kind of buffer descibed in the param argument of class initialization. The length of the buffer as well is set by that argument. This function does not check that the memory is available (for performance reasons).
+    * @param in pointer to pointer to the buffer that will be filled with samples. The float2 is interpreted as a complex number. The user has to take care that the memory is allocated.
+    */
+    (this->*get_ptr)(in);
+}
 
 //wrapper to the correct cleaning function
-void TX_buffer_generator::close(){ (this->*clr_ptr)(); }
+void TX_buffer_generator::close(){
+    //@brief Clean the dynamic memory allocated in the initialization call.
+    //!This method is also the destructor of the class.
+    (this->*clr_ptr)();
+}
 
 //pre-fill the queue with some packets. WARNING: for some reason it doesn't update the index parameter inside the called function
 //causing the waveform to restart when get() method is called outside the class (why?)
 int TX_buffer_generator::prefill_queue(tx_queue* queue, preallocator<float2>* memory, param* parameter_tx){
+    //! @brief This method fill the buffer queue associated with the tx streaming process.
+    /*!A call to this method will retun 0 do nothing if the buffer generation method is not dynamic. in that case there is no latency associated with the buffer generation except the one associated with pointer passing that is negligible. The preallocation stops when the queue is short of nodes.
+    * @param queue the queue that will be filled with buffers pointer.
+    * @param memory the memory allocator using to allocate buffer's memory.
+    * @param parameter_tx: the parameter describing the buffer.
+    * @return The number of buffers allocated.
+    */
     bool filling = true;
     // how many packets have been produced
     int filled = 0;

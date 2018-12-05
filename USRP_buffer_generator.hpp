@@ -6,13 +6,44 @@
 #include "USRP_server_settings.hpp"
 #include "USRP_server_diagnostic.hpp"
 #include "USRP_server_memory_management.hpp"
+//!@brief This class generates the transimission buffer given a the parameter object in the initialization.
+//!The way the buffer is generated is internally managed, different kind of buffers are generated using different strategies. This class is non threadsafe.
 
+/*!@code
+//What follows is a minimal example on how to use this class.
+
+int buffer_len = 1024;
+param signal_parameters;
+
+//initialize the parameters in a senseful way...
+
+signal_parameters.buffer_len = buffer_len;
+float2* samples[buffer_len];
+
+//initialize the signal source
+TX_buffer_generator signal_source(&signal_parameters);
+
+
+for(int t=0; t<1000; t++){
+    //fill the buffer with generated signal
+    samples = signal_source.get();
+    //do stuff with samples...
+}
+
+//clean memory.
+free(samples);
+signal_source.close();
+@endcode
+*/
+//!There are three different behaviour of the class: 
 class TX_buffer_generator{
 
     public:
-    
-        int buffer_len; //length of the buffer to transmit to the UHD send function
-        param* parameters; //pointer to the struct containing the parameters
+        //!Length of the buffer segment retrived with the TX_buffer_generator::get() method. Usually equalt to the UHD tx_buffer value.
+        int buffer_len;
+        
+        //!Pointer to the struct containing the parameters used to generate the signal.
+        param* parameters; 
         //initialization of the class
         TX_buffer_generator(param* init_parameters);
         
