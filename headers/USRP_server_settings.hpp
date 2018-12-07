@@ -1,3 +1,10 @@
+//! @file USRP_server_settings.hpp
+/* @brief Containd definitions of variables, macros and functions needed for the server basic settings and definitions.
+ *
+ * 
+ *
+*/
+//! @cond
 #ifndef USRP_SERVER_SETTING_IMPORTED
 #define USRP_SERVER_SETTING_IMPORTED
 
@@ -20,11 +27,9 @@
 #include <uhd/utils/thread.hpp>
 #include <uhd/utils/safe_main.hpp>
 #include <uhd/utils/static.hpp>
-#include <uhd/usrp/multi_usrp.hpp>
+
 #include <uhd/exception.hpp>
 
-
-#include <boost/thread/thread.hpp>
 #include <boost/math/special_functions/round.hpp>
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
@@ -41,7 +46,9 @@
 #include <boost/exception/diagnostic_information.hpp> 
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/asio/basic_deadline_timer.hpp>
-
+//! @endcond
+#include <boost/thread/thread.hpp>
+#include <uhd/usrp/multi_usrp.hpp>
 #include "USRP_server_console_print.hpp"
 
 #include <cuda_runtime.h>

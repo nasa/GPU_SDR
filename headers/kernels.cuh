@@ -1,3 +1,12 @@
+/* @file
+ * @brief function prototypes for the GPU kernels.
+ *
+ * Contains the prototype of the functions that runs the GPU and their wrappers.
+ *
+ * @todo Clean all the decimator that you don't use.
+ * @todo Add noise generation support.
+*/
+
 #pragma once
 #ifndef GPU_KERNELS_INCUDED_h
 #define GPU_KERNELS_INCUDED_h
@@ -7,30 +16,33 @@
 #include <curand.h>
 #include <curand_kernel.h>
 #include <cufft.h>
+//! @cond
 #include <iostream>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <iostream>
-//#include "USRP_server_diagnostic.hpp"
+//! @endcond
 #ifndef pi_f
 #define pi_f 3.14159265358979f
 #define _31_BIT_VALUE 2147483647.5
 #endif
 
 //could be used to tune for other GPUs. NOTE: it also defines the shared memory
+//! @brief Tune the Thread Per Block used in certain functions.
 #define PFB_DECIM_TPB 64. //Threads per block
 
-//polyphase filter parameter wrapper + utility variables for buffer reminder
+
 struct filter_param {
-    float2* window; //pointer to an already initialized window.
-    int length; //total length of the device buffer
-    int n_tones; //how many points to calculate in the FFT
-    int average_buffer; //how many buffer are averaged (length of the window has to be average_buffer * n_tones)
-    int batching; //how many samples per each tone are present in the device buffer
-    int* tones; //Must be an array containing the fft bin number corresponding to the tone frequency
-    int eff_n_tones; //how many tones do you effectively want to download in the host buffer
+    //! @brief Polyphase filter parameter wrapper and utility variables for buffer reminder.
+    float2* window; //! Pointer to an already initialized window.
+    int length; //! Total length of the device buffer
+    int n_tones; //! How many points to calculate in the FFT
+    int average_buffer; //! How many buffer are averaged (length of the window has to be average_buffer * n_tones)
+    int batching; //! How many samples per each tone are present in the device buffer
+    int* tones; //! Must be an array containing the fft bin number corresponding to the tone frequency
+    int eff_n_tones; //! How many tones do you effectively want to download in the host buffer
 
 };
 

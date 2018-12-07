@@ -1,10 +1,20 @@
+/* @file USRP_buffer_generator.cpp
+ * @brief Signal generation methods for the TX_buffer_generator class.
+ *
+ * Contains the definitions of the methods used to generates the buffer.
+ * Most of the methods used to generate the transmission buffer will call some cuda kernel wrapper.
+ *
+*/
 #include "USRP_buffer_generator.hpp"
 
 TX_buffer_generator::TX_buffer_generator(param* init_parameters){
     
     
     //!@brief Initialization method for the server signal generator class.
-    //!The initialization of the class assign the get() and close() methods to the private functions capable of handling and closing the resources needed for buffer generation.
+    /*!The initialization of the class assign the get() and close() methods to the private functions capable of handling and closing the resources needed for buffer generation.
+    * Calling this method initialize a maximum priority cudaStream object: while the cuda driver can postpone the analysis process of the
+    * received data without causing transmission error, the transmission buffer has to be generated on time to avoid transmission timing errors.
+    */
     parameters = init_parameters;
     buffer_len = parameters->buffer_len;
 
@@ -144,8 +154,9 @@ void TX_buffer_generator::get(float2** __restrict__ in){
 
 //wrapper to the correct cleaning function
 void TX_buffer_generator::close(){
-    //@brief Clean the dynamic memory allocated in the initialization call.
-    //!This method is also the destructor of the class.
+    //!@brief Clean the dynamic memory allocated in the initialization call.
+    /*!This method is also the destructor of the class.
+    */
     (this->*clr_ptr)();
 }
 

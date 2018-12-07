@@ -1,3 +1,12 @@
+/* @file USRP_buffer_generator.hpp
+ * @brief class prototypes for the buffer generator.
+ *
+ * Contains the prototype of the TX_buffer_generator class. Such class is used to generate the transmission buffer for the SDR.
+ *
+ * @bug The queue_prefiller method is not working as expected. This is non-critical for most applications
+ * @todo Test the behaviour of multiple class instances driving multiple USRPs/channels
+ *
+*/
 #pragma once
 #ifndef USRP_BUFFER_GEN_INCLUDED
 #define USRP_BUFFER_GEN_INCLUDED
