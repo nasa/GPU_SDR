@@ -132,6 +132,13 @@ class RX_buffer_demodulator{
         //same process as the pfb but there is no tone selection and the buffer is bully downloaded
         int process_pfb_spec(float2** __restrict__ input_buffer, float2** __restrict__ output_buffer);
         
+        //! @brief Process the nodsp case by simply copying the input in the output.
+        //! @todo This function should't exist: it would be better to directly bypass the RX_buffer_demodulator::process() call in the TXRX::rx_single_link() process.
+        int process_nodsp(float2** __restrict__ input_buffer, float2** __restrict__ output_buffer);
+        
+        //! Close the NODSP case: just destroy the cuda stream object.
+        void close_nodsp();
+        
         //clean up the pfb allocations
         void close_pfb();
         

@@ -405,12 +405,15 @@ void hardware_manager::set_streams(){
     //declare unit to be used
     uhd::stream_args_t stream_args("fc32");
     
-    //check if the stream configuration is different
+    //check if the stream configuration is different //DEPRECATED
+    /*
     if(A_TXRX_chk != config.A_TXRX.mode or
        A_RX2_chk != config.A_RX2.mode or
        B_RX2_chk != config.B_RX2.mode or
        B_TXRX_chk != config.B_TXRX.mode
        ){
+   */
+    if(true){
        
         //if the stream configuration is different, reset the streams
         clear_streams();
@@ -1072,6 +1075,11 @@ void hardware_manager::single_rx_thread(
         uhd::stream_cmd_t stop_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
         stop_cmd.stream_now = false;
         rx_stream->issue_stream_cmd(stop_cmd);
+        
+        flush_rx_streamer(rx_stream); // flush the cache
+        rx_stream.reset();
+
+
     //}
     
     //something went wrong and the thread has interrupred
@@ -1085,6 +1093,13 @@ void hardware_manager::single_rx_thread(
     //wait_condition->wait();
 }
 
+void hardware_manager::flush_rx_streamer(uhd::rx_streamer::sptr &rx_streamer) {
+   constexpr double timeout { 0.010 }; // 10ms
+   constexpr size_t size { 1048576 };
+   static float2 dummy_buffer[size];
+   static uhd::rx_metadata_t dummy_meta { };
+   while (rx_streamer->recv(dummy_buffer, size, dummy_meta, timeout)) {}
+}
 
 //used to sync TX and rRX streaming time
 void hardware_manager::sync_time(){

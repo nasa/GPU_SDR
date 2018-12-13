@@ -74,6 +74,8 @@ class hardware_manager{
         uhd::tx_streamer::sptr tx_stream;
 
         void set_streams();
+        
+        void flush_rx_streamer(uhd::rx_streamer::sptr &rx_streamer);
 
         //pointer to rx thread and boolean chk variable
         std::atomic<bool> rx_thread_operation;

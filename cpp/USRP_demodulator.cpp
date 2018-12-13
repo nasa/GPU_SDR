@@ -99,6 +99,8 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
                 
                 //initialize the post demodulator decimation buffer manager
                 pfb_decim_helper = new pfb_decimator_helper(parameters->decim, parameters->fft_tones);
+                
+                print_warning("When using TONES demodulation type, the decimation should be achieved increasing the number of pfb channels");
             }
             
             break;
@@ -241,6 +243,13 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
             
             break;
             
+        case NODSP:
+        
+            //this case is a pass through.
+            process_ptr = &RX_buffer_demodulator::process_nodsp;
+            clr_ptr = &RX_buffer_demodulator::close_nodsp;
+        
+            break;    
         default: //the default case means that no wave type has been selected. will transmit the full buffer. //TODO
             print_error("Void demodulation operation has not been implemented yet!");
             exit(-1);
@@ -253,6 +262,12 @@ int RX_buffer_demodulator::process(float2** __restrict__ in, float2** __restrict
 
 //wrapper to the correct cleaning function
 void RX_buffer_demodulator::close(){ (this->*clr_ptr)(); }
+
+int RX_buffer_demodulator::process_nodsp(float2** __restrict__ input_buffer, float2** __restrict__ output_buffer){
+    //TODO: a bypass on demodulator call would be more efficient
+    std::memcpy(*output_buffer, *input_buffer, parameters->buffer_len*sizeof(float2));
+    return parameters->buffer_len;
+}
 
 //process a packet demodulating with chirp
 int RX_buffer_demodulator::process_chirp(float2** __restrict__ input_buffer, float2** __restrict__ output_buffer){
@@ -527,6 +542,8 @@ void RX_buffer_demodulator::close_chirp(){
         delete(vna_helper);
     }
 }
+
+void RX_buffer_demodulator::close_nodsp(){cudaStreamDestroy(internal_stream);}
 
 //converts general purpose parameters into kernel wrapper parameters on gpu.
 //THIS ONLY TAKES CARE OF MULTI TONES MEASUREMENT
