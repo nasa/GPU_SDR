@@ -162,3 +162,43 @@ std::string get_front_end_name(char code){
             return "not_init";
     }
 }
+
+    //attemp to controll the thread scheduling on mac osx
+    #if defined(__APPLE__)
+
+    #include <mach/mach.h>
+    #include <mach/mach_time.h>
+    #include <pthread.h>
+
+    #endif
+
+void Thread_Prioriry(boost::thread& Thread, int priority, int affinity){
+    int SYSTEM_CORES = std::thread::hardware_concurrency();
+    cpu_set_t cpuset;
+    int policy;
+    pthread_t thread_ID = (pthread_t)Thread.native_handle();
+    #if defined(__APPLE__)
+    //hsould find a way to controll the affinity policy on osx
+    #endif
+    int retcode;
+    struct sched_param scheme;
+    retcode = pthread_getschedparam(thread_ID, &policy, &scheme);
+    //std::cout << "Priority was: " << scheme.sched_priority << std::endl;
+    policy = SCHED_FIFO;
+    scheme.sched_priority = priority;
+    retcode = pthread_setschedparam(thread_ID, policy, &scheme);
+    //std::cout << "Priority now is: " << scheme.sched_priority << std::endl;
+    if(retcode == -1)std::cout<<"cannot set thread scheduling policy"<<std::endl;
+    if(affinity!=-1){
+    #if not defined(__APPLE__)
+        CPU_ZERO(&cpuset);
+        for(int i = 0; i < SYSTEM_CORES; i++) CPU_SET(affinity+i, &cpuset);
+        int rc = pthread_setaffinity_np(Thread.native_handle(),sizeof(cpu_set_t), &cpuset);
+        if (rc != 0) {
+            std::cout << "Error calling pthread_setaffinity_np: there may be some instability. Result: " << rc << std::endl;
+        }else{
+            //std::cout << "Correctly assigning the thread affinity. Result: " << rc << std::endl;
+        }
+    #endif
+    }
+}

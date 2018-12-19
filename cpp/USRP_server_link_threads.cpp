@@ -70,12 +70,6 @@ void TXRX::set(usrp_param* global_param){
     modes[2] = &global_param->B_TXRX;
     modes[3] = &global_param->B_RX2;
     
-    //the writer class takes care of single and double RX stream so it only has to be started once.(moved to start method)
-    //bool writer_started = false;
-    
-    //the streamer class is currently setted to only receive one stream (moved to start method)
-    //bool streamer_started = false;
-    
     //single TX and RX cases initialization
     if(global_param->get_number(RX)<2 and global_param->get_number(TX)<2){
         for(int i = 0; i < modes.size(); i++ ){
@@ -121,7 +115,7 @@ void TXRX::set(usrp_param* global_param){
                         
                         output_memory_size = modes[i]->buffer_len;//get_output_buffer_size();
                         //print_debug("outmemory size is: ",output_memory_size);//TODO can be adjusted to use less memory
-                        rx_output_memory = new preallocator<float2>(output_memory_size,RX_QUEUE_LENGTH);
+                        rx_output_memory = new preallocator<float2>(output_memory_size,RX_QUEUE_LENGTH,2);
                         std::cout<<"\tdone."<<std::endl;
                     }
                     
@@ -150,7 +144,7 @@ void TXRX::set(usrp_param* global_param){
                         tx_buffer_len = modes[i]->buffer_len;
                         
                         //NOTE: this queue doesn't autorefill
-                        tx_memory = new preallocator<float2>(tx_buffer_len,TX_QUEUE_LENGTH,false);
+                        tx_memory = new preallocator<float2>(tx_buffer_len,TX_QUEUE_LENGTH,false,0);
                         std::cout<<"\tdone."<<std::endl;
                         
                     //in case a static memory is required
@@ -193,7 +187,9 @@ void TXRX::start(usrp_param* global_param){
                 current_tx_param->samples,
                 current_tx_param->dynamic_buffer(),
                 preallocated    ));
-               
+                
+            Thread_Prioriry(*TX_worker, 99, 1);   
+            
             //start the TX loader: this thrad takes samples form the other thread and stream them on the USRP
             hardware->start_tx(
                 tx_conditional_waiting,
@@ -219,6 +215,8 @@ void TXRX::start(usrp_param* global_param){
                 hardware,
                 current_rx_param->samples,
                 stream_queue    ));
+            
+            Thread_Prioriry(*RX_worker, 99, 3);  
                 
             //start the RX thread: interfaces with the USRP receiving samples and pushing them in a queue read by the thread launched above.
             hardware->start_rx(

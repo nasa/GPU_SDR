@@ -117,6 +117,8 @@ void hardware_manager::start_tx(
                 tx_thread = new boost::thread(boost::bind(&hardware_manager::software_tx_thread,this,current_settings,memory));
             
             }
+            //setting maximum prioprity and affinity to core 0
+            Thread_Prioriry(*tx_thread, 99, 0);
                 
         }else{
             print_error("Double TX not implemented yet");
@@ -158,6 +160,10 @@ void hardware_manager::start_rx(
                 rx_thread = new boost::thread(boost::bind(&hardware_manager::software_rx_thread,this,current_settings,memory,RX_queue));
                 
             }
+            
+            //setting maximum prioprity and affinity to core 2
+            Thread_Prioriry(*rx_thread, 99, 2);
+            
                 
         }else{
             print_error("Double RX not implemented yet");
@@ -781,7 +787,7 @@ void hardware_manager::single_tx_thread(
                 }
                 
                 
-                tx_stream->send(tx_buffer, current_settings->buffer_len, metadata_tx,0.3f);//timeout
+                tx_stream->send(tx_buffer, current_settings->buffer_len, metadata_tx,0.1f);//timeout
 
                 
                 sent_samp += current_settings->buffer_len;
@@ -1010,7 +1016,7 @@ void hardware_manager::single_rx_thread(
                 if(first_packet)std::this_thread::sleep_for(std::chrono::nanoseconds(size_t(1.e9*current_settings->delay)));
 
                 //receive command
-                num_rx_samps += rx_stream->recv(rx_buffer + num_rx_samps, samples_remaining, metadata_rx);//,0.1f
+                num_rx_samps += rx_stream->recv(rx_buffer + num_rx_samps, samples_remaining, metadata_rx,0.3f);//,0.1f
                 
                 //interpret errors
                 if(get_rx_errors(&metadata_rx, true)>0)errors++;

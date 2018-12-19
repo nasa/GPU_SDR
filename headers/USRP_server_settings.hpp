@@ -196,4 +196,9 @@ typedef boost::lockfree::queue< RX_wrapper, boost::lockfree::fixed_sized<(bool)t
 typedef boost::lockfree::queue< float2*, boost::lockfree::fixed_sized<(bool)true>> tx_queue;
 typedef boost::lockfree::queue< int, boost::lockfree::fixed_sized<(bool)true>> error_queue;
 
+//! @brief Set thread priority, scheduling policy and core affinity. Require administrative privilege. Only tested on Linux and OSX
+// One of the main causes of error in the system is the RX/TX processes core switching. The switch instroduces a delay that is not well tollerated by the real-time tasks.
+void Thread_Prioriry(boost::thread& Thread, int priority, int affinity);
+
+
 #endif
