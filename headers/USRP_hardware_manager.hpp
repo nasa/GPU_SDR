@@ -7,6 +7,8 @@
 #include "USRP_server_memory_management.hpp"
 #include <uhd/types/time_spec.hpp>
 
+
+//! @brief Manages the hardware I/O of one usrp unit.
 class hardware_manager{
     public:
         
@@ -19,46 +21,65 @@ class hardware_manager{
         //address of the device controlled by this instance
         uhd::usrp::multi_usrp::sptr main_usrp;
         
-        //the initializer of the class can be used to select which usrp is controlled by the class
-        //Default call suppose only one USRP is connected
+        //! @brief The initializer of the class can be used to select which usrp is controlled by the class
+        //! Default call suppose only one USRP is connected
         hardware_manager(server_settings* settings, bool sw_loop_init, int usrp_number = 0);
         
-        //this function should be used to set the USRP device with user parameters
-        //TODO catch exceptions and return a boolean
+        //! @brief Set the USRP device with user parameters
+        //! @todo TODO catch exceptions and return a boolean
         bool preset_usrp(usrp_param* requested_config);
-
-        //apply the global parameter configuration
-        // NOTE: only changes parameters when needed
         
-        //those queues can be accessed to retrive or stream data from each frontend.
-        rx_queue* RX_queue;
-        tx_queue* TX_queue;
+        //! @brief Queue accessed to retrive data from A frontend.
+        rx_queue* A_RX_queue;
+        
+        //! @brief Queue accessed to stream data from A frontend.
+        tx_queue* A_TX_queue;
+        
+        //! @brief Queue accessed to retrive data from B frontend.
+        rx_queue* B_RX_queue;
+        
+        //! @brief Queue accessed to stream data from B frontend.
+        tx_queue* B_TX_queue;
         
         bool check_rx_status(bool verbose = false);
         
         bool check_tx_status(bool verbose = false);
         
+        //! @brief Start a transmission thread.
+        //! The threads started by this function do two things: pop a packet from the respective queue; stram the packet via UHD interface.
+        //! Each streamer is handled by an independent thread.
+        //! If the source queue is empty a warning is printed on the console and an error is pushed in the erorr queue.
         void start_tx(
             threading_condition* wait_condition,    //before joining wait for that condition
-            preallocator<float2>* memory = NULL    //if the thread is transmitting a buffer that requires dynamical allocation than a pointer to  custo memory manager class has to be passed
+            int thread_op,                          //core affinity of the process
+            param *current_settings,                //representative of the paramenters (must match A or B frontend description)
+            char front_end,                          //must be "A" or "B"
+            preallocator<float2>* memory = NULL    //if the thread is transmitting a buffer that requires dynamical allocation than a pointer to  custo memory manager class has to be passed.
         
         );
         
+        //! @ brief start a rx thread.
         void start_rx(
             int buffer_len,                         //length of the buffer. MUST be the same of the preallocator initialization
-            long int num_samples,                   //how many sample to receive
             threading_condition* wait_condition,    //before joining wait for that condition
-            preallocator<float2>* memory            //custom memory preallocator
+            preallocator<float2>* memory,           //custom memory preallocator
+            int thread_op,                          //core affinity number
+            param *current_settings,                //representative of the paramenters (must match A or B frontend description)
+            char front_end                          //must be "A" or "B"
         
         );
         
+        //! @ brief Close all the tx streamer threads.
         void close_tx();
         
+        //! @ brief Close all the rx streamer threads.
         void close_rx();
         
-        int clean_tx_queue(preallocator<float2>* memory);
+        //! @ brief Release the memory associated with pointers holded by a tx queue using the respective memory allocator.
+        int clean_tx_queue(tx_queue* TX_queue,preallocator<float2>* memory);
         
-        int clean_rx_queue(preallocator<float2>* memory);
+        //! @ brief Release the memory associated with pointers holded by a rx queue using the respective memory allocator.
+        int clean_rx_queue(rx_queue* RX_queue, preallocator<float2>* memory);
         
     private:
 
@@ -69,24 +90,30 @@ class hardware_manager{
         //the next variables will be called by the tx and rx functions to stream and receive packets.
         //they are managed inside this class as I suspect the frequent reinitialization of the streaming causes
         //the DAC sync error.
-       
-        uhd::rx_streamer::sptr rx_stream;
-        uhd::tx_streamer::sptr tx_stream;
+        uhd::rx_streamer::sptr A_rx_stream;
+        uhd::tx_streamer::sptr A_tx_stream;
+        uhd::rx_streamer::sptr B_rx_stream;
+        uhd::tx_streamer::sptr B_tx_stream;
 
         void set_streams();
         
         void flush_rx_streamer(uhd::rx_streamer::sptr &rx_streamer);
 
         //pointer to rx thread and boolean chk variable
-        std::atomic<bool> rx_thread_operation;
-        boost::thread* rx_thread;
+        std::atomic<bool> A_rx_thread_operation;
+        boost::thread* A_rx_thread;
+        std::atomic<bool> B_rx_thread_operation;
+        boost::thread* B_rx_thread;
         
         //pointer to tx thread and boolean chk variable
-        std::atomic<bool> tx_thread_operation;
-        boost::thread* tx_thread;
+        std::atomic<bool> A_tx_thread_operation;
+        boost::thread* A_tx_thread;
+        std::atomic<bool> B_tx_thread_operation;
+        boost::thread* B_tx_thread;
         
         //queue for sharing the error event code with RX thread
-        error_queue* tx_error_queue;
+        error_queue* A_tx_error_queue;
+        error_queue* B_tx_error_queue;
         
         //kind of device to look for
         uhd::device_addr_t hint;
@@ -98,7 +125,8 @@ class hardware_manager{
         usrp_param config;
         
         //pointer to the software loop queue
-        tx_queue* sw_loop_queue;
+        tx_queue* A_sw_loop_queue;
+        tx_queue* B_sw_loop_queue;
         
         //channel vector. is 1 unit long because each channel has its own streamer
         //used in set_streams() method.
@@ -133,22 +161,30 @@ class hardware_manager{
         
         void software_tx_thread(
             param *current_settings,                //some parameters are useful also in sw
-            preallocator<float2>* memory            //custom memory preallocator
-            );
+            preallocator<float2>* memory,            //custom memory preallocator
+            tx_queue* TX_queue,
+            tx_queue* sw_loop_queue,
+            char front_end
+        );
         
         void single_tx_thread(
             param *current_settings,                //(managed internally to the class) user parameter to use for rx setting
             threading_condition* wait_condition,    //before joining wait for that condition
-            preallocator<float2>* memory            //custom memory preallocator
+            tx_queue* TX_queue,
+            uhd::tx_streamer::sptr &tx_stream,       //asscociated usrp stream 
+            preallocator<float2>* memory,           //custom memory preallocator
+            char front_end
         );
         
         //ment to be in a thread. receive messages asyncronously on metadata
-        void async_stream();
+        void async_stream(uhd::tx_streamer::sptr &tx_stream, char fron_tend);
         
         void software_rx_thread(
             param *current_settings,
             preallocator<float2>* memory,
-            rx_queue* Rx_queue
+            rx_queue* Rx_queue,
+            tx_queue* sw_loop_queue,
+            char front_end
         );
             
         
@@ -157,7 +193,9 @@ class hardware_manager{
 
             rx_queue* Rx_queue,                     //(managed internally)queue to use for pushing
             threading_condition* wait_condition,    //before joining wait for that condition
-            preallocator<float2>* memory            //custom memory preallocator
+            preallocator<float2>* memory,           //custom memory preallocator
+            uhd::rx_streamer::sptr &rx_stream,      //associated usrp streamer
+            char front_end
             
         );
         

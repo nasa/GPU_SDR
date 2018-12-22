@@ -503,7 +503,7 @@ float2* tone_gen(
     }
 
     //finalize normaization coefficient calculation
-    normalization = 1./normalization;
+    //normalization = 1./normalization;
 
     //upload in the device the host base vector
     cudaMemcpy(device_base, base_vector, sampling_rate*sizeof(float2),cudaMemcpyHostToDevice);
@@ -516,7 +516,7 @@ float2* tone_gen(
     }
     
     //apply normalization to the device buffer
-    scale_buffer<<<1024, 32>>>(device_base, sampling_rate, normalization);
+    //scale_buffer<<<1024, 32>>>(device_base, sampling_rate, normalization);
     
     //if the user set a scale, apply scalar multiplication
     if(scale>1.) std::cout<<"CUDA WARNING: Maximum amplitude of the TX buffer is > 1."<<std::endl;//print_warning("Maximum amplitude of the TX buffer is > 1.");

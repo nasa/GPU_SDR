@@ -1,8 +1,9 @@
 #include "USRP_hardware_manager.hpp"
 
 
-//the initializer of the class can be used to select which usrp is controlled by the class
-//Default call suppose only one USRP is connected
+//! @brief Initializer of the class can be used to select which usrp is controlled by the class
+//! Default call suppose only one USRP is connected
+//! @todo TODO: the multi_usrp object has to be passed as argument to this initializer. Multiple usrp's will crash as the obj is not ts
 hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init, int usrp_number){
 
     //software loop mode exclude the hardware
@@ -39,7 +40,8 @@ hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init,
         main_usrp->set_clock_source(settings->clock_reference);
     
     }else{
-        sw_loop_queue = new tx_queue(SW_LOOP_QUEUE_LENGTH);
+        A_sw_loop_queue = new tx_queue(SW_LOOP_QUEUE_LENGTH);
+        B_sw_loop_queue = new tx_queue(SW_LOOP_QUEUE_LENGTH);
     }
     
     //initialize port connection check variables
@@ -49,21 +51,27 @@ hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init,
     A_RX2_chk = OFF;
     
     //set the thread state
-    rx_thread_operation = false;
-    tx_thread_operation = false;
+    A_rx_thread_operation = false;
+    A_tx_thread_operation = false;
+    B_rx_thread_operation = false;
+    B_tx_thread_operation = false;
     
     //settling time for fpga register initialization
     std::this_thread::sleep_for(std::chrono::milliseconds(800));
     
     //initialize transmission queues
-    RX_queue = new rx_queue(RX_QUEUE_LENGTH);
-    TX_queue = new tx_queue(TX_QUEUE_LENGTH);
-    tx_error_queue = new error_queue(ERROR_QUEUE_LENGTH);
+    A_RX_queue = new rx_queue(RX_QUEUE_LENGTH);
+    A_TX_queue = new tx_queue(TX_QUEUE_LENGTH);
+    B_RX_queue = new rx_queue(RX_QUEUE_LENGTH);
+    B_TX_queue = new tx_queue(TX_QUEUE_LENGTH);
+    A_tx_error_queue = new error_queue(ERROR_QUEUE_LENGTH);
+    B_tx_error_queue = new error_queue(ERROR_QUEUE_LENGTH);
 
 }
 
-//this function should be used to set the USRP device with user parameters
-//TODO catch exceptions and return a boolean
+//! @brief This function set the USRP device with user parameters.
+//! It's really a wrappe raround the private methods apply(), set_streams() and check_tuning() of this class.
+//! @todo TODO catch exceptions and return a boolean
 bool hardware_manager::preset_usrp(usrp_param* requested_config){
     apply(requested_config);
     set_streams();
@@ -76,52 +84,69 @@ bool hardware_manager::preset_usrp(usrp_param* requested_config){
 
 bool hardware_manager::check_rx_status(bool verbose){
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    if(verbose)print_debug("RX thread status: ",rx_thread_operation);
-    return rx_thread_operation;
+    bool op = B_rx_thread_operation and A_rx_thread_operation;
+    if(verbose)print_debug("RX thread status: ",op);
+    return op;
 }
 
 bool hardware_manager::check_tx_status(bool verbose){
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    if(verbose)print_debug("TX thread status: ",tx_thread_operation);
-    return tx_thread_operation;
+    bool op = B_tx_thread_operation and A_tx_thread_operation;
+    if(verbose)print_debug("TX thread status: ",op);
+    return op;
 }
 
+//! @brief Start a transmission thread.
+//! The threads started by this function do two things: pop a packet from the respective queue; stram the packet via UHD interface.
+//! Each streamer is handled by an independent thread.
+//! If the source queue is empty a warning is printed on the console and an error is pushed in the erorr queue.
 void hardware_manager::start_tx(
     threading_condition* wait_condition,    //before joining wait for that condition
+    int thread_op,  //core affinity of the process
+    param *current_settings, //representative of the paramenters (must match A or B frontend description)
+    char front_end, //must be "A" or "B"
     preallocator<float2>* memory    //if the thread is transmitting a buffer that requires dynamical allocation than a pointer to  custo memory manager class has to be passed
-
 ){
-
+    bool tx_thread_operation;
+    
+    if(front_end=='A'){
+        tx_thread_operation = A_tx_thread_operation;
+    }else if(front_end=='B'){
+        tx_thread_operation = B_tx_thread_operation;
+    }else{
+        print_error("Front end code not recognised by hardware manager");
+        return;
+    }
+    
     if(not tx_thread_operation){
-        //pointer to rx parameters
-        param *current_settings;
-        
-        //single and double threads are different
-        if(not check_double_txrx(TX)){
-        
-            //assign the correct struct reference to the parameter input (assuming only one is active as RX)
-            if(config.A_TXRX.mode == TX) current_settings = &config.A_TXRX;
-            if(config.B_TXRX.mode == TX) current_settings = &config.B_TXRX;
-            if(config.A_RX2.mode == TX) current_settings = &config.A_RX2;
-            if(config.B_RX2.mode == TX) current_settings = &config.B_RX2;
 
-            //start the thread
-            if(not sw_loop){
-            
-                tx_thread = new boost::thread(boost::bind(&hardware_manager::single_tx_thread,this,
+        //start the thread
+        if(not sw_loop){
+            if(front_end=='A'){
+                A_tx_thread = new boost::thread(boost::bind(&hardware_manager::single_tx_thread,this,
                     current_settings,
                     wait_condition,
-                    memory));
-            }else{
-            
-                tx_thread = new boost::thread(boost::bind(&hardware_manager::software_tx_thread,this,current_settings,memory));
-            
+                    A_TX_queue,
+                    A_tx_stream,
+                    memory,
+                    'B'));
+            }else if(front_end=='B'){
+                B_tx_thread = new boost::thread(boost::bind(&hardware_manager::single_tx_thread,this,
+                    current_settings,
+                    wait_condition,
+                    B_TX_queue,
+                    B_tx_stream,
+                    memory,
+                    'B'));
             }
-            //setting maximum prioprity and affinity to core 0
-            Thread_Prioriry(*tx_thread, 99, 0);
-                
         }else{
-            print_error("Double TX not implemented yet");
+            if(front_end=='A'){
+                A_tx_thread = new boost::thread(boost::bind(&hardware_manager::software_tx_thread,this,current_settings,memory,A_TX_queue,A_sw_loop_queue,'A'));
+                Thread_Prioriry(*A_tx_thread, 99, thread_op);
+            }else if(front_end=='B'){
+                B_tx_thread = new boost::thread(boost::bind(&hardware_manager::software_tx_thread,this,current_settings,memory,B_TX_queue,B_sw_loop_queue,'B'));
+                Thread_Prioriry(*B_tx_thread, 99, thread_op);
+            }
         }
     }else{
         std::stringstream ss;
@@ -129,75 +154,107 @@ void hardware_manager::start_tx(
         print_error(ss.str());
     }
 }
+//! @brief Start a receiver thread.
 void hardware_manager::start_rx(
     int buffer_len,                         //length of the buffer. MUST be the same of the preallocator initialization
-    long int num_samples,                   //how many sample to receive
     threading_condition* wait_condition,    //before joining wait for that condition
-    preallocator<float2>* memory            //custom memory preallocator
-
+    preallocator<float2>* memory,            //custom memory preallocator
+    int thread_op,
+    param *current_settings, //representative of the paramenters (must match A or B frontend description)
+    char front_end //must be "A" or "B"
+    
     ){
+    
+    bool rx_thread_operation;
+    
+    if(front_end=='A'){
+        rx_thread_operation = A_rx_thread_operation;
+    }else if(front_end=='B'){
+        rx_thread_operation = B_rx_thread_operation;
+    }else{
+        print_error("Front end code not recognised by hardware manager");
+        return;
+    }
+    
     if(not rx_thread_operation){
-        //pointer to rx parameters
-        param *current_settings;
-        
-        //single and double threads are different
-        if(not check_double_txrx(RX)){
-            //assign the correct struct reference to the parameter input (assuming only one is active as RX)
-            if(config.A_TXRX.mode == RX) current_settings = &config.A_TXRX; 
-            if(config.B_TXRX.mode == RX) current_settings = &config.B_TXRX; 
-            if(config.A_RX2.mode == RX) current_settings = &config.A_RX2; 
-            if(config.B_RX2.mode == RX) current_settings = &config.B_RX2;
-
-            //start the thread
-            if(not sw_loop){
-                rx_thread = new boost::thread(boost::bind(&hardware_manager::single_rx_thread,this,
+        //start the thread
+        if(not sw_loop){
+            if(front_end=='A'){
+                A_rx_thread = new boost::thread(boost::bind(&hardware_manager::single_rx_thread,this,
                     current_settings,
-                    RX_queue,
+                    A_RX_queue,
                     wait_condition,
-                    memory));
-            }else{
-            
-                rx_thread = new boost::thread(boost::bind(&hardware_manager::software_rx_thread,this,current_settings,memory,RX_queue));
-                
+                    memory,
+                    A_rx_stream,
+                    'A'));
+                Thread_Prioriry(*A_rx_thread, 99, thread_op);
+            }else if(front_end=='B'){
+                B_rx_thread = new boost::thread(boost::bind(&hardware_manager::single_rx_thread,this,
+                    current_settings,
+                    B_RX_queue,
+                    wait_condition,
+                    memory,
+                    B_rx_stream,
+                    'B'));
+                Thread_Prioriry(*B_rx_thread, 99, thread_op);
             }
-            
-            //setting maximum prioprity and affinity to core 2
-            Thread_Prioriry(*rx_thread, 99, 2);
-            
-                
         }else{
-            print_error("Double RX not implemented yet");
+            if(front_end=='A'){
+                A_rx_thread = new boost::thread(boost::bind(&hardware_manager::software_rx_thread,this,current_settings,memory,A_RX_queue,A_sw_loop_queue,'A'));
+            }else if(front_end=='B'){
+                B_rx_thread = new boost::thread(boost::bind(&hardware_manager::software_rx_thread,this,current_settings,memory,B_RX_queue,B_sw_loop_queue,'B'));
+            }
         }
+            
     }else{
         std::stringstream ss;
         ss << "Cannot start RX thread, a rx threead associated with USRP "<< this_usrp_number <<" is already running";
         print_error(ss.str());
     }
 }
+//! @brief Force close the tx uploading threads if active (thread safe)
 void hardware_manager::close_tx(){
 
-    //if(tx_thread_operation){
+    if(A_tx_thread_operation){
     
-        tx_thread->interrupt();
-        tx_thread->join();
-        //tx_thread_operation = false;
+        A_tx_thread->interrupt();
+        A_tx_thread->join();
+        A_tx_thread_operation = false;
         
-    //}
+    }
+    
+    if(B_tx_thread_operation){
+    
+        B_tx_thread->interrupt();
+        B_tx_thread->join();
+        B_tx_thread_operation = false;
+        
+    }
 
 }
-
+//! @brief Force close the rx downloading threads if active (thread safe)
 void hardware_manager::close_rx(){
 
-    //if(rx_thread_operation){
+    if(A_rx_thread_operation){
     
-        rx_thread->interrupt();
-        rx_thread->join();
-        //rx_thread_operation = false;
+        A_rx_thread->interrupt();
+        A_rx_thread->join();
+        A_rx_thread_operation = false;
 
-    //}
+    }
+    
+    if(B_rx_thread_operation){
+    
+        B_rx_thread->interrupt();
+        B_rx_thread->join();
+        B_rx_thread_operation = false;
+
+    }
+    
 }
-
-int hardware_manager::clean_tx_queue(preallocator<float2>* memory){
+//! @brief close a TX queue object preventing memory leaks.
+//! Before closing the queue (as the queue used supports multiple consumers) the frontend operation MUST be terminated.
+int hardware_manager::clean_tx_queue(tx_queue* TX_queue, preallocator<float2>* memory){
 
     //temporary wrapper
     float2* buffer;
@@ -205,14 +262,12 @@ int hardware_manager::clean_tx_queue(preallocator<float2>* memory){
     //counter. Expected to be 0
     int counter = 0;
     
-    //cannot execute when the rx thread is going
-    if(not tx_thread_operation){
-        while(not TX_queue->empty() or TX_queue->pop(buffer)){
-        
-            memory->trash(buffer);
-            counter ++;
-        }
+    while(not TX_queue->empty() or TX_queue->pop(buffer)){
+    
+        memory->trash(buffer);
+        counter ++;
     }
+    
     if(counter > 0){
         std::stringstream ss;
         ss << "TX queue cleaned of "<< counter <<"buffer(s)";
@@ -220,8 +275,9 @@ int hardware_manager::clean_tx_queue(preallocator<float2>* memory){
     } 
     return counter;
 }
-
-int hardware_manager::clean_rx_queue(preallocator<float2>* memory){
+//! @brief close a RX queue object preventing memory leaks.
+//! Before closing the queue (as the queue used supports multiple consumers) the frontend operation MUST be terminated.
+int hardware_manager::clean_rx_queue(rx_queue* RX_queue, preallocator<float2>* memory){
 
     //temporary wrapper
     RX_wrapper warapped_buffer;
@@ -230,12 +286,11 @@ int hardware_manager::clean_rx_queue(preallocator<float2>* memory){
     int counter = 0;
     
     //cannot execute when the rx thread is going
-    if(not rx_thread_operation){
-        while(not RX_queue->empty() or RX_queue->pop(warapped_buffer)){
-            memory->trash(warapped_buffer.buffer);
-            counter ++;
-        }
+    while(not RX_queue->empty() or RX_queue->pop(warapped_buffer)){
+        memory->trash(warapped_buffer.buffer);
+        counter ++;
     }
+    
     if(counter > 0){
         std::stringstream ss;
         ss << "RX queue cleaned of "<< counter <<"buffer(s)";
@@ -253,20 +308,6 @@ void hardware_manager::apply(usrp_param* requested_config){
     //stack of messages
     std::stringstream ss;
     ss<<std::endl;
-    
-    //set the subdevice specification IS IT REDUNDANT WITH CHANNEL NUMBER?
-    /*
-    std::stringstream subdev_tx; 
-    if (requested_config->A_TXRX.mode == TX or requested_config->A_RX2.mode == TX)subdev_tx<<"A:0 ";
-    if (requested_config->B_TXRX.mode == TX or requested_config->B_RX2.mode == TX)subdev_tx<<"B:0" ;
-    if(subdev_tx.str().compare("") != 0) main_usrp->set_tx_subdev_spec(subdev_tx.str());
-    
-    std::stringstream subdev_rx; 
-    if (requested_config->A_TXRX.mode == RX or requested_config->A_RX2.mode == RX)subdev_tx<<"A:0 ";
-    if (requested_config->B_TXRX.mode == RX or requested_config->B_RX2.mode == RX)subdev_tx<<"B:0" ;
-    if(subdev_rx.str().compare("") != 0) main_usrp->set_rx_subdev_spec(subdev_rx.str());
-    */
-    
     
     //apply configuration to each antenna on each subdevice
     ss<<"Hardware parameter subdevice A_TXRX: ";
@@ -347,146 +388,142 @@ bool hardware_manager::check_tuning(){
         std::vector<std::string>  rx_sensor_names;
         rx_sensor_names = main_usrp->get_rx_sensor_names(chan);
         
-        //check only if there is a channel associated with RX.
-        if(check_global_mode_presence(RX,chan)){
-            std::cout<<"Checking RX frontend tuning... "<<std::flush;
-            if (std::find(rx_sensor_names.begin(), rx_sensor_names.end(), "lo_locked") != rx_sensor_names.end()) {
-                uhd::sensor_value_t lo_locked = main_usrp->get_rx_sensor("lo_locked",chan);
-                
-                //a settling time is normal
-                int timeout_counter = 0;
-                while (not main_usrp->get_rx_sensor("lo_locked",chan).to_bool()){
-                    //sleep for a short time in milliseconds
-                    timeout_counter++;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-                    if(timeout_counter>500){
-                        std::stringstream ss;
-                        ss<<"Cannot tune the RX frontend of channel "<<chan?"A":"B";
-                        print_error(ss.str());
-                        return false;
+        try{
+            //check only if there is a channel associated with RX.
+            if(check_global_mode_presence(RX,chan)){
+                std::cout<<"Checking RX frontend tuning... "<<std::flush;
+                if (std::find(rx_sensor_names.begin(), rx_sensor_names.end(), "lo_locked") != rx_sensor_names.end()) {
+                    uhd::sensor_value_t lo_locked = main_usrp->get_rx_sensor("lo_locked",chan);
+                    
+                    //a settling time is normal
+                    int timeout_counter = 0;
+                    while (not main_usrp->get_rx_sensor("lo_locked",chan).to_bool()){
+                        //sleep for a short time in milliseconds
+                        timeout_counter++;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                        if(timeout_counter>500){
+                            std::stringstream ss;
+                            ss<<"Cannot tune the RX frontend of channel "<<chan?"A":"B";
+                            print_error(ss.str());
+                            return false;
+                        }
                     }
+                    lo_locked = main_usrp->get_rx_sensor("lo_locked",chan);
                 }
-                lo_locked = main_usrp->get_rx_sensor("lo_locked",chan);
+                rx = rx and main_usrp->get_rx_sensor("lo_locked",chan).to_bool();
+                std::cout<<"Done!"<<std::endl;
             }
-            rx = rx and main_usrp->get_rx_sensor("lo_locked",chan).to_bool();
-            std::cout<<"Done!"<<std::endl;
-        }
-        
+        }catch (uhd::lookup_error e){
+            std::cout<<"None"<<std::endl;
+            rx = true;
+        }   
         //check for TX locking
         std::vector<std::string>  tx_sensor_names;
         tx_sensor_names = main_usrp->get_tx_sensor_names(0);
-        
-        //check only if there is a channel associated with TX.
-        if(check_global_mode_presence(TX,chan)){
-            std::cout<<"Checking TX frontend tuning... "<<std::flush;
-            if (std::find(tx_sensor_names.begin(), tx_sensor_names.end(), "lo_locked") != tx_sensor_names.end()) {
-                uhd::sensor_value_t lo_locked = main_usrp->get_tx_sensor("lo_locked",chan);
-                
-                //a settling time is normal
-                int timeout_counter = 0;
-                while (not main_usrp->get_tx_sensor("lo_locked",chan).to_bool()){
-                    //sleep for a short time in milliseconds
-                    timeout_counter++;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-                    if(timeout_counter>500){
-                        std::stringstream ss;
-                        ss<<"Cannot tune the TX frontend of channel "<<chan?"A":"B";
-                        print_error(ss.str());
-                        return false;
+        try{   
+            //check only if there is a channel associated with TX.
+            if(check_global_mode_presence(TX,chan)){
+                std::cout<<"Checking TX frontend tuning... "<<std::flush;
+                if (std::find(tx_sensor_names.begin(), tx_sensor_names.end(), "lo_locked") != tx_sensor_names.end()) {
+                    uhd::sensor_value_t lo_locked = main_usrp->get_tx_sensor("lo_locked",chan);
+                    
+                    //a settling time is normal
+                    int timeout_counter = 0;
+                    while (not main_usrp->get_tx_sensor("lo_locked",chan).to_bool()){
+                        //sleep for a short time in milliseconds
+                        timeout_counter++;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                        if(timeout_counter>500){
+                            std::stringstream ss;
+                            ss<<"Cannot tune the TX frontend of channel "<<chan?"A":"B";
+                            print_error(ss.str());
+                            return false;
+                        }
                     }
+                    lo_locked = main_usrp->get_tx_sensor("lo_locked",chan);
                 }
-                lo_locked = main_usrp->get_tx_sensor("lo_locked",chan);
+                tx = tx and main_usrp->get_tx_sensor("lo_locked",chan).to_bool();
+                std::cout<<"Done!"<<std::endl;
             }
-            tx = tx and main_usrp->get_tx_sensor("lo_locked",chan).to_bool();
-            std::cout<<"Done!"<<std::endl;
+        }catch (uhd::lookup_error e){
+            std::cout<<"None"<<std::endl;
+            tx = true;
         }
-    }    
+    }
+    
     return rx and tx;
 
 }
 
 void hardware_manager::set_streams(){
 
-
+    //in this function config is an object representing the current paramenters.
+    
     //declare unit to be used
     uhd::stream_args_t stream_args("fc32");
-    
-    //check if the stream configuration is different //DEPRECATED
-    /*
-    if(A_TXRX_chk != config.A_TXRX.mode or
-       A_RX2_chk != config.A_RX2.mode or
-       B_RX2_chk != config.B_RX2.mode or
-       B_TXRX_chk != config.B_TXRX.mode
-       ){
-   */
-    if(true){
        
-        //if the stream configuration is different, reset the streams
-        clear_streams();
-        
-        A_TXRX_chk = config.A_TXRX.mode;
-        A_RX2_chk = config.A_RX2.mode;
-        B_RX2_chk = config.B_RX2.mode;
-        B_TXRX_chk = config.B_TXRX.mode;
-        
-        //check if the rx and tx streaming is single or double
-        bool rx_duble_set = check_double_txrx(RX);
-        bool tx_duble_set = check_double_txrx(TX);
-        
-        if(not rx_duble_set){
-            //set the A frontend
-           
-            if(config.A_TXRX.mode == RX or config.A_RX2.mode == RX){
-                front_end_code0 = (config.A_TXRX.mode == RX)?'A':'B';
-                channel_num.resize(1);
-                channel_num[0] = 0;
-                stream_args.channels = channel_num;
-                if(not sw_loop)rx_stream = main_usrp->get_rx_stream(stream_args);
-            }
-            if(config.B_TXRX.mode == RX or config.B_RX2.mode == RX){
-                front_end_code0 = (config.B_TXRX.mode == RX)?'C':'D';
-                channel_num.resize(1);
-                channel_num[0] = 1;
-                stream_args.channels = channel_num;
-                if(not sw_loop)rx_stream = main_usrp->get_rx_stream(stream_args);
-            }
-        }else{
-            channel_num.resize(2);
-            channel_num[0] = 0;
-            channel_num[1] = 1;
-            stream_args.channels = channel_num;
-            if(not sw_loop)rx_stream = main_usrp->get_rx_stream(stream_args);
-            //antenna code to be invented here
-        }
-        
-        if(not tx_duble_set){
-
-            if(config.A_TXRX.mode == TX or config.A_RX2.mode == TX){
-                channel_num.resize(1);
-                channel_num[0] = 0;
-                stream_args.channels = {0};//channel_num;
-                if(not sw_loop)tx_stream = main_usrp->get_tx_stream(stream_args);
-            }
-            if(config.B_TXRX.mode == TX or config.B_RX2.mode == TX){
-                channel_num.resize(1);
-                channel_num[0] = 1;
-                stream_args.channels = {1};//channel_num;
-                if(not sw_loop)tx_stream = main_usrp->get_tx_stream(stream_args);
-            }
-        }else{
-            channel_num.resize(2);
-            channel_num[0] = 0;
-            channel_num[1] = 1;
-            stream_args.channels = {0,1};//channel_num;
-            if(not sw_loop)tx_stream = main_usrp->get_tx_stream(stream_args);
-        }
+    //if the stream configuration is different, reset the streams
+    clear_streams();
+    
+    if(channel_num.size()!=1)channel_num.resize(1);
+    
+    if (config.A_TXRX.mode == RX and config.A_RX2.mode == RX){
+        print_error("Currently only one receiver per front end is suppored");
+        return;
     }
+    
+    if (config.A_TXRX.mode == TX and config.A_RX2.mode == TX){
+        print_error("Currently only one transmitter per front end is suppored");
+        return;
+    }
+    
+    //the rx side is different from tx as the front_end_code0 variable will determine the HDF5 group in wich the final packet will be written.
+    
+    if(config.A_TXRX.mode == RX){
+        front_end_code0 = 'A';
+        channel_num[0] = 0;
+        stream_args.channels = channel_num;
+        if(not sw_loop)A_rx_stream = main_usrp->get_rx_stream(stream_args);
+    }else if(config.A_RX2.mode == RX){
+        front_end_code0 = 'B';
+        channel_num[0] = 0;
+        stream_args.channels = channel_num;
+        if(not sw_loop)A_rx_stream = main_usrp->get_rx_stream(stream_args);
+    }
+    
+    if(config.B_TXRX.mode == RX){
+        front_end_code0 = 'C';
+        channel_num[0] = 1;
+        stream_args.channels = channel_num;
+        if(not sw_loop)B_rx_stream = main_usrp->get_rx_stream(stream_args);
+    }else if(config.B_RX2.mode == RX){
+        front_end_code0 = 'D';
+        channel_num[0] = 1;
+        stream_args.channels = channel_num;
+        if(not sw_loop)B_rx_stream = main_usrp->get_rx_stream(stream_args);
+    }
+    
+    
+    if(config.A_RX2.mode == TX or config.A_TXRX.mode == TX){
+        channel_num[0] = 0;
+        stream_args.channels = channel_num;
+        if(not sw_loop)A_tx_stream = main_usrp->get_tx_stream(stream_args);
+    }
+    
+    if(config.B_RX2.mode == TX or config.B_TXRX.mode == TX){
+        channel_num[0] = 1;
+        stream_args.channels = channel_num;
+        if(not sw_loop)B_tx_stream = main_usrp->get_tx_stream(stream_args);
+    }
+    
 
 };
 
 void hardware_manager::clear_streams(){
-    rx_stream = NULL;
-    tx_stream = NULL;
+    A_rx_stream = NULL;
+    A_tx_stream = NULL;
+    B_rx_stream = NULL;
+    B_tx_stream = NULL;
 }
 
 
@@ -525,64 +562,74 @@ std::string hardware_manager::apply_antenna_config(param *parameters, param *old
                 ss<<boost::format("Effective value: %f Msps. ") % (old_parameters->rate / 1e6)<<std::endl;
             parameters->rate = old_parameters->rate;
         }
-        
-        if(old_parameters->mode == OFF or old_parameters->tone != parameters->tone or old_parameters->tuning_mode != parameters->tuning_mode){
-            changed = true;
-            
-            if(parameters->mode == RX) {
-                if(not sw_loop){
-                    if(not parameters->tuning_mode){
-                        
-                        uhd::tune_request_t tune_request(parameters->tone,0); 
-                        tune_request.args = uhd::device_addr_t("mode_n=integer");
-                        main_usrp->set_rx_freq(tune_request,chan);
-                    }else{
-                        uhd::tune_request_t tune_request(parameters->tone,0); 
-                        main_usrp->set_rx_freq(tune_request,chan);
-                        //main_usrp->set_rx_freq(parameters->tone,chan);
-                    }
+        try{
+            if(old_parameters->mode == OFF or old_parameters->tone != parameters->tone or old_parameters->tuning_mode != parameters->tuning_mode){
+                changed = true;
+                
+                
+                if(parameters->mode == RX) {
                     
-                    old_parameters->tone = main_usrp->get_rx_freq(chan);
-                } else old_parameters->tone = parameters->tone;
-                old_parameters->tuning_mode = parameters->tuning_mode;
-                ss << boost::format("\tSetting RX central frequency: %f MHz. ") % (parameters->tone / 1e6);
-                if(parameters->tuning_mode){
-                    ss<<" (fractional) ";
-                }else{
-                    ss<<" (integer) ";
-                }
-                ss<< std::flush;
-            }else{
-                if(not sw_loop){
-                    if(not parameters->tuning_mode){
-                        
-                        uhd::tune_request_t tune_request(parameters->tone,0); 
-                        tune_request.args = uhd::device_addr_t("mode_n=integer");
-                        main_usrp->set_tx_freq(tune_request,chan);
-                    }else{
-                        uhd::tune_request_t tune_request(parameters->tone,0); 
-                        main_usrp->set_tx_freq(tune_request,chan);
-                        //main_usrp->set_tx_freq(parameters->tone,chan);
-                    }
-                    old_parameters->tone = main_usrp->get_tx_freq(chan);
-                }else{ 
-                    old_parameters->tone = parameters->tone;
-                }
-                old_parameters->tuning_mode = parameters->tuning_mode;
+                        if(not sw_loop){
+                            main_usrp->get_rx_sensor("lo_locked",chan).to_bool();
+                            if(not parameters->tuning_mode){
+                                
+                                uhd::tune_request_t tune_request(parameters->tone,0); 
+                                tune_request.args = uhd::device_addr_t("mode_n=integer");
+                                main_usrp->set_rx_freq(tune_request,chan);
+                            }else{
+                                uhd::tune_request_t tune_request(parameters->tone,0); 
+                                main_usrp->set_rx_freq(tune_request,chan);
+                                //main_usrp->set_rx_freq(parameters->tone,chan);
+                            }
+                            
+                            old_parameters->tone = main_usrp->get_rx_freq(chan);
+                        } else old_parameters->tone = parameters->tone;
+                        old_parameters->tuning_mode = parameters->tuning_mode;
+                        ss << boost::format("\tSetting RX central frequency: %f MHz. ") % (parameters->tone / 1e6);
+                        if(parameters->tuning_mode){
+                            ss<<" (fractional) ";
+                        }else{
+                            ss<<" (integer) ";
+                        }
+                        ss<< std::flush;
                     
-                ss << boost::format("\tSetting TX central frequency: %f MHz. ") % (parameters->tone / 1e6);
-                if(parameters->tuning_mode){
-                    ss<<" (fractional) ";
+                
                 }else{
-                    ss<<" (integer) ";
-                }
-                ss<< std::flush;
-            }    
+                    
+                    if(not sw_loop){
+                        main_usrp->get_tx_sensor("lo_locked",chan).to_bool();
+                        if(not parameters->tuning_mode){
+                            
+                            uhd::tune_request_t tune_request(parameters->tone,0); 
+                            tune_request.args = uhd::device_addr_t("mode_n=integer");
+                            main_usrp->set_tx_freq(tune_request,chan);
+                        }else{
+                            uhd::tune_request_t tune_request(parameters->tone,0); 
+                            main_usrp->set_tx_freq(tune_request,chan);
+                            //main_usrp->set_tx_freq(parameters->tone,chan);
+                        }
+                        old_parameters->tone = main_usrp->get_tx_freq(chan);
+                    }else{ 
+                        old_parameters->tone = parameters->tone;
+                    }
+                    old_parameters->tuning_mode = parameters->tuning_mode;
+                        
+                    ss << boost::format("\tSetting TX central frequency: %f MHz. ") % (parameters->tone / 1e6);
+                    if(parameters->tuning_mode){
+                        ss<<" (fractional) ";
+                    }else{
+                        ss<<" (integer) ";
+                    }
+                    ss<< std::flush;
+                }    
 
-            old_parameters->tone == parameters->tone?
-                ss<<std::endl:
-                ss<<boost::format("Effective value: %f MHz. ") % (old_parameters->tone / 1e6)<<std::endl;
-            parameters->tone = old_parameters->tone;
+                old_parameters->tone == parameters->tone?
+                    ss<<std::endl:
+                    ss<<boost::format("Effective value: %f MHz. ") % (old_parameters->tone / 1e6)<<std::endl;
+                parameters->tone = old_parameters->tone;
+            }
+        }catch(uhd::lookup_error e){
+            ss << boost::format("\tNo mixer detected\n");
         }
         
         if(old_parameters->mode == OFF or old_parameters->gain != parameters->gain){
@@ -702,10 +749,20 @@ bool hardware_manager::check_global_mode_presence(ant_mode mode, size_t chan){
 
 void hardware_manager::software_tx_thread(
     param *current_settings,                //some parameters are useful also in sw
-    preallocator<float2>* memory            //custom memory preallocator
+    preallocator<float2>* memory,            //custom memory preallocator
+    tx_queue* TX_queue,
+    tx_queue* sw_loop_queue,
+    char front_end
     ){
     float2* tx_buffer;          //the buffer pointer
-    tx_thread_operation = true; //class variable to account for thread activity
+    if(front_end == 'A'){
+        A_tx_thread_operation = true; //class variable to account for thread activity
+    }else if(front_end == 'B'){
+        B_tx_thread_operation = true;
+    }else{
+        print_error("Frontend code not recognized in software tx thread");
+        return;
+    } //class variable to account for thread activity
     bool active = true;         //local activity monitor
     long int sent_samp = 0;     //total number of samples sent
     
@@ -732,13 +789,20 @@ void hardware_manager::software_tx_thread(
             
         }
     }
-    tx_thread_operation = false;
+    if(front_end == 'A'){
+        A_tx_thread_operation = false; //class variable to account for thread activity
+    }else if(front_end == 'B'){
+        B_tx_thread_operation = false;
+    }
 }
 
 void hardware_manager::single_tx_thread(
     param *current_settings,                //(managed internally to the class) user parameter to use for rx setting
     threading_condition* wait_condition,    //before joining wait for that condition
-    preallocator<float2>* memory            //custom memory preallocator
+    tx_queue* TX_queue,                     //associated tx stream queue
+    uhd::tx_streamer::sptr &tx_stream,       //stream to usrp 
+    preallocator<float2>* memory,            //custom memory preallocator
+    char front_end
 ){
     
 
@@ -752,11 +816,17 @@ void hardware_manager::single_tx_thread(
     size_t sent_samp = 0;       //total number of samples sent
     float2* tx_buffer;  //the buffer pointer
     
-    boost::thread* metadata_thread = new boost::thread(boost::bind(&hardware_manager::async_stream,this));
+    boost::thread* metadata_thread = new boost::thread(boost::bind(&hardware_manager::async_stream,this,tx_stream,front_end));
     
     //float timeout = 0.1f;   //timeout in seconds(will be used to sync the recv calls)
-    tx_thread_operation = true; //class variable to account for thread activity
-    
+    if(front_end == 'A'){
+        A_tx_thread_operation = true; //class variable to account for thread activity
+    }else if(front_end == 'B'){
+        B_tx_thread_operation = true;
+    }else{
+        print_error("Frontend code not recognized in hardware tx thread");
+        return;
+    } //class variable to account for thread activity
     uhd::tx_metadata_t metadata_tx;
     
     metadata_tx.start_of_burst = true;
@@ -832,26 +902,43 @@ void hardware_manager::single_tx_thread(
     metadata_thread->join();
     
     //set check the condition to false
-    tx_thread_operation = false;
+    if(front_end == 'A'){
+        A_tx_thread_operation = false; //class variable to account for thread activity
+    }else if(front_end == 'B'){
+        B_tx_thread_operation = false;
+    }
     
     //wait_condition->release();
 }
 
 //ment to be in a thread. receive messages asyncronously on metadata
-void hardware_manager::async_stream(){
+void hardware_manager::async_stream(uhd::tx_streamer::sptr &tx_stream, char fornt_end){
+    bool parent_process_active = false;
     bool active = true;
     uhd::async_metadata_t async_md;
     int errors;
     while(active){
         try{
+        
             boost::this_thread::interruption_point();
-            if(tx_thread_operation){
+            
+            if (fornt_end == 'A'){
+                parent_process_active = A_tx_thread_operation;
+            }else if (fornt_end == 'B'){
+                parent_process_active = B_tx_thread_operation;
+            }
+            
+            if(parent_process_active){
                 errors = 0;
                 if(tx_stream->recv_async_msg(async_md)){
                     errors = get_tx_error(&async_md,true);
                 }
-                if(errors>0 and tx_thread_operation){
-                    tx_error_queue->push(1);
+                if(errors>0 and parent_process_active){
+                    if (fornt_end == 'A'){
+                        A_tx_error_queue->push(1);
+                    }else if (fornt_end == 'B'){
+                        B_tx_error_queue->push(1);
+                    }
                 }
                 
             }else{ active = false; }
@@ -864,10 +951,19 @@ void hardware_manager::async_stream(){
 void hardware_manager::software_rx_thread(
     param *current_settings,
     preallocator<float2>* memory,
-    rx_queue* Rx_queue
+    rx_queue* Rx_queue,
+    tx_queue* sw_loop_queue,
+    char front_end
 ){
     
-    rx_thread_operation = true; //class variable to account for thread activity
+    if(front_end == 'A'){
+        A_rx_thread_operation = true; //class variable to account for thread activity
+    }else if(front_end == 'B'){
+        B_rx_thread_operation = true;
+    }else{
+        print_error("Frontend code not recognized in software rx thread");
+        return;
+    } //class variable to account for thread activity
     bool active = true;         //control the interruption of the thread
     bool taken = true;
     RX_wrapper warapped_buffer;
@@ -907,19 +1003,32 @@ void hardware_manager::software_rx_thread(
         }catch (boost::thread_interrupted &){ active = false;} 
         
     }
-    rx_thread_operation = false;
+    if(front_end == 'A'){
+        A_rx_thread_operation = false; //class variable to account for thread activity
+    }else if(front_end == 'B'){
+        B_rx_thread_operation = false;
+    }
 }
     
 
 void hardware_manager::single_rx_thread(
     param *current_settings,                //(managed internally) user parameter to use for rx setting
-
     rx_queue* Rx_queue,                     //(managed internally)queue to use for pushing
     threading_condition* wait_condition,    //before joining wait for that condition
-    preallocator<float2>* memory            //custom memory preallocator
+    preallocator<float2>* memory,            //custom memory preallocator
+    uhd::rx_streamer::sptr &rx_stream ,     //the streamer to usrp
+    char front_end                          //front end code for operation accountability
     
 ){
-    rx_thread_operation = true; //class variable to account for thread activity
+    if(front_end == 'A'){
+        A_rx_thread_operation = true; //class variable to account for thread activity
+    }else if(front_end == 'B'){
+        B_rx_thread_operation = true;
+    }else{
+        print_error("Frontend code not recognized in hardware rx thread");
+        return;
+    }
+    
     bool active = true;         //control the interruption of the thread
 
     float2* rx_buffer;      //pointer to the receiver buffer
@@ -1022,7 +1131,11 @@ void hardware_manager::single_rx_thread(
                 if(get_rx_errors(&metadata_rx, true)>0)errors++;
                 
                 //get errors from tx thread if present
-                while(tx_error_queue->pop(tmp) and tx_thread_operation)errors++;
+                if(front_end == 'A'){
+                    while(A_tx_error_queue->pop(tmp) and A_tx_thread_operation)errors++;
+                }else if(front_end == 'B'){
+                    while(B_tx_error_queue->pop(tmp) and B_tx_thread_operation)errors++;
+                }
 
                 //change metadata for continuous streaming or burst mode
                 if(first_packet){
@@ -1094,8 +1207,11 @@ void hardware_manager::single_rx_thread(
     }
     
     //set the check condition to false
-    rx_thread_operation = false;
-    
+    if(front_end == 'A'){
+        A_rx_thread_operation = false; //class variable to account for thread activity
+    }else if(front_end == 'B'){
+        B_rx_thread_operation = false;
+    }
     //wait_condition->wait();
 }
 
