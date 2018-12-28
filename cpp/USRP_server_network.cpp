@@ -72,13 +72,19 @@ bool Sync_server::stop(bool force){
         force_close = true;
         TCP_worker->interrupt();
         TCP_worker->join();
+        delete TCP_worker;
+        TCP_worker = nullptr;
         //print_debug("force_stopping TCP");
         return NET_IS_STREAMING;
     }else if(NET_IS_CONNECTED){
         //print_debug("stopping TCP");
         force_close = false;
         TCP_worker->interrupt();
-        if(not NET_IS_STREAMING)TCP_worker->join();
+        if(not NET_IS_STREAMING){
+            TCP_worker->join();
+            delete TCP_worker;
+            TCP_worker = nullptr;
+        }
         return NET_IS_STREAMING;
     }
     print_warning("Chekcing streaming status on disconnected socket");
@@ -271,18 +277,18 @@ void Sync_server::tcp_streamer(param* current_settings){
 }
 
 char* format_error(){
-    char* error = NULL;
+    char* error = nullptr;
     return error;
 }
 
 char* format_status(){
-    char* error = NULL;
+    char* error = nullptr;
     return error;
 }
 
 //allocates memory for char*, print the message in it and returns the pointer
 char* format_parameter(usrp_param *parameters, bool response){
-    char* error = NULL;
+    char* error = nullptr;
     return error;
 }
 

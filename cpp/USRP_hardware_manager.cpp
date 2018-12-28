@@ -35,7 +35,6 @@ hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init,
         
         //assign desired address
         main_usrp = uhd::usrp::multi_usrp::make(dev_addrs[usrp_number]);
-        
         //set the clock reference
         main_usrp->set_clock_source(settings->clock_reference);
     
@@ -64,8 +63,14 @@ hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init,
     A_TX_queue = new tx_queue(TX_QUEUE_LENGTH);
     B_RX_queue = new rx_queue(RX_QUEUE_LENGTH);
     B_TX_queue = new tx_queue(TX_QUEUE_LENGTH);
+    
     A_tx_error_queue = new error_queue(ERROR_QUEUE_LENGTH);
     B_tx_error_queue = new error_queue(ERROR_QUEUE_LENGTH);
+
+    A_rx_stream = nullptr;
+    A_tx_stream = nullptr;
+    B_rx_stream = nullptr;
+    B_tx_stream = nullptr;
 
 }
 
@@ -82,16 +87,44 @@ bool hardware_manager::preset_usrp(usrp_param* requested_config){
     
 }
 
+bool hardware_manager::check_A_rx_status(bool verbose){
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    bool op = A_rx_thread_operation;
+    if(verbose)print_debug("RX thread status: ",op);
+    return op;
+}
+
+bool hardware_manager::check_B_rx_status(bool verbose){
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    bool op = B_rx_thread_operation;
+    if(verbose)print_debug("RX thread status: ",op);
+    return op;
+}
+
 bool hardware_manager::check_rx_status(bool verbose){
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    bool op = B_rx_thread_operation and A_rx_thread_operation;
+    bool op = B_rx_thread_operation or A_rx_thread_operation;
     if(verbose)print_debug("RX thread status: ",op);
     return op;
 }
 
 bool hardware_manager::check_tx_status(bool verbose){
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    bool op = B_tx_thread_operation and A_tx_thread_operation;
+    bool op = B_tx_thread_operation or A_tx_thread_operation;
+    if(verbose)print_debug("TX thread status: ",op);
+    return op;
+}
+
+bool hardware_manager::check_A_tx_status(bool verbose){
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    bool op = A_tx_thread_operation;
+    if(verbose)print_debug("TX thread status: ",op);
+    return op;
+}
+
+bool hardware_manager::check_B_tx_status(bool verbose){
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    bool op = B_tx_thread_operation;
     if(verbose)print_debug("TX thread status: ",op);
     return op;
 }
@@ -102,10 +135,10 @@ bool hardware_manager::check_tx_status(bool verbose){
 //! If the source queue is empty a warning is printed on the console and an error is pushed in the erorr queue.
 void hardware_manager::start_tx(
     threading_condition* wait_condition,    //before joining wait for that condition
-    int thread_op,  //core affinity of the process
-    param *current_settings, //representative of the paramenters (must match A or B frontend description)
-    char front_end, //must be "A" or "B"
-    preallocator<float2>* memory    //if the thread is transmitting a buffer that requires dynamical allocation than a pointer to  custo memory manager class has to be passed
+    int thread_op,                          //core affinity of the process
+    param *current_settings,                //representative of the paramenters (must match A or B frontend description)
+    char front_end,                         //must be "A" or "B"
+preallocator<float2>* memory                //if the thread is transmitting a buffer that requires dynamical allocation than a pointer to  custo memory manager class has to be passed
 ){
     bool tx_thread_operation;
     
@@ -129,7 +162,11 @@ void hardware_manager::start_tx(
                     A_TX_queue,
                     A_tx_stream,
                     memory,
-                    'B'));
+                    'A'
+                ));
+            SetThreadName(A_tx_thread, "A_tx_thread");  
+            Thread_Prioriry(*A_tx_thread, 99, thread_op);
+            
             }else if(front_end=='B'){
                 B_tx_thread = new boost::thread(boost::bind(&hardware_manager::single_tx_thread,this,
                     current_settings,
@@ -137,7 +174,12 @@ void hardware_manager::start_tx(
                     B_TX_queue,
                     B_tx_stream,
                     memory,
-                    'B'));
+                    'B'
+                ));
+                
+            SetThreadName(B_tx_thread, "B_tx_thread");  
+            Thread_Prioriry(*B_tx_thread, 99, thread_op);
+            
             }
         }else{
             if(front_end=='A'){
@@ -154,6 +196,7 @@ void hardware_manager::start_tx(
         print_error(ss.str());
     }
 }
+
 //! @brief Start a receiver thread.
 void hardware_manager::start_rx(
     int buffer_len,                         //length of the buffer. MUST be the same of the preallocator initialization
@@ -188,6 +231,7 @@ void hardware_manager::start_rx(
                     A_rx_stream,
                     'A'));
                 Thread_Prioriry(*A_rx_thread, 99, thread_op);
+                SetThreadName(A_rx_thread, "A_rx_thread");
             }else if(front_end=='B'){
                 B_rx_thread = new boost::thread(boost::bind(&hardware_manager::single_rx_thread,this,
                     current_settings,
@@ -197,12 +241,17 @@ void hardware_manager::start_rx(
                     B_rx_stream,
                     'B'));
                 Thread_Prioriry(*B_rx_thread, 99, thread_op);
+                SetThreadName(B_rx_thread, "B_rx_thread");
             }
         }else{
             if(front_end=='A'){
                 A_rx_thread = new boost::thread(boost::bind(&hardware_manager::software_rx_thread,this,current_settings,memory,A_RX_queue,A_sw_loop_queue,'A'));
+                Thread_Prioriry(*A_rx_thread, 99, thread_op);
+                SetThreadName(A_rx_thread, "A_rx_thread");
             }else if(front_end=='B'){
                 B_rx_thread = new boost::thread(boost::bind(&hardware_manager::software_rx_thread,this,current_settings,memory,B_RX_queue,B_sw_loop_queue,'B'));
+                Thread_Prioriry(*B_rx_thread, 99, thread_op);
+                SetThreadName(B_rx_thread, "B_rx_thread");
             }
         }
             
@@ -216,17 +265,19 @@ void hardware_manager::start_rx(
 void hardware_manager::close_tx(){
 
     if(A_tx_thread_operation){
-    
         A_tx_thread->interrupt();
         A_tx_thread->join();
+        delete A_tx_thread;
+        A_tx_thread = nullptr;
         A_tx_thread_operation = false;
         
     }
     
     if(B_tx_thread_operation){
-    
         B_tx_thread->interrupt();
         B_tx_thread->join();
+        delete B_tx_thread;
+        B_tx_thread = nullptr;
         B_tx_thread_operation = false;
         
     }
@@ -239,6 +290,8 @@ void hardware_manager::close_rx(){
     
         A_rx_thread->interrupt();
         A_rx_thread->join();
+        delete A_rx_thread;
+        A_rx_thread = nullptr;
         A_rx_thread_operation = false;
 
     }
@@ -247,6 +300,8 @@ void hardware_manager::close_rx(){
     
         B_rx_thread->interrupt();
         B_rx_thread->join();
+        delete B_rx_thread;
+        B_rx_thread = nullptr;
         B_rx_thread_operation = false;
 
     }
@@ -459,9 +514,6 @@ void hardware_manager::set_streams(){
 
     //in this function config is an object representing the current paramenters.
     
-    //declare unit to be used
-    uhd::stream_args_t stream_args("fc32");
-       
     //if the stream configuration is different, reset the streams
     clear_streams();
     
@@ -480,11 +532,15 @@ void hardware_manager::set_streams(){
     //the rx side is different from tx as the front_end_code0 variable will determine the HDF5 group in wich the final packet will be written.
     
     if(config.A_TXRX.mode == RX){
+        //declare unit to be used
+        uhd::stream_args_t stream_args("fc32");
         front_end_code0 = 'A';
         channel_num[0] = 0;
         stream_args.channels = channel_num;
         if(not sw_loop)A_rx_stream = main_usrp->get_rx_stream(stream_args);
     }else if(config.A_RX2.mode == RX){
+        //declare unit to be used
+        uhd::stream_args_t stream_args("fc32");
         front_end_code0 = 'B';
         channel_num[0] = 0;
         stream_args.channels = channel_num;
@@ -492,11 +548,15 @@ void hardware_manager::set_streams(){
     }
     
     if(config.B_TXRX.mode == RX){
+        //declare unit to be used
+        uhd::stream_args_t stream_args("fc32");
         front_end_code0 = 'C';
         channel_num[0] = 1;
         stream_args.channels = channel_num;
         if(not sw_loop)B_rx_stream = main_usrp->get_rx_stream(stream_args);
     }else if(config.B_RX2.mode == RX){
+        //declare unit to be used
+        uhd::stream_args_t stream_args("fc32");
         front_end_code0 = 'D';
         channel_num[0] = 1;
         stream_args.channels = channel_num;
@@ -505,12 +565,16 @@ void hardware_manager::set_streams(){
     
     
     if(config.A_RX2.mode == TX or config.A_TXRX.mode == TX){
+        //declare unit to be used
+        uhd::stream_args_t stream_args("fc32");
         channel_num[0] = 0;
         stream_args.channels = channel_num;
         if(not sw_loop)A_tx_stream = main_usrp->get_tx_stream(stream_args);
     }
     
     if(config.B_RX2.mode == TX or config.B_TXRX.mode == TX){
+        //declare unit to be used
+        uhd::stream_args_t stream_args("fc32");
         channel_num[0] = 1;
         stream_args.channels = channel_num;
         if(not sw_loop)B_tx_stream = main_usrp->get_tx_stream(stream_args);
@@ -520,10 +584,22 @@ void hardware_manager::set_streams(){
 };
 
 void hardware_manager::clear_streams(){
-    A_rx_stream = NULL;
-    A_tx_stream = NULL;
-    B_rx_stream = NULL;
-    B_tx_stream = NULL;
+    if(A_rx_stream){
+        A_rx_stream.reset();
+        A_rx_stream = nullptr;
+    }    
+    if(A_tx_stream){
+        A_tx_stream.reset();
+        A_tx_stream = nullptr;
+    }
+    if(B_rx_stream){
+        B_rx_stream.reset();
+        B_rx_stream = nullptr;
+    }
+    if(B_tx_stream){
+        B_tx_stream.reset();
+        B_tx_stream = nullptr;
+    }
 }
 
 
@@ -818,6 +894,8 @@ void hardware_manager::single_tx_thread(
     
     boost::thread* metadata_thread = new boost::thread(boost::bind(&hardware_manager::async_stream,this,tx_stream,front_end));
     
+    SetThreadName(metadata_thread, "TX_metadata_thread");  
+    
     //float timeout = 0.1f;   //timeout in seconds(will be used to sync the recv calls)
     if(front_end == 'A'){
         A_tx_thread_operation = true; //class variable to account for thread activity
@@ -895,11 +973,15 @@ void hardware_manager::single_tx_thread(
         if(memory)memory->trash(tx_buffer);
     }
     //something went wrong and the thread has interrupred
-    if(not active){
-        print_warning("TX thread was taken down without transmitting the specified samples");
+    if(not active and sent_samp < current_settings->samples){
+        print_warning("TX thread was joined without transmitting the specified samples");
+        std::cout<< "Missing "<< current_settings->samples - sent_samp<<" samples"<<std::endl;
     }
+    
     metadata_thread->interrupt();
     metadata_thread->join();
+    delete metadata_thread;
+    metadata_thread = nullptr;
     
     //set check the condition to false
     if(front_end == 'A'){
@@ -907,7 +989,7 @@ void hardware_manager::single_tx_thread(
     }else if(front_end == 'B'){
         B_tx_thread_operation = false;
     }
-    
+    tx_stream.reset();
     //wait_condition->release();
 }
 
@@ -946,6 +1028,7 @@ void hardware_manager::async_stream(uhd::tx_streamer::sptr &tx_stream, char forn
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
         
     }
+    tx_stream.reset();
 }
 
 void hardware_manager::software_rx_thread(
@@ -971,7 +1054,6 @@ void hardware_manager::software_rx_thread(
     float2 *rx_buffer_cpy;
     long int acc_samp = 0;  //total number of samples received
     int counter = 0;
-    //int ll = 0;
     while(active and (acc_samp < current_settings->samples)){
     
         try{
@@ -992,8 +1074,6 @@ void hardware_manager::software_rx_thread(
                 warapped_buffer.front_end_code = front_end_code0;
                 while(not Rx_queue->push(warapped_buffer))std::this_thread::sleep_for(std::chrono::microseconds(1));
                 acc_samp += current_settings->buffer_len;
-                //print_debug("swtx inter: ",ll);
-                //ll++;
             }else{
                 taken = false;
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -1212,6 +1292,9 @@ void hardware_manager::single_rx_thread(
     }else if(front_end == 'B'){
         B_rx_thread_operation = false;
     }
+    
+    rx_stream.reset();
+    
     //wait_condition->wait();
 }
 

@@ -152,14 +152,18 @@ class preallocator{
 
             deallocator->interrupt();
             deallocator->join();
-
+            delete deallocator;
+            deallocator = nullptr;
+            
             filler->interrupt();
             filler->join();
-
+            delete filler;
+            filler = nullptr;
+            
             delete allocated;
             delete deallocated;
-            delete filler;
-            delete deallocator;
+            
+            
             
         }
         

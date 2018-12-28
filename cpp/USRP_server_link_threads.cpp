@@ -49,10 +49,16 @@ TXRX::TXRX(server_settings* settings, hardware_manager* init_hardware, bool diag
     TX_status = false;
     
     //set the pointer to current parameter configuration
-    A_current_tx_param = NULL;
-    A_current_rx_param = NULL;
-    B_current_tx_param = NULL;
-    B_current_rx_param = NULL;
+    A_current_tx_param = nullptr;
+    A_current_rx_param = nullptr;
+    B_current_tx_param = nullptr;
+    B_current_rx_param = nullptr;
+    
+    //initializing memory pointers
+    A_tx_memory = nullptr;
+    A_rx_memory = nullptr;
+    B_tx_memory = nullptr;
+    B_rx_memory = nullptr;
     
 }
 
@@ -153,13 +159,16 @@ void TXRX::set(usrp_param* global_param){
                 
             case TX:
             
-                //adjust the memory buffer in case of custom buffer length or pint the memori to NULL
+                //adjust the memory buffer in case of custom buffer length or pint the memori to nullptr
                 std::cout<<"Allocating RF frontend "<<(char)(i<2?'A':'B')<<" TX memory buffer: "<< (modes[i]->buffer_len * sizeof(float2))/(1024.*1024.)<< " MB per buffer..."<<std::flush;
                 //NOTE: this queue doesn't autorefill
 
                 if(i<2){
                     if(modes[i]->dynamic_buffer()){
                         if(not A_tx_memory or modes[i]->buffer_len != A_tx_buffer_len){
+                            if(A_tx_memory){
+                                A_tx_memory->close();
+                            }
                             A_tx_memory = new preallocator<float2>(modes[i]->buffer_len,TX_QUEUE_LENGTH,false,this_thread_n);
                             A_tx_buffer_len = modes[i]->buffer_len;
                         }else{
@@ -169,7 +178,7 @@ void TXRX::set(usrp_param* global_param){
                         if(A_tx_memory){
                             A_tx_memory->close();
                         }
-                        A_tx_memory = NULL;
+                        A_tx_memory = nullptr;
                     }
                          
                     A_tx_gen = new TX_buffer_generator(modes[i]);
@@ -190,7 +199,7 @@ void TXRX::set(usrp_param* global_param){
                         if(B_tx_memory){
                             B_tx_memory->close();
                         }
-                        B_tx_memory = NULL;
+                        B_tx_memory = nullptr;
                     }
                          
                     B_tx_gen = new TX_buffer_generator(modes[i]);
@@ -223,9 +232,9 @@ void TXRX::start(usrp_param* global_param){
     int rx_threads = 0;
     int tx_threads = 0;
     
-    //current_tx_param is NULL if no param struct in global_param has TX mode
+    //current_tx_param is nullptr if no param struct in global_param has TX mode
     if(global_param->A_TXRX.mode!=OFF){
-        if(not TX_status and not hardware->check_tx_status()){
+        if(not hardware->check_A_tx_status()){
             
             //start the TX worker: this thread produces the samples and push them in a queue read by the next thread
             A_TX_worker = new boost::thread(boost::bind(&TXRX::tx_single_link,this,
@@ -236,7 +245,9 @@ void TXRX::start(usrp_param* global_param){
                 global_param->A_TXRX.dynamic_buffer(),
                 A_preallocated,
                 'A'    ));
-               
+                
+            SetThreadName(A_TX_worker, "A_TX_worker");  
+             
             Thread_Prioriry(*A_TX_worker, 99, tx_thread_n[tx_threads]*2);   
             
             
@@ -257,20 +268,23 @@ void TXRX::start(usrp_param* global_param){
             print_error(ss.str());
             return;
         }
-    }
+    }else A_TX_worker = nullptr;
+    
     if(global_param->B_TXRX.mode!=OFF){
-        if(not TX_status and not hardware->check_tx_status()){
+        if(not hardware->check_B_tx_status()){
             
             //start the TX worker: this thread produces the samples and push them in a queue read by the next thread
             B_TX_worker = new boost::thread(boost::bind(&TXRX::tx_single_link,this,
                 B_tx_memory,  //memory preallocator
                 B_tx_gen,     //signal generator class
                 hardware->B_TX_queue,   //has the queue to the tx loader thread
-                global_param->A_TXRX.samples,
-                global_param->A_TXRX.dynamic_buffer(),
+                global_param->B_TXRX.samples,
+                global_param->B_TXRX.dynamic_buffer(),
                 B_preallocated,
                 'B'    ));
-               
+                
+            SetThreadName(B_TX_worker, "B_TX_worker");    
+            
             Thread_Prioriry(*B_TX_worker, 99, tx_thread_n[tx_threads]*2);   
             
             
@@ -291,10 +305,11 @@ void TXRX::start(usrp_param* global_param){
             print_error(ss.str());
             return;
         }
-    }
-    //current_rx_param is NULL if no param struct in global_param has RX mode
+    }else B_TX_worker = nullptr;
+    
+    //current_rx_param is nullptr if no param struct in global_param has RX mode
     if(global_param->A_RX2.mode!=OFF){
-        if(not RX_status and not hardware->check_rx_status()){
+        if(not hardware->check_A_rx_status()){
             
             //start the RX worker: takes samples from the queue of the next thread, analyze them and push the result in the streaming queue
             A_RX_worker = new boost::thread(boost::bind(&TXRX::rx_single_link,this,
@@ -305,6 +320,8 @@ void TXRX::start(usrp_param* global_param){
                 global_param->A_RX2.samples,
                 stream_queue,
                 'A'    ));
+            
+            SetThreadName(A_RX_worker, "A_RX_worker"); 
             
             Thread_Prioriry(*A_RX_worker, 99, rx_thread_n[rx_threads]*2);  
                 
@@ -327,9 +344,10 @@ void TXRX::start(usrp_param* global_param){
             print_error(ss.str());
             return;
         }
-    }
+    }else A_RX_worker = nullptr;
+    
     if(global_param->B_RX2.mode!=OFF){
-        if(not RX_status and not hardware->check_rx_status()){
+        if(not hardware->check_B_rx_status()){
             
             //start the RX worker: takes samples from the queue of the next thread, analyze them and push the result in the streaming queue
             B_RX_worker = new boost::thread(boost::bind(&TXRX::rx_single_link,this,
@@ -340,6 +358,8 @@ void TXRX::start(usrp_param* global_param){
                 global_param->B_RX2.samples,
                 stream_queue,
                 'B'    ));
+            
+            SetThreadName(B_RX_worker, "B_RX_worker");
             
             Thread_Prioriry(*B_RX_worker, 99, rx_thread_n[rx_threads]*2);  
                 
@@ -364,7 +384,7 @@ void TXRX::start(usrp_param* global_param){
             print_error(ss.str());
             return;
         }
-    }
+    }else B_RX_worker = nullptr;
     
     if (global_param->B_RX2.mode!=OFF and global_param->B_RX2.mode!=OFF){
         if(file_writing){
@@ -434,18 +454,20 @@ bool TXRX::stop(bool force){
                 //close the rx worker
                 A_RX_worker->interrupt();
                 A_RX_worker->join();
-                
+                delete A_RX_worker;
+                A_RX_worker = nullptr;
                 //reset the parameter pointer
-                A_current_rx_param = NULL;
+                A_current_rx_param = nullptr;
             }
             if (B_RX_worker){
             
                 //close the rx worker
                 B_RX_worker->interrupt();
                 B_RX_worker->join();
-                
+                delete B_RX_worker;
+                B_RX_worker = nullptr;
                 //reset the parameter pointer
-                B_current_rx_param = NULL;
+                B_current_rx_param = nullptr;
             }
             
             //force close data output threads                    
@@ -459,27 +481,33 @@ bool TXRX::stop(bool force){
     
     if(A_current_tx_param or B_current_tx_param){
         if((not TX_status and not hardware->check_tx_status()) or force){
+        
             //close the rx interface thread
             hardware->close_tx();
             
             //close the rx worker
             if (A_TX_worker){
+                
                 A_TX_worker->interrupt();
                 A_TX_worker->join();
-            
+                delete A_TX_worker;
+                A_TX_worker=nullptr;
                 A_tx_gen->close();
-            
+                
                 //reset the parameter pointer
-                A_current_tx_param = NULL;
+                A_current_tx_param = nullptr;
             }
             if (B_TX_worker){
                 B_TX_worker->interrupt();
                 B_TX_worker->join();
+                delete B_TX_worker;
+                B_TX_worker = nullptr;
             
                 B_tx_gen->close();
             
                 //reset the parameter pointer
-                B_current_tx_param = NULL;
+                B_current_tx_param = nullptr;
+                
             }
             
         //if the threads are still running
@@ -488,7 +516,6 @@ bool TXRX::stop(bool force){
     
     //reset the thread counter
     if(status)thread_counter = 0;
-    
     return status;
 }
 
@@ -537,10 +564,10 @@ void TXRX::tx_single_link(
             //std::cout<<"Pushing buffer"<<std::endl;
             boost::this_thread::sleep_for(boost::chrono::microseconds{1});
         }catch(boost::thread_interrupted &){ active = false; 
+        
 
         }
     }
-    
     //notify that the tx worker is off
     TX_status = false;
     

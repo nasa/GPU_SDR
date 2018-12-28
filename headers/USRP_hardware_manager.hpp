@@ -41,9 +41,25 @@ class hardware_manager{
         //! @brief Queue accessed to stream data from B frontend.
         tx_queue* B_TX_queue;
         
+        //! @brief Check the status of every rx operations.
+        //! Returns the status of A or B.
         bool check_rx_status(bool verbose = false);
         
+        //! @brief Check the status of A rx operations.
+        bool check_A_rx_status(bool verbose = false);
+        
+        //! @brief Check the status of B rx operations.
+        bool check_B_rx_status(bool verbose = false);
+        
+        //! @brief Check the status of every tx operations.
+        //! Returns the status of A or B.
         bool check_tx_status(bool verbose = false);
+        
+        //! @brief Check the status of A tx operations.
+        bool check_A_tx_status(bool verbose = false);
+        
+        //! @brief Check the status of B tx operations.
+        bool check_B_tx_status(bool verbose = false);
         
         //! @brief Start a transmission thread.
         //! The threads started by this function do two things: pop a packet from the respective queue; stram the packet via UHD interface.

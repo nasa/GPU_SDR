@@ -202,3 +202,14 @@ void Thread_Prioriry(boost::thread& Thread, int priority, int affinity){
     #endif
     }
 }
+
+void SetThreadName(boost::thread* thread, const char* threadName){
+   auto handle = thread->native_handle();
+   pthread_setname_np(handle,threadName);
+}
+/*
+void SetThreadName( const char* threadName)
+{
+  prctl(PR_SET_NAME,threadName,0,0,0);
+}
+*/
