@@ -48,6 +48,10 @@ TXRX::TXRX(server_settings* settings, hardware_manager* init_hardware, bool diag
     RX_status = false;
     TX_status = false;
     
+    //what follows is the initialization of the memory allocator pointers.
+    //do NOT skip that part as the system will use the pointers to detect memory allocation status
+    //and unallocated memory will result in if(pointer) to be compiled as if(true)
+    
     //set the pointer to current parameter configuration
     A_current_tx_param = nullptr;
     A_current_rx_param = nullptr;
@@ -59,6 +63,8 @@ TXRX::TXRX(server_settings* settings, hardware_manager* init_hardware, bool diag
     A_rx_memory = nullptr;
     B_tx_memory = nullptr;
     B_rx_memory = nullptr;
+    
+    rx_output_memory = nullptr;
     
 }
 
@@ -137,10 +143,11 @@ void TXRX::set(usrp_param* global_param){
                 
                 if ((output_memory_size!=modes[i]->buffer_len or not rx_output_memory) or modes[i]->buffer_len>output_memory_size){
                     std::cout<<"Allocating RX output memory buffer: "<< (modes[i]->buffer_len * sizeof(float2))/(1024.*1024.)<< " MB per buffer..."<<std::flush;
-                    if(modes[i]->buffer_len>output_memory_size and output_memory_size>0)std::cout<<" (upgrading buffer size)"<<std::flush;
+                    if(modes[i]->buffer_len>output_memory_size and output_memory_size>0)std::cout<<" (updating buffer size)"<<std::flush;
                     if(rx_output_memory) rx_output_memory->close();
-                    rx_output_memory = new preallocator<float2>(output_memory_size,RX_QUEUE_LENGTH);
                     output_memory_size = modes[i]->buffer_len;
+                    rx_output_memory = new preallocator<float2>(output_memory_size,RX_QUEUE_LENGTH);
+                    print_debug("Allocating memory: output_memory_size", output_memory_size);
                     std::cout<<"\tdone."<<std::endl;
                 }else{
                     std::cout<<" RX output memory buffer requirements already satisfaid."<<std::endl;
@@ -420,7 +427,6 @@ void TXRX::start(usrp_param* global_param){
 //in case the force option is true, force close the threads and cleans the queues
 // NOTE: with force option true this call is blocking
 bool TXRX::stop(bool force){
-
     if(tcp_streaming)if (TCP_streamer->NEED_RECONNECT == true)force = true;
     
     bool status = true;
@@ -450,7 +456,6 @@ bool TXRX::stop(bool force){
             hardware->close_rx();    
             
             if (A_RX_worker){
-            
                 //close the rx worker
                 A_RX_worker->interrupt();
                 A_RX_worker->join();
@@ -460,7 +465,6 @@ bool TXRX::stop(bool force){
                 A_current_rx_param = nullptr;
             }
             if (B_RX_worker){
-            
                 //close the rx worker
                 B_RX_worker->interrupt();
                 B_RX_worker->join();

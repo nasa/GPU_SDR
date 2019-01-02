@@ -896,7 +896,7 @@ void hardware_manager::single_tx_thread(
     
     SetThreadName(metadata_thread, "TX_metadata_thread");  
     
-    //float timeout = 0.1f;   //timeout in seconds(will be used to sync the recv calls)
+    float timeout = 0.1f;   //timeout in seconds(will be used to sync the recv calls)
     if(front_end == 'A'){
         A_tx_thread_operation = true; //class variable to account for thread activity
     }else if(front_end == 'B'){
@@ -908,16 +908,25 @@ void hardware_manager::single_tx_thread(
     uhd::tx_metadata_t metadata_tx;
     
     metadata_tx.start_of_burst = true;
-    metadata_tx.has_time_spec  = current_settings->delay == 0 ? false:true;
+    
+    //those two instruction should delay the start of transmirrion of a desired time however the UHD library keep throwing errors (L)
+    //if this method is used. The workaround is to bypass this using a software timeout. (implemented few lines below)
     metadata_tx.time_spec = uhd::time_spec_t(current_settings->delay);
+    metadata_tx.has_time_spec  = current_settings->delay == 0 ? false:true;
+    timeout+=current_settings->delay;
     
     //if the number of samples to receive is smaller than the buffer the first packet is also the last one
     //metadata_tx.end_of_burst = current_settings->samples <= current_settings->buffer_len ? true : false;
     metadata_tx.end_of_burst = current_settings->burst_off!=0?true:false;;
-    //boost::chrono::high_resolution_clock::time_point ti ;
-    //boost::chrono::high_resolution_clock::time_point tf ;
     
-    sync_time(); //sync to next pps + delay
+    //sync to next pps
+    sync_time();
+    
+    //sync to delay: software timeout used instead of UHD one.
+    std::this_thread::sleep_for(std::chrono::nanoseconds(size_t(1.e9*current_settings->delay)));
+    metadata_tx.time_spec = uhd::time_spec_t(0.f);
+    metadata_tx.has_time_spec  = false;
+    timeout = 0.1f; 
     
     while(active and (sent_samp < current_settings->samples)){
         try{
@@ -930,12 +939,12 @@ void hardware_manager::single_tx_thread(
                     metadata_tx.end_of_burst   = (bool)true;
                     metadata_tx.start_of_burst = (bool)true;
                     metadata_tx.has_time_spec = (bool)true;
-                    //timeout = 0.1f + current_settings->burst_off;
+                    timeout += current_settings->burst_off;
                     metadata_tx.time_spec = main_usrp->get_time_now() + uhd::time_spec_t(current_settings->burst_off);
                 }
                 
                 
-                tx_stream->send(tx_buffer, current_settings->buffer_len, metadata_tx,0.1f);//timeout
+                tx_stream->send(tx_buffer, current_settings->buffer_len, metadata_tx,timeout);//
 
                 
                 sent_samp += current_settings->buffer_len;
@@ -948,7 +957,7 @@ void hardware_manager::single_tx_thread(
                     metadata_tx.start_of_burst = false;
                     metadata_tx.has_time_spec = false;
                     first_packet = false;
-                    //timeout = 0.1f;
+                    timeout = 0.1f;
 
                 }
                 
@@ -1311,5 +1320,5 @@ void hardware_manager::sync_time(){
     
     main_usrp->set_time_next_pps(uhd::time_spec_t(0.));
     double sec_to_next_pps = 1. - (main_usrp->get_time_now().get_real_secs() - main_usrp->get_time_last_pps().get_real_secs());
-    std::this_thread::sleep_for(std::chrono::microseconds(int(1.e6*sec_to_next_pps)));
+    std::this_thread::sleep_for(std::chrono::nanoseconds(size_t(1.e9*sec_to_next_pps)));
 }
