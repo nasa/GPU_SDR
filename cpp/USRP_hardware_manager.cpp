@@ -1117,7 +1117,11 @@ void hardware_manager::single_rx_thread(
         print_error("Frontend code not recognized in hardware rx thread");
         return;
     }
-    
+    if (not uhd::set_thread_priority_safe(+1)){
+        std::stringstream ss;
+        ss<<"Cannot set thread priority from tx thread"<<front_end;
+        print_warning(ss.str());
+    }
     bool active = true;         //control the interruption of the thread
 
     float2* rx_buffer;      //pointer to the receiver buffer

@@ -147,7 +147,6 @@ void TXRX::set(usrp_param* global_param){
                     if(rx_output_memory) rx_output_memory->close();
                     output_memory_size = modes[i]->buffer_len;
                     rx_output_memory = new preallocator<float2>(output_memory_size,RX_QUEUE_LENGTH);
-                    print_debug("Allocating memory: output_memory_size", output_memory_size);
                     std::cout<<"\tdone."<<std::endl;
                 }else{
                     std::cout<<" RX output memory buffer requirements already satisfaid."<<std::endl;
@@ -254,19 +253,17 @@ void TXRX::start(usrp_param* global_param){
                 'A'    ));
                 
             SetThreadName(A_TX_worker, "A_TX_worker");  
-             
-            Thread_Prioriry(*A_TX_worker, 99, tx_thread_n[tx_threads]*2);   
             
+            Thread_Prioriry(*A_TX_worker, 99, tx_thread_n[tx_threads]*2+1);   
             
             //start the TX loader: this thrad takes samples form the other thread and stream them on the USRP
             hardware->start_tx(
                 tx_conditional_waiting,
-                tx_thread_n[tx_threads],
+                tx_thread_n[tx_threads]*2,
                 &(global_param->A_TXRX),
                 'A',
                 A_tx_memory
             );
-                
             tx_threads += 1; 
         
         }else{
@@ -292,18 +289,17 @@ void TXRX::start(usrp_param* global_param){
                 
             SetThreadName(B_TX_worker, "B_TX_worker");    
             
-            Thread_Prioriry(*B_TX_worker, 99, tx_thread_n[tx_threads]*2);   
+            Thread_Prioriry(*B_TX_worker, 99, tx_thread_n[tx_threads]*2+1);   
             
             
             //start the TX loader: this thrad takes samples form the other thread and stream them on the USRP
             hardware->start_tx(
                 tx_conditional_waiting,
-                tx_thread_n[tx_threads],
+                tx_thread_n[tx_threads]*2,
                 &(global_param->B_TXRX),
                 'B',
                 B_tx_memory
             );
-                
             tx_threads += 1; 
         
         }else{
@@ -330,14 +326,14 @@ void TXRX::start(usrp_param* global_param){
             
             SetThreadName(A_RX_worker, "A_RX_worker"); 
             
-            Thread_Prioriry(*A_RX_worker, 99, rx_thread_n[rx_threads]*2);  
+            Thread_Prioriry(*A_RX_worker, 99, rx_thread_n[rx_threads]*2+1);  
                 
             //start the RX thread: interfaces with the USRP receiving samples and pushing them in a queue read by the thread launched above.
             hardware->start_rx(
                 A_rx_buffer_len,
                 rx_conditional_waiting,
                 A_rx_memory,
-                rx_thread_n[rx_threads],
+                rx_thread_n[rx_threads]*2,
                 &(global_param->A_RX2),
                 'A'
             );
@@ -368,14 +364,14 @@ void TXRX::start(usrp_param* global_param){
             
             SetThreadName(B_RX_worker, "B_RX_worker");
             
-            Thread_Prioriry(*B_RX_worker, 99, rx_thread_n[rx_threads]*2);  
+            Thread_Prioriry(*B_RX_worker, 99, rx_thread_n[rx_threads]*2+1);  
                 
             //start the RX thread: interfaces with the USRP receiving samples and pushing them in a queue read by the thread launched above.
             hardware->start_rx(
                 B_rx_buffer_len,
                 rx_conditional_waiting,
                 B_rx_memory,
-                rx_thread_n[rx_threads],
+                rx_thread_n[rx_threads]*2,
                 &(global_param->B_RX2),
                 'B'
             );

@@ -173,34 +173,36 @@ std::string get_front_end_name(char code){
     #endif
 
 void Thread_Prioriry(boost::thread& Thread, int priority, int affinity){
+    #if not defined(__APPLE__)
     int SYSTEM_CORES = std::thread::hardware_concurrency();
-    cpu_set_t cpuset;
-    int policy;
-    pthread_t thread_ID = (pthread_t)Thread.native_handle();
-    #if defined(__APPLE__)
-    //hsould find a way to controll the affinity policy on osx
-    #endif
     int retcode;
+    int policy;
     struct sched_param scheme;
-    retcode = pthread_getschedparam(thread_ID, &policy, &scheme);
-    //std::cout << "Priority was: " << scheme.sched_priority << std::endl;
+    cpu_set_t cpuset;
+    pthread_t thread_ID = (pthread_t)Thread.native_handle();
     policy = SCHED_FIFO;
     scheme.sched_priority = priority;
+    
+    
     retcode = pthread_setschedparam(thread_ID, policy, &scheme);
-    //std::cout << "Priority now is: " << scheme.sched_priority << std::endl;
-    if(retcode == -1)std::cout<<"cannot set thread scheduling policy"<<std::endl;
-    if(affinity!=-1){
-    #if not defined(__APPLE__)
-        CPU_ZERO(&cpuset);
-        for(int i = 0; i < SYSTEM_CORES; i++) CPU_SET(affinity+i, &cpuset);
-        int rc = pthread_setaffinity_np(Thread.native_handle(),sizeof(cpu_set_t), &cpuset);
-        if (rc != 0) {
-            std::cout << "Error calling pthread_setaffinity_np: there may be some instability. Result: " << rc << std::endl;
-        }else{
-            //std::cout << "Correctly assigning the thread affinity. Result: " << rc << std::endl;
-        }
-    #endif
+    if(retcode != 0)print_warning("cannot set thread scheduling policy");
+    
+    
+    print_debug("Setting affinity to ", affinity%SYSTEM_CORES);
+    CPU_ZERO(&cpuset);
+    CPU_SET(affinity%SYSTEM_CORES, &cpuset);
+    int rc = pthread_setaffinity_np(Thread.native_handle(),sizeof(cpu_set_t), &cpuset);
+    if (rc != 0) {
+        std::stringstream ss;
+        ss << "Error calling pthread_setaffinity_np: there may be some instability. Result: " << rc;
+        print_error(ss.str());
     }
+    #endif
+    
+    #if defined(__APPLE__)
+    //TODO should find a way to controll the affinity policy on osx and windows
+    #endif
+    
 }
 
 void SetThreadName(boost::thread* thread, const char* threadName){
