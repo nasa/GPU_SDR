@@ -76,7 +76,10 @@
 
 #define DEFAULT_BUFFER_LEN 1000000
 
+//! @brief Port used for client server communication.
 extern int TCP_SYNC_PORT;
+
+//! @brief Port used for data streaming.
 extern int TCP_ASYNC_PORT;
 
 //valid for TX and RX operations, describe the signal generation/demodulation.

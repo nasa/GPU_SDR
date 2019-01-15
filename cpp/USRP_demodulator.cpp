@@ -452,13 +452,13 @@ int RX_buffer_demodulator::process_pfb_spec(float2** __restrict__ input_buffer, 
         decimate_pfb(output,decim_output,parameters->decim,parameters->fft_tones,pfb_decim_helper->out_size,internal_stream);
         */
         
-        std::cout<<"Input len is: "<<buf_setting->spare_begin<<std::endl;
+        //std::cout<<"Input len is: "<<buf_setting->spare_begin<<std::endl;
         output_len = parameters->fft_tones*int((buf_setting->spare_begin/parameters->fft_tones)/(float)parameters->decim);
         int input_len = output_len * parameters->decim;
-        std::cout<<"Output len will be: "<<output_len<<std::endl;
+        //std::cout<<"Output len will be: "<<output_len<<std::endl;
         decimate_spectra( output, decim_output, parameters->decim, parameters->fft_tones, input_len, output_len, internal_stream);
         //move the spare buffer
-        std::cout<<"Resifual buffer is: "<<buf_setting->spare_begin - input_len    <<std::endl;
+        //std::cout<<"Resifual buffer is: "<<buf_setting->spare_begin - input_len    <<std::endl;
         move_buffer_wrapper(
             output,  //from
             output,  //to

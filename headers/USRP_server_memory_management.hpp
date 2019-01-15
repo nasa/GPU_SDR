@@ -122,9 +122,9 @@ class preallocator{
             allocated = new  boost::lockfree::queue< intptr_t ,boost::lockfree::fixed_sized<(bool)true>> (init_pipe_size);       
             deallocated = new  boost::lockfree::queue< intptr_t ,boost::lockfree::fixed_sized<(bool)false>>(0);        
             filler = new boost::thread(boost::bind(&preallocator::queue_filler,this));
-            if(core>-1)Thread_Prioriry(*filler, 98, core);         
+            if(core>-1)Thread_Prioriry(*filler, 90, core);         
             deallocator = new boost::thread(boost::bind(&preallocator::queue_deallocator,this));   
-            if(core>-1)Thread_Prioriry(*deallocator, 98, core);       
+            if(core>-1)Thread_Prioriry(*deallocator, 90, core);       
             while(counter<pipe_size-1)boost::this_thread::sleep_for(boost::chrono::milliseconds{200});
                     
         }
