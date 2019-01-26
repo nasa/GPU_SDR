@@ -1,4 +1,4 @@
-import libUSRP2 as u
+import pyUSRP.libUSRP2 as u
 import numpy as np
 import matplotlib.pyplot as pl
 import os

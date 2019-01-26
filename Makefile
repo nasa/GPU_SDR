@@ -1,6 +1,6 @@
 CC=g++
 
-CC_DEF_FLAGS =-std=c++11 -O3
+CC_DEF_FLAGS =-std=c++11# -O3
 CC+=$(CC_DEF_FLAGS)
 
 SRC_DIR := cpp
@@ -22,7 +22,7 @@ NV_DEF_FLAGS = -std=c++11 -arch=sm_61
 NVCC+=$(NV_DEF_FLAGS)
 
 NVINCLUDE = -I/usr/local/cuda/include/ 
-NVLINK = -lcudart -lcuda  -lcufft -lcublas -lculibos
+NVLINK = -lcudart -lcuda -lcufft -lcublas -lculibos
 
 SRC_FILES := $(wildcard $(SRC_DIR)/*.cpp)
 CUDA_SRC_FILES := $(wildcard $(SRC_DIR)/*.cu)
