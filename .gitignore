@@ -3,3 +3,6 @@
 *.xml
 *.pyc
 *.iml
+server
+/data
+/lib_docs

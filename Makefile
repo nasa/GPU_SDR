@@ -13,7 +13,7 @@ CINCLUDE =-I$(HDF5_PATH_INC) -I$(HPP_DIR)
 CLINK = -lz -lsz -ldl 
 CLINK += -lpthread -lboost_system -lboost_program_options -lboost_chrono -lboost_thread 
 
-CLINK += -luhd 
+CLINK += -luhd  
 CLINK += -lhdf5_hl_cpp -lhdf5_cpp -lhdf5_serial 
 
 NVCC = nvcc
@@ -33,11 +33,18 @@ CUDA_HPP_FILES := $(wildcard $(HPP_DIR)/*.cuh)
 OBJ_FILES := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRC_FILES))
 CUDA_OBJ_FILES := $(patsubst $(SRC_DIR)/%.cu,$(OBJ_DIR)/%.o,$(CUDA_SRC_FILES))
 
+SPHINXBUILD = sphinx-build
+
+SPHINXSOURCEDIR = pyUSRP
+SPHINXBUILDDIR = lib_docs
+SPHINXOPTS =
 all: server
 
-doc: docs/doc_gen
-	$(info Generating documentation...)
-	doxygen docs/doc_gen
+doc:
+	#$(info Generating C++ documentation...)
+	#doxygen server_docs/doc_gen
+	#$(info Generating Python documentation...)
+	$(SPHINXBUILD) "$(SPHINXSOURCEDIR)" "$(SPHINXBUILDDIR)" $(SPHINXOPTS) $(O)
 	
 server: $(CUDA_OBJ_FILES) $(OBJ_FILES)
 	$(info Linking all using nvcc...)

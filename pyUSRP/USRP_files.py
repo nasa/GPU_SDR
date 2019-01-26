@@ -40,7 +40,7 @@ import matplotlib.patches as mpatches
 import progressbar
 
 # import submodules
-from USRP_low_lever import *
+from USRP_low_level import *
 
 def format_filename(filename):
     return os.path.splitext(filename)[0]+".h5"

@@ -40,13 +40,13 @@ import matplotlib.patches as mpatches
 import progressbar
 
 #import submodules
-from USRP_low_lever import *
+from USRP_low_level import *
 from USRP_connections import *
 from USRP_plotting import *
 from USRP_files import *
 from USRP_parameters import *
-from .USRP_data_analysis import *
-    
+from USRP_data_analysis import *
+
 
 def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decimation = True, RF = None, Front_end = None, Device = None, filename = None, Multitone_compensation = None, Iterations = 1, verbose = False):
 

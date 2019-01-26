@@ -6,7 +6,7 @@
 ########################################################################################
 
 from .USRP_data_analysis import *
-from .USRP_low_lever import *
+from .USRP_low_level import *
 from .USRP_connections import *
 from .USRP_plotting import *
 from .USRP_files import *

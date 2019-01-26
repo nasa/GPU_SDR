@@ -40,7 +40,7 @@ import matplotlib.patches as mpatches
 import progressbar
 
 # import submodules
-from USRP_low_lever import *
+from USRP_low_level import *
 from USRP_files import *
 from USRP_parameters import *
 
@@ -72,7 +72,7 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
         - backend: see plotting backend section for informations.
         - auto_open: open the plot in default system browser if plotly backend is selected (non-blocking) or open the matplotlib figure (blocking). Default is True.
         - output_filename: string: if given the function saves the plot (in png for matplotlib backend and html for plotly backend) with the given name.
-        - **kwargs: usrp_number and front_end can be passed to the openH5file() function. tx_front_end can be passed to manually determine the tx frontend to calculate the readout power. add_info could be a list of the same length og filenames containing additional leggend informations.
+        - kwargs: usrp_number and front_end can be passed to the openH5file() function. tx_front_end can be passed to manually determine the tx frontend to calculate the readout power. add_info could be a list of the same length og filenames containing additional leggend informations.
     '''
     filenames = to_list_of_str(filenames)
 
@@ -214,9 +214,9 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
         - decimation: eventually deciamte the signal before plotting.
         - low pass: floating point number controlling the cut-off frequency of a low pass filter that is eventually applied to the data.
         - backend: [string] choose the return type of the plot. Allowed backends for now are:
-            * matplotlib: creates a matplotlib figure, plots in non-blocking mode and return the matplotlib figure object. **kwargs in this case accept:
+            * matplotlib: creates a matplotlib figure, plots in non-blocking mode and return the matplotlib figure object. kwargs in this case accept:
                 - size: size of the plot in the form of a tuple (inches,inches). Default is matplotlib default.
-            * plotly: plot using plotly and webgl interface, returns the html code descibing the plot. **kwargs in this case accept:
+            * plotly: plot using plotly and webgl interface, returns the html code descibing the plot. kwargs in this case accept:
                 - size: size of the plot. Default is plotly default.
             * bokeh: use bokeh to generate an interactive html file containing the IQ plane and the magnitude/phase timestream.
 
@@ -228,7 +228,7 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
         - start_time: time where to start plotting. Default is 0.
         - end_time: time where to stop plotting. Default is end of the measure.
         - auto_open: open the plot in default system browser if plotly backend is selected (non-blocking) or open the matplotlib figure (blocking). Default is True.
-        - **kwargs:
+        - kwargs:
             * usrp_number and front_end can be passed to the openH5file() function.
             * size: the size of matplotlib figure.
             * add_info: list of strings as long as the file list to add info to the legend.

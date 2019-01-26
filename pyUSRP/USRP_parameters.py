@@ -40,7 +40,7 @@ import matplotlib.patches as mpatches
 import progressbar
 
 # import submodules
-from USRP_low_lever import *
+from USRP_low_level import *
 
 
 class global_parameter(object):
