@@ -1,0 +1,7 @@
+<map id="SetThreadName" name="SetThreadName">
+<area shape="rect" id="node2" href="$de/d74/classhardware__manager.html#aa9c9a0b847da0e2315f55b8f3eed5e5a" title="@ brief Release the memory associated with pointers holded by a rx queue using the respective memory ..." alt="" coords="177,5,348,47"/>
+<area shape="rect" id="node3" href="$d7/dc7/classTXRX.html#a933d561cd486fde7570cfc241bf5dca6" title="Start the threads. " alt="" coords="403,122,495,149"/>
+<area shape="rect" id="node5" href="$de/d74/classhardware__manager.html#aaaf2da667e74e82bee499587013e10f2" title="@ brief start a rx thread. " alt="" coords="171,122,355,149"/>
+<area shape="rect" id="node6" href="$de/d74/classhardware__manager.html#a491cd0e4a8edcf9102c3693fcebe3c33" title="Start a transmission thread. The threads started by this function do two things: pop a packet from th..." alt="" coords="171,173,355,199"/>
+<area shape="rect" id="node4" href="$d6/d52/usrp__server_8cpp.html#a3c04138a5bfe5d72780bb7e82a18e627" title="main" alt="" coords="543,122,593,149"/>
+</map>

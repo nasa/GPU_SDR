@@ -44,7 +44,6 @@ from USRP_low_level import *
 from USRP_connections import *
 from USRP_plotting import *
 from USRP_files import *
-from USRP_parameters import *
 from USRP_data_analysis import *
 
 
@@ -186,36 +185,6 @@ def Get_noise(tones, measure_t, rate, decimation = None, powers = None, RF = Non
         
     Returns:
         - filename where the measure is or empty string if something went wrong.
-    '''    
-
-
-def Measure_line_delay(rate, LO_freq):
-    '''
-    Measure the line delay around a given frequency.
-    '''
-    global USRP_data_queue, REMOTE_FILENAME, END_OF_MEASURE
-
-    # check connection
-
-    # configure command
-
-    # send command
-
-    # write it to file
-
-def Analyze_line_delay(filename):
-    '''
-    Analyze the file delay from a tagged file.
-
-    :param filename: the name of the file containing the delay data.
-    :return: the delay in seconds.
-    '''
-
-def load_delay_from_file(filename):
-    '''
-    Recover delay information from a delay file
-    :param filename:
-    :return:
     '''
     
     

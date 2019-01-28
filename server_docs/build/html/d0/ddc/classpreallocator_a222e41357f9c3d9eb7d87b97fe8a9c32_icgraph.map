@@ -1,0 +1,7 @@
+<map id="preallocator::get" name="preallocator::get">
+<area shape="rect" id="node2" href="$de/d74/classhardware__manager.html#aa9c9a0b847da0e2315f55b8f3eed5e5a" title="@ brief Release the memory associated with pointers holded by a rx queue using the respective memory ..." alt="" coords="168,5,339,47"/>
+<area shape="rect" id="node3" href="$db/d9d/classTX__buffer__generator.html#adfbc74fdd8b08f5fbe13579d60035909" title="TX_buffer_generator\l::prefill_queue" alt="" coords="183,71,323,112"/>
+<area shape="rect" id="node4" href="$d7/dc7/classTXRX.html#ae84feba1d3a95c27ceae940efdcdaa16" title="TXRX::stop" alt="" coords="208,137,299,163"/>
+<area shape="rect" id="node5" href="$d6/d52/usrp__server_8cpp.html#a3c04138a5bfe5d72780bb7e82a18e627" title="main" alt="" coords="527,137,577,163"/>
+<area shape="rect" id="node6" href="$d7/dc7/classTXRX.html#a933d561cd486fde7570cfc241bf5dca6" title="Start the threads. " alt="" coords="387,162,479,189"/>
+</map>

@@ -10,5 +10,4 @@ from .USRP_low_level import *
 from .USRP_connections import *
 from .USRP_plotting import *
 from .USRP_files import *
-from .USRP_parameters import *
-from .USRP_measures import *
+from .USRP_delay import *

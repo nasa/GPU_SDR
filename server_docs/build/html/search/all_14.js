@@ -1,0 +1,27 @@
+var searchData=
+[
+  ['tcp_5fasync_5fport',['TCP_ASYNC_PORT',['../db/d0a/USRP__server__settings_8cpp.html#a23ae3682434c1b8395cc90cd8a029e2d',1,'TCP_ASYNC_PORT():&#160;USRP_server_settings.cpp'],['../d8/d77/USRP__server__settings_8hpp.html#a23ae3682434c1b8395cc90cd8a029e2d',1,'TCP_ASYNC_PORT():&#160;USRP_server_settings.cpp']]],
+  ['tcp_5fstreaming',['TCP_streaming',['../de/db2/structserver__settings.html#af978bc53350bf4acfb142b520090d11a',1,'server_settings::TCP_streaming()'],['../d7/dc7/classTXRX.html#aa0959bf145ce3d50bb4b48e800dd1b3b',1,'TXRX::tcp_streaming()']]],
+  ['tcp_5fsync_5fport',['TCP_SYNC_PORT',['../db/d0a/USRP__server__settings_8cpp.html#af41bb883ca95d905c6d124f84677aadf',1,'TCP_SYNC_PORT():&#160;USRP_server_settings.cpp'],['../d8/d77/USRP__server__settings_8hpp.html#af41bb883ca95d905c6d124f84677aadf',1,'TCP_SYNC_PORT():&#160;USRP_server_settings.cpp']]],
+  ['this_5fusrp_5fnumber',['this_usrp_number',['../de/d74/classhardware__manager.html#ad1eaebeae886f4c7f09cf30fbe439c9c',1,'hardware_manager']]],
+  ['thread_5fprioriry',['Thread_Prioriry',['../db/d0a/USRP__server__settings_8cpp.html#a4916632736782e7b055130bed11c863e',1,'Thread_Prioriry(boost::thread &amp;Thread, int priority, int affinity):&#160;USRP_server_settings.cpp'],['../d8/d77/USRP__server__settings_8hpp.html#a4916632736782e7b055130bed11c863e',1,'Thread_Prioriry(boost::thread &amp;Thread, int priority, int affinity):&#160;USRP_server_settings.cpp']]],
+  ['threading_5fcondition',['threading_condition',['../dc/d0e/classthreading__condition.html',1,'threading_condition'],['../dc/d0e/classthreading__condition.html#a02b38871bede0fad04c1b5b8e8473fac',1,'threading_condition::threading_condition()']]],
+  ['todo_20list',['Todo List',['../dd/da0/todo.html',1,'']]],
+  ['tone',['tone',['../de/dd5/structparam.html#ab5b3e54958c30647f52910244b16d7ee',1,'param']]],
+  ['tone_5ffrquencies',['tone_frquencies',['../d8/ddc/structtone__parameters.html#af468f29c393427acb35d9e9f0d5a36c9',1,'tone_parameters']]],
+  ['tone_5fgen',['tone_gen',['../d6/d68/kernels_8cu.html#a45c5f71640431d6b06a8e66a89989107',1,'tone_gen(tone_parameters *info, int sampling_rate, float scale, bool device):&#160;kernels.cu'],['../df/d6d/kernels_8cuh.html#a62072cab2fb391babcb718aa0c551339',1,'tone_gen(tone_parameters *info, int sampling_rate, float scale=1., bool device=false):&#160;kernels.cu']]],
+  ['tone_5fparameters',['tone_parameters',['../d8/ddc/structtone__parameters.html',1,'']]],
+  ['tone_5fselect',['tone_select',['../d6/d68/kernels_8cu.html#ad1d26c669cec132eac585f3e1d1b94ed',1,'kernels.cu']]],
+  ['tone_5fselect_5fwrapper',['tone_select_wrapper',['../d6/d68/kernels_8cu.html#a5fdb7cae2c0b85cfe650098eb9550ef8',1,'tone_select_wrapper(float2 *__restrict__ input, float2 *__restrict__ output, filter_param *__restrict__ filter_info, int effective_batching, cudaStream_t internal_stream):&#160;kernels.cu'],['../df/d6d/kernels_8cuh.html#a5fdb7cae2c0b85cfe650098eb9550ef8',1,'tone_select_wrapper(float2 *__restrict__ input, float2 *__restrict__ output, filter_param *__restrict__ filter_info, int effective_batching, cudaStream_t internal_stream):&#160;kernels.cu']]],
+  ['tones',['tones',['../d0/d27/structfilter__param.html#a48a398ef39d0a155aed692d709c199b1',1,'filter_param::tones()'],['../d8/d77/USRP__server__settings_8hpp.html#a07b64415a8ad7060670b67260b6c0255afb53644180a3fbfb8579340aa3bf29b6',1,'TONES():&#160;USRP_server_settings.hpp']]],
+  ['tones_5famplitudes',['tones_amplitudes',['../d8/ddc/structtone__parameters.html#a48cb27b1de1d1fc2b3cf742c2a116bf1',1,'tone_parameters']]],
+  ['tones_5fnumber',['tones_number',['../d8/ddc/structtone__parameters.html#a3f93eac35a16c4678803186fe106720b',1,'tone_parameters']]],
+  ['total_5flen',['total_len',['../d5/dbd/classVNA__decimator__helper.html#a308dd16e4bdffb0a740479b002459fa6',1,'VNA_decimator_helper']]],
+  ['trash',['trash',['../d0/ddc/classpreallocator.html#afcc85438a5c29a75b0c996f59228813b',1,'preallocator']]],
+  ['tuning_5fmode',['tuning_mode',['../de/dd5/structparam.html#a21ad2b0984b8c23c04c56f1555fe3244',1,'param']]],
+  ['tx',['TX',['../d8/d77/USRP__server__settings_8hpp.html#a2f44aff7f411ae6802ac9eee89a6d72da951f819598b53b2729ee0e4c05e6888e',1,'USRP_server_settings.hpp']]],
+  ['tx_5fbuffer_5fgenerator',['TX_buffer_generator',['../db/d9d/classTX__buffer__generator.html',1,'TX_buffer_generator'],['../db/d9d/classTX__buffer__generator.html#a52c4bc9d30608db5db1143cc97e0010a',1,'TX_buffer_generator::TX_buffer_generator()']]],
+  ['tx_5fqueue',['tx_queue',['../d8/d77/USRP__server__settings_8hpp.html#a3004f779e0ce2442084d467d6e17d07f',1,'USRP_server_settings.hpp']]],
+  ['tx_5fqueue_5flength',['TX_QUEUE_LENGTH',['../d8/d77/USRP__server__settings_8hpp.html#a5e0d99b2e534a589ef4f41ff384e2230',1,'USRP_server_settings.hpp']]],
+  ['txrx',['TXRX',['../d7/dc7/classTXRX.html',1,'TXRX'],['../d7/dc7/classTXRX.html#a233a78c80f6984d2c9546090945bf74a',1,'TXRX::TXRX()']]]
+];

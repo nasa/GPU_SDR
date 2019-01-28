@@ -1,0 +1,25 @@
+var structparam =
+[
+    [ "get_output_buffer_size", "de/dd5/structparam.html#aaaeae195c407cb5d9c941086f9447a61", null ],
+    [ "dynamic_buffer", "de/dd5/structparam.html#a278e3283f64e94e044ef9f8909af747b", null ],
+    [ "mode", "de/dd5/structparam.html#ad45dd4225138c5cbfa0d0a6457ed8fe1", null ],
+    [ "rate", "de/dd5/structparam.html#aebc1f03641f5d5741ba953edf4ac0354", null ],
+    [ "tone", "de/dd5/structparam.html#ab5b3e54958c30647f52910244b16d7ee", null ],
+    [ "gain", "de/dd5/structparam.html#ab3029fe5c197d912e69c7858c3eb7bf3", null ],
+    [ "bw", "de/dd5/structparam.html#aaf2e314f5ec4379a37f1ee128ab4b6bf", null ],
+    [ "samples", "de/dd5/structparam.html#a8bbb351d644c4aff1ad104b784817310", null ],
+    [ "delay", "de/dd5/structparam.html#a71cdedd3a5c239768349f3b3298755d0", null ],
+    [ "burst_on", "de/dd5/structparam.html#a9ee875e0e90c48dce28f171137595345", null ],
+    [ "burst_off", "de/dd5/structparam.html#a2a8ae120f3df17491f521811b24e42eb", null ],
+    [ "buffer_len", "de/dd5/structparam.html#afe3c2522304807c3192f479f47a3f7d6", null ],
+    [ "tuning_mode", "de/dd5/structparam.html#a21ad2b0984b8c23c04c56f1555fe3244", null ],
+    [ "freq", "de/dd5/structparam.html#a78483ace6d0af2fae41196a738adc50a", null ],
+    [ "wave_type", "de/dd5/structparam.html#a64d6c0165da588dcacb7ae366e301adc", null ],
+    [ "ampl", "de/dd5/structparam.html#ad410990e765120996878f04a5d4dc409", null ],
+    [ "decim", "de/dd5/structparam.html#a9830ac9cc2176113d3c344b1f0086462", null ],
+    [ "chirp_t", "de/dd5/structparam.html#a7c386f359ace0003331be314ca38f1e2", null ],
+    [ "chirp_f", "de/dd5/structparam.html#ac2659433c55a543342e458657d7f051a", null ],
+    [ "swipe_s", "de/dd5/structparam.html#a9a98692ae663a57949281ebb29e055db", null ],
+    [ "fft_tones", "de/dd5/structparam.html#aa619da020ba896df8324fcd30a3384bb", null ],
+    [ "pf_average", "de/dd5/structparam.html#ab5a94ea9e88a48478c9b36ae1ad02961", null ]
+];

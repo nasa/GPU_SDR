@@ -1,0 +1,4 @@
+<map id="TXRX" name="TXRX">
+<area shape="rect" id="node2" href="$d0/ddc/classpreallocator.html" title="{preallocator\&lt; float2 \&gt;\n|+ vector_size\l+ pipe_size\l+ wait_on_full\l+ allocated\l+ deallocated\l+ prefil\l|+ preallocator()\l+ get()\l+ trash()\l+ close()\l}" alt="" coords="5,277,151,472"/>
+<area shape="rect" id="node3" href="$d0/ddc/classpreallocator.html" title="{preallocator\&lt; vector\l_type \&gt;\n|+ vector_size\l+ pipe_size\l+ wait_on_full\l+ allocated\l+ deallocated\l+ prefil\l|+ preallocator()\l+ get()\l+ trash()\l+ close()\l}" alt="" coords="9,5,147,215"/>
+</map>

@@ -1,0 +1,8 @@
+<map id="Sync_server::clear_stream_queue" name="Sync_server::clear_stream_queue">
+<area shape="rect" id="node2" href="$dd/d18/USRP__server__console__print_8cpp.html#a648cb9110cdfcfe3362600cf6bfbc285" title="print_error" alt="" coords="224,5,304,32"/>
+<area shape="rect" id="node3" href="$d1/dcc/classSync__server.html#ad90e6eedf81a09d0f77da5944dd3e562" title="Sync_server::reconnect" alt="" coords="184,56,344,83"/>
+<area shape="rect" id="node7" href="$d0/ddc/classpreallocator.html#afcc85438a5c29a75b0c996f59228813b" title="preallocator::trash" alt="" coords="201,107,327,133"/>
+<area shape="rect" id="node4" href="$d1/dcc/classSync__server.html#a0d0b3bf04376f276403cde72901fda36" title="Sync_server::connect" alt="" coords="392,31,541,57"/>
+<area shape="rect" id="node5" href="$d1/dcc/classSync__server.html#ad63ebb8cc4dd73ce3c1edbd5e14e82b1" title="Sync_server::stop" alt="" coords="403,81,531,108"/>
+<area shape="rect" id="node6" href="$dd/d18/USRP__server__console__print_8cpp.html#a3c50ebb57e7087225b485d35eed8a07c" title="print_warning" alt="" coords="589,81,688,108"/>
+</map>

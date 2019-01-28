@@ -41,9 +41,9 @@ SPHINXOPTS =
 all: server
 
 doc:
-	#$(info Generating C++ documentation...)
-	#doxygen server_docs/doc_gen
-	#$(info Generating Python documentation...)
+	$(info Generating C++ documentation...)
+	doxygen server_docs/doc_gen
+	$(info Generating Python documentation...)
 	$(SPHINXBUILD) "$(SPHINXSOURCEDIR)" "$(SPHINXBUILDDIR)" $(SPHINXOPTS) $(O)
 	
 server: $(CUDA_OBJ_FILES) $(OBJ_FILES)

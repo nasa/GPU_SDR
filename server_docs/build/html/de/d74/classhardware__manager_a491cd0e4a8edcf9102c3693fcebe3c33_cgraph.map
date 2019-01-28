@@ -1,0 +1,7 @@
+<map id="hardware_manager::start_tx" name="hardware_manager::start_tx">
+<area shape="rect" id="node2" href="$dd/d18/USRP__server__console__print_8cpp.html#a648cb9110cdfcfe3362600cf6bfbc285" title="print_error" alt="" coords="412,5,492,32"/>
+<area shape="rect" id="node3" href="$db/d0a/USRP__server__settings_8cpp.html#af51ba9b4f58b2bffbc62b7b419f19a82" title="Set the thread name to the OS Under linux one can use htop or ps to display wich thread is running an..." alt="" coords="237,43,355,69"/>
+<area shape="rect" id="node4" href="$db/d0a/USRP__server__settings_8cpp.html#a4916632736782e7b055130bed11c863e" title="Set thread priority, scheduling policy and core affinity. Require administrative privilege. Only tested on Linux and OSX. " alt="" coords="241,93,351,120"/>
+<area shape="rect" id="node5" href="$dd/d18/USRP__server__console__print_8cpp.html#a7eb680eca1def1482b53092ec0ddfd16" title="print_debug" alt="" coords="407,68,497,95"/>
+<area shape="rect" id="node6" href="$dd/d18/USRP__server__console__print_8cpp.html#a3c50ebb57e7087225b485d35eed8a07c" title="print_warning" alt="" coords="403,119,501,145"/>
+</map>

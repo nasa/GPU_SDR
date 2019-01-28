@@ -1,0 +1,24 @@
+<map id="print_error" name="print_error">
+<area shape="rect" id="node2" href="$d2/d0c/USRP__JSON__interpreter_8hpp.html#ae21d86ad151378d6cdd44421860578a9" title="chk_param" alt="" coords="604,165,691,191"/>
+<area shape="rect" id="node4" href="$de/d74/classhardware__manager.html#aa9c9a0b847da0e2315f55b8f3eed5e5a" title="@ brief Release the memory associated with pointers holded by a rx queue using the respective memory ..." alt="" coords="355,237,525,279"/>
+<area shape="rect" id="node5" href="$d1/dcc/classSync__server.html#a9b0635762bc0cdc0e9245472da70bdc7" title="Sync_server::clear\l_stream_queue" alt="" coords="151,113,282,155"/>
+<area shape="rect" id="node6" href="$d0/ddc/classpreallocator.html#a518ff4e373984e4b44a0d4267c95564c" title="preallocator\&lt; float2\l \&gt;::close" alt="" coords="150,179,283,220"/>
+<area shape="rect" id="node7" href="$df/d80/USRP__server__diagnostic_8hpp.html#a531bd4685ab2b1234fde1bed107f7acc" title="get_rx_errors" alt="" coords="167,295,266,322"/>
+<area shape="rect" id="node8" href="$df/d80/USRP__server__diagnostic_8hpp.html#a89d49516664b67ab172d76793788a34f" title="get_tx_error" alt="" coords="171,62,262,89"/>
+<area shape="rect" id="node9" href="$df/d80/USRP__server__diagnostic_8hpp.html#ae4e9d7e52f83e0dd8cff2e6778646a23" title="print_params" alt="" coords="599,393,696,419"/>
+<area shape="rect" id="node10" href="$db/dd6/classRX__buffer__demodulator.html#a231dce5b2a8487450a7231bd7892de59" title="RX_buffer_demodulator\l::RX_buffer_demodulator" alt="" coords="133,397,300,439"/>
+<area shape="rect" id="node11" href="$d7/dc7/classTXRX.html#a3998691309f79e7604431580900cb49d" title="Launches the setting functions for the required signals, antennas... " alt="" coords="605,514,689,541"/>
+<area shape="rect" id="node12" href="$d9/d60/classH5__file__writer.html#a3ae5c1321cd51951b93ec3612039efe4" title="H5_file_writer::start" alt="" coords="372,514,508,541"/>
+<area shape="rect" id="node13" href="$d7/dc7/classTXRX.html#a933d561cd486fde7570cfc241bf5dca6" title="Start the threads. " alt="" coords="601,641,693,667"/>
+<area shape="rect" id="node14" href="$d1/dcc/classSync__server.html#a68b26167ba1ef6b8fd979d89f4ed1825" title="Sync_server::start" alt="" coords="375,615,505,642"/>
+<area shape="rect" id="node15" href="$de/d74/classhardware__manager.html#aaaf2da667e74e82bee499587013e10f2" title="@ brief start a rx thread. " alt="" coords="348,666,532,693"/>
+<area shape="rect" id="node16" href="$de/d74/classhardware__manager.html#a491cd0e4a8edcf9102c3693fcebe3c33" title="Start a transmission thread. The threads started by this function do two things: pop a packet from th..." alt="" coords="348,834,532,861"/>
+<area shape="rect" id="node17" href="$d7/dc7/classTXRX.html#ae84feba1d3a95c27ceae940efdcdaa16" title="TXRX::stop" alt="" coords="395,885,485,911"/>
+<area shape="rect" id="node18" href="$d2/d0c/USRP__JSON__interpreter_8hpp.html#ad48969ad7a6be1f38abd21ee4a214ad3" title="string2param" alt="" coords="391,935,489,962"/>
+<area shape="rect" id="node20" href="$d8/d77/USRP__server__settings_8hpp.html#a4916632736782e7b055130bed11c863e" title="Set thread priority, scheduling policy and core affinity. Require administrative privilege. Only tested on Linux and OSX. " alt="" coords="161,717,272,743"/>
+<area shape="rect" id="node22" href="$db/d9d/classTX__buffer__generator.html#a52c4bc9d30608db5db1143cc97e0010a" title="TX_buffer_generator\l::TX_buffer_generator" alt="" coords="143,920,291,961"/>
+<area shape="rect" id="node23" href="$de/db2/structserver__settings.html#aebe146dc298bd82d31a3eac7d2ea2ad3" title="server_settings::validate" alt="" coords="135,986,299,1013"/>
+<area shape="rect" id="node3" href="$d6/d52/usrp__server_8cpp.html#a3c04138a5bfe5d72780bb7e82a18e627" title="main" alt="" coords="763,615,813,642"/>
+<area shape="rect" id="node19" href="$d8/dc7/classAsync__server.html#a2b24b68449bdeffb49a638b5dc4efc19" title="Async_server::recv\l_async" alt="" coords="580,863,715,904"/>
+<area shape="rect" id="node21" href="$d0/ddc/classpreallocator.html#a238e3fc5ee0c1e2b06db473e537223f0" title="preallocator\&lt; float2\l \&gt;::preallocator" alt="" coords="373,768,507,809"/>
+</map>

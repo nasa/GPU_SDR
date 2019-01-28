@@ -42,7 +42,6 @@ import progressbar
 #import submodules
 from USRP_low_level import *
 from USRP_files import *
-from USRP_parameters import *
 
 
 def linear_phase(phase):

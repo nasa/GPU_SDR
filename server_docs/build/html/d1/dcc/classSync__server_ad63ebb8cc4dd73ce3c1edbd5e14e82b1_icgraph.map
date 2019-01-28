@@ -1,0 +1,7 @@
+<map id="Sync_server::stop" name="Sync_server::stop">
+<area shape="rect" id="node2" href="$d1/dcc/classSync__server.html#ad90e6eedf81a09d0f77da5944dd3e562" title="Sync_server::reconnect" alt="" coords="181,17,341,43"/>
+<area shape="rect" id="node4" href="$d7/dc7/classTXRX.html#ae84feba1d3a95c27ceae940efdcdaa16" title="TXRX::stop" alt="" coords="216,71,307,98"/>
+<area shape="rect" id="node3" href="$d1/dcc/classSync__server.html#a9b0635762bc0cdc0e9245472da70bdc7" title="Sync_server::clear\l_stream_queue" alt="" coords="389,5,520,47"/>
+<area shape="rect" id="node5" href="$d6/d52/usrp__server_8cpp.html#a3c04138a5bfe5d72780bb7e82a18e627" title="main" alt="" coords="568,97,619,123"/>
+<area shape="rect" id="node6" href="$d7/dc7/classTXRX.html#a933d561cd486fde7570cfc241bf5dca6" title="Start the threads. " alt="" coords="409,122,501,149"/>
+</map>

@@ -34,6 +34,7 @@ import progressbar
 
 # import submodules
 from USRP_low_level import *
+from USRP_files import *
 
 
 def reinit_data_socket():
@@ -76,25 +77,24 @@ def clean_data_queue(USRP_data_queue=USRP_data_queue):
     return residual_packets
 
 
-def Packets_to_file(parameters, timeout=None, filename=None, meas_tag=None, dpc_expected=None):
+def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, push_queue = None, **kwargs):
     '''
     Consume the USRP_data_queue and writes an H5 file on disk.
 
-    Arguments:
-        - parameters: global_parameter object containing the informations used to drive the GPU server.
-        - timeout: time after which the function stops and tries to stop the server.
-        - filename: eventual filename. Default is datetime.
-        - meas_tag: an eventual string attribute to the raw_data# group to tag the measure.
-        - dpc_expected: number of sample per channel expected. if given display a percentage progressbar.
+    :param parameters: global_parameter object containing the informations used to drive the GPU server.
+    :param timeout: time after which the function stops and tries to stop the server.
+    :param filename: eventual filename. Default is datetime.
+    :param dpc_expected: number of sample per channel expected. if given display a percentage progressbar.
+    :param push_queue: external queue where to push data and metadata
 
-    Returns:
-        - filename or empty string if something went wrong
+    :return filename or empty string if something went wrong
 
     Note:
         - if the \"End of measurement\" async signal is received from the GPU server the timeout mode becomes active.
     '''
 
     global dynamic_alloc_warning
+    push_queue_warning = False
 
     def write_ext_H5_packet(metadata, data, h5fp, index):
         '''
@@ -122,7 +122,6 @@ def Packets_to_file(parameters, timeout=None, filename=None, meas_tag=None, dpc_
         data_shape = np.shape(dataset)
         data_start = index
         data_end = data_start + samples_per_channel
-
         try:
             if data_shape[0] < metadata['channels']:
                 print_warning("Main dataset in H5 file not initialized.")
@@ -235,7 +234,7 @@ def Packets_to_file(parameters, timeout=None, filename=None, meas_tag=None, dpc_
         print "Writing data on disk with filename: \"" + filename + ".h5\""
 
     H5_file_pointer = create_h5_file(str(filename))
-    Param_to_H5(H5_file_pointer, parameters, tag=meas_tag)
+    Param_to_H5(H5_file_pointer, parameters, **kwargs)
     CLIENT_STATUS["measure_running_now"] = True
     if dpc_expected != None:
         widgets = [progressbar.Percentage(), progressbar.Bar()]
@@ -256,6 +255,14 @@ def Packets_to_file(parameters, timeout=None, filename=None, meas_tag=None, dpc_
             else:
                 # write_single_H5_packet(meta_data, data, H5_file_pointer)
                 write_ext_H5_packet(meta_data, data, H5_file_pointer, spc_acc)
+                if push_queue is not None:
+                    if not push_queue_warning:
+                        try:
+                            push_queue.put((meta_data, data))
+                        except:
+                            print_warning("Cannot push packets into external queue: %s"%str(sys.exc_info()[0]))
+                            push_queue_warning = True
+
                 spc_acc += meta_data['length'] / meta_data['channels']
                 try:
                     bar.update(spc_acc)
@@ -284,7 +291,7 @@ def Packets_to_file(parameters, timeout=None, filename=None, meas_tag=None, dpc_
             bar.update(spc_acc)
         except:
             if (more_sample_than_expected_WARNING): print_debug("Sync RX received more data than expected.")
-        bar.finish
+        bar.finish()
         EOM_cond.acquire()
         if END_OF_MEASURE:
             timeout = .5
