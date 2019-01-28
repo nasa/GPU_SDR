@@ -1,7 +1,0 @@
-<map id="string2param" name="string2param">
-<area shape="rect" id="node2" href="$db/d0a/USRP__server__settings_8cpp.html#a86c08ecec0164e8277103fa18d070a97" title="ant_mode_from_string" alt="" coords="157,5,308,32"/>
-<area shape="rect" id="node4" href="$dd/d18/USRP__server__console__print_8cpp.html#a648cb9110cdfcfe3362600cf6bfbc285" title="print_error" alt="" coords="193,56,273,83"/>
-<area shape="rect" id="node5" href="$db/d0a/USRP__server__settings_8cpp.html#a46cf1d3b905edda6661aa94f52295c78" title="string_to_w_type_vector" alt="" coords="151,107,315,133"/>
-<area shape="rect" id="node3" href="$dd/d18/USRP__server__console__print_8cpp.html#a3c50ebb57e7087225b485d35eed8a07c" title="print_warning" alt="" coords="374,5,473,32"/>
-<area shape="rect" id="node6" href="$db/d0a/USRP__server__settings_8cpp.html#abf4fee9a8ffea2fe7539b0e41c014488" title="string_to_w_type" alt="" coords="363,107,484,133"/>
-</map>

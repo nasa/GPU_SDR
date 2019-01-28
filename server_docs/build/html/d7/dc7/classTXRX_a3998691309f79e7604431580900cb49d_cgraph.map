@@ -1,7 +1,0 @@
-<map id="TXRX::set" name="TXRX::set">
-<area shape="rect" id="node2" href="$d0/ddc/classpreallocator.html#a518ff4e373984e4b44a0d4267c95564c" title="preallocator::close" alt="" coords="177,5,305,32"/>
-<area shape="rect" id="node3" href="$de/d74/classhardware__manager.html#a30c0b09c0df3f7c630114d0311222f13" title="Set the USRP device with user parameters. " alt="" coords="137,56,345,83"/>
-<area shape="rect" id="node4" href="$dd/d18/USRP__server__console__print_8cpp.html#a648cb9110cdfcfe3362600cf6bfbc285" title="print_error" alt="" coords="201,107,281,133"/>
-<area shape="rect" id="node5" href="$d9/d60/classH5__file__writer.html#ad95a89a6f8b975de572c9e061565385f" title="H5_file_writer::update\l_pointers" alt="" coords="167,158,316,199"/>
-<area shape="rect" id="node6" href="$d1/dcc/classSync__server.html#a370e55ee1115aeeb7d12bfcf05499276" title="Sync_server::update\l_pointers" alt="" coords="170,223,313,265"/>
-</map>

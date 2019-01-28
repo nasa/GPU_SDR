@@ -1,4 +1,0 @@
-<map id="TX_buffer_generator" name="TX_buffer_generator">
-<area shape="rect" id="node2" href="$de/dd5/structparam.html" title="{param\n|+ mode\l+ rate\l+ tone\l+ gain\l+ bw\l+ samples\l+ delay\l+ burst_on\l+ burst_off\l+ buffer_len\l+ tuning_mode\l+ decim\l+ fft_tones\l+ pf_average\l|+ get_output_buffer_size()\l+ dynamic_buffer()\l}" alt="" coords="160,315,335,597"/>
-<area shape="rect" id="node4" title="STL class. " alt="" coords="189,5,305,83"/>
-</map>

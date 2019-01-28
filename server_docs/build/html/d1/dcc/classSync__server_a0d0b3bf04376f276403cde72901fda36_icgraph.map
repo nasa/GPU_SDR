@@ -1,8 +1,0 @@
-<map id="Sync_server::connect" name="Sync_server::connect">
-<area shape="rect" id="node2" href="$d8/dc7/classAsync__server.html#a1a344c602d2489f63837982483ab891a" title="Async_server::Async\l_server" alt="" coords="209,5,356,47"/>
-<area shape="rect" id="node3" href="$d1/dcc/classSync__server.html#ad90e6eedf81a09d0f77da5944dd3e562" title="Sync_server::reconnect" alt="" coords="203,71,363,98"/>
-<area shape="rect" id="node5" href="$d8/dc7/classAsync__server.html#a2b24b68449bdeffb49a638b5dc4efc19" title="Async_server::recv\l_async" alt="" coords="215,123,350,164"/>
-<area shape="rect" id="node7" href="$d7/dc7/classTXRX.html#a233a78c80f6984d2c9546090945bf74a" title="Initialization method requires an already initialized hardware manager class and an already initializ..." alt="" coords="231,189,334,215"/>
-<area shape="rect" id="node4" href="$d1/dcc/classSync__server.html#a9b0635762bc0cdc0e9245472da70bdc7" title="Sync_server::clear\l_stream_queue" alt="" coords="411,64,541,105"/>
-<area shape="rect" id="node6" href="$d6/d52/usrp__server_8cpp.html#a3c04138a5bfe5d72780bb7e82a18e627" title="main" alt="" coords="451,130,501,157"/>
-</map>

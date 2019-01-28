@@ -1,7 +1,0 @@
-<map id="Thread_Prioriry" name="Thread_Prioriry">
-<area shape="rect" id="node2" href="$d0/ddc/classpreallocator.html#a238e3fc5ee0c1e2b06db473e537223f0" title="preallocator\&lt; float2\l \&gt;::preallocator" alt="" coords="189,5,323,47"/>
-<area shape="rect" id="node3" href="$d7/dc7/classTXRX.html#a933d561cd486fde7570cfc241bf5dca6" title="Start the threads. " alt="" coords="396,122,488,149"/>
-<area shape="rect" id="node5" href="$de/d74/classhardware__manager.html#aaaf2da667e74e82bee499587013e10f2" title="@ brief start a rx thread. " alt="" coords="164,122,348,149"/>
-<area shape="rect" id="node6" href="$de/d74/classhardware__manager.html#a491cd0e4a8edcf9102c3693fcebe3c33" title="Start a transmission thread. The threads started by this function do two things: pop a packet from th..." alt="" coords="164,173,348,199"/>
-<area shape="rect" id="node4" href="$d6/d52/usrp__server_8cpp.html#a3c04138a5bfe5d72780bb7e82a18e627" title="main" alt="" coords="536,122,587,149"/>
-</map>

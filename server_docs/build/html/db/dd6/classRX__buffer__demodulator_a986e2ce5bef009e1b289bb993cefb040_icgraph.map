@@ -1,5 +1,0 @@
-<map id="RX_buffer_demodulator::process" name="RX_buffer_demodulator::process">
-<area shape="rect" id="node2" href="$d7/dc7/classTXRX.html#ae84feba1d3a95c27ceae940efdcdaa16" title="TXRX::stop" alt="" coords="212,13,303,39"/>
-<area shape="rect" id="node3" href="$d6/d52/usrp__server_8cpp.html#a3c04138a5bfe5d72780bb7e82a18e627" title="main" alt="" coords="491,13,541,39"/>
-<area shape="rect" id="node4" href="$d7/dc7/classTXRX.html#a933d561cd486fde7570cfc241bf5dca6" title="Start the threads. " alt="" coords="351,38,443,65"/>
-</map>

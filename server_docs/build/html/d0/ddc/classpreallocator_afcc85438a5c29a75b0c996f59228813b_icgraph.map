@@ -1,8 +1,0 @@
-<map id="preallocator::trash" name="preallocator::trash">
-<area shape="rect" id="node2" href="$de/d74/classhardware__manager.html#aa9c9a0b847da0e2315f55b8f3eed5e5a" title="@ brief Release the memory associated with pointers holded by a rx queue using the respective memory ..." alt="" coords="180,5,351,47"/>
-<area shape="rect" id="node3" href="$de/d74/classhardware__manager.html#ae7f29a8fdedbb617bf29b8837b0803a1" title="@ brief Release the memory associated with pointers holded by a tx queue using the respective memory ..." alt="" coords="180,71,351,112"/>
-<area shape="rect" id="node4" href="$d1/dcc/classSync__server.html#a9b0635762bc0cdc0e9245472da70bdc7" title="Sync_server::clear\l_stream_queue" alt="" coords="200,136,331,177"/>
-<area shape="rect" id="node5" href="$d7/dc7/classTXRX.html#ae84feba1d3a95c27ceae940efdcdaa16" title="TXRX::stop" alt="" coords="220,202,311,229"/>
-<area shape="rect" id="node6" href="$d6/d52/usrp__server_8cpp.html#a3c04138a5bfe5d72780bb7e82a18e627" title="main" alt="" coords="539,202,589,229"/>
-<area shape="rect" id="node7" href="$d7/dc7/classTXRX.html#a933d561cd486fde7570cfc241bf5dca6" title="Start the threads. " alt="" coords="399,227,491,254"/>
-</map>
