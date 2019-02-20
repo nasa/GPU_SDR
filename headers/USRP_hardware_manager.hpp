@@ -85,19 +85,31 @@ class hardware_manager{
         
         );
         
-        //! @ brief Close all the tx streamer threads.
+        //! @brief Close all the tx streamer threads.
         void close_tx();
         
-        //! @ brief Close all the rx streamer threads.
+        //! @brief Close all the rx streamer threads.
         void close_rx();
         
-        //! @ brief Release the memory associated with pointers holded by a tx queue using the respective memory allocator.
+        //! @brief Release the memory associated with pointers holded by a tx queue using the respective memory allocator.
         int clean_tx_queue(tx_queue* TX_queue,preallocator<float2>* memory);
         
-        //! @ brief Release the memory associated with pointers holded by a rx queue using the respective memory allocator.
+        //! @brief Release the memory associated with pointers holded by a rx queue using the respective memory allocator.
         int clean_rx_queue(rx_queue* RX_queue, preallocator<float2>* memory);
         
     private:
+        
+        //! @brief Describe the state of the TX settling time for the A front_end.
+        bool tx_loaded_cmd_A;
+        
+        //! @brief Describe the state of the TX settling time for the B front_end.
+        bool tx_loaded_cmd_B;
+        
+        //! @brief Describe the state of the RX settling time for the A front_end.
+        bool rx_loaded_cmd_A;
+
+        //! @brief Describe the state of the RX settling time for the B front_end.
+        bool rx_loaded_cmd_B;
 
         void apply(usrp_param* requested_config);
         
@@ -217,6 +229,8 @@ class hardware_manager{
         
         //used to sync TX and rRX streaming time
         void sync_time();
+        
+        size_t nanosec_next_pps();
 };
 
 #endif

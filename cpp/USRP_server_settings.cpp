@@ -185,7 +185,7 @@ void Thread_Prioriry(boost::thread& Thread, int priority, int affinity){
     
     
     retcode = pthread_setschedparam(thread_ID, policy, &scheme);
-    if(retcode != 0)print_warning("cannot set thread scheduling policy");
+    if(retcode != 0)print_warning("Cannot set thread scheduling policy");
     
     
     print_debug("Setting affinity to ", affinity%SYSTEM_CORES);

@@ -160,8 +160,8 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
                 
                 //set the decimator parameter
                 ppt = h_parameter.length;
-                //print_debug("PPT is: ",ppt);
-                //print_debug("Buffer_len is: ",parameters->buffer_len);
+                print_debug("PPT is: ",ppt);
+                print_debug("Buffer_len is: ",parameters->buffer_len);
                 
                 vna_helper = new VNA_decimator_helper(ppt, parameters->buffer_len);
                 

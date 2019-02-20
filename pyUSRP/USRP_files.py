@@ -294,7 +294,7 @@ def openH5file(filename, ch_list=None, start_sample=None, last_sample=None, usrp
 
 def get_noise(filename, usrp_number=0, front_end=None, channel_list=None):
     '''
-    Get the noise samples from a a pre-analyzed H5 file.
+    Get the noise spectra from a a pre-analyzed H5 file.
 
     Argumers:
         - filename: [string] the name of the file.
@@ -492,6 +492,9 @@ class global_parameter(object):
                 if ant_key == 'device':
                     continue
                 if self.parameters[ant_key]['mode'] != "OFF":
+
+                    self.parameters[ant_key]['rf'] = int(self.parameters[ant_key]['rf'])
+
                     try:
                         len(self.parameters[ant_key]['chirp_f'])
                     except TypeError:
@@ -536,9 +539,11 @@ class global_parameter(object):
                         return False
                     try:
                         len(self.parameters[ant_key]['freq'])
+                        self.parameters[ant_key]['freq'] = [int(xx) for xx in self.parameters[ant_key]['freq']]
                     except TypeError:
-                        print_warning("\'freq\" attribute in parameters has to be a list, changing value to list...")
-                        self.parameters[ant_key]['freq'] = [self.parameters[ant_key]['freq']]
+                        print_warning("\'freq\" attribute in parameters has to be a list of int, changing value to list...")
+
+
                     try:
                         int(self.parameters[ant_key]['freq'][0])
                     except IndexError:

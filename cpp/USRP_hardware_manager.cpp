@@ -1,5 +1,6 @@
 #include "USRP_hardware_manager.hpp"
 
+auto start = std::chrono::system_clock::now();
 
 //! @brief Initializer of the class can be used to select which usrp is controlled by the class
 //! Default call suppose only one USRP is connected
@@ -32,9 +33,12 @@ hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init,
         
         
         std::cout<<"Device found and assigned to GPU "<< props.name <<" ("<< settings->GPU_device_index <<")"<<std::endl;
-        
+        for(size_t ii = 0; ii<dev_addrs.size(); ii++){
+            std::cout<<dev_addrs[ii].to_pp_string()<<std::endl;
+        }
         //assign desired address
         main_usrp = uhd::usrp::multi_usrp::make(dev_addrs[usrp_number]);
+        //main_usrp = uhd::usrp::multi_usrp::make(std::string("addr = 192.168.40.2, second_addr = 192.168.30.2"));
         //set the clock reference
         main_usrp->set_clock_source(settings->clock_reference);
     
@@ -72,6 +76,7 @@ hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init,
     B_rx_stream = nullptr;
     B_tx_stream = nullptr;
 
+    main_usrp->set_time_now(0.);
 }
 
 //! @brief This function set the USRP device with user parameters.
@@ -568,6 +573,7 @@ void hardware_manager::set_streams(){
         //declare unit to be used
         uhd::stream_args_t stream_args("fc32");
         channel_num[0] = 0;
+
         stream_args.channels = channel_num;
         if(not sw_loop)A_tx_stream = main_usrp->get_tx_stream(stream_args);
     }
@@ -575,7 +581,7 @@ void hardware_manager::set_streams(){
     if(config.B_RX2.mode == TX or config.B_TXRX.mode == TX){
         //declare unit to be used
         uhd::stream_args_t stream_args("fc32");
-        channel_num[0] = 1;
+        channel_num[1] = 1;
         stream_args.channels = channel_num;
         if(not sw_loop)B_tx_stream = main_usrp->get_tx_stream(stream_args);
     }
@@ -872,6 +878,53 @@ void hardware_manager::software_tx_thread(
     }
 }
 
+
+
+
+
+#ifndef GET_CACHE_LINE_SIZE_H_INCLUDED
+#define GET_CACHE_LINE_SIZE_H_INCLUDED
+
+#include <stddef.h>
+size_t cache_line_size();
+
+#if defined(__gnu_linux__)
+
+#include <stdio.h>
+size_t cache_line_size() {
+    FILE * p = 0;
+    p = fopen("/sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size", "r");
+    unsigned int i = 0;
+    if (p) {
+        fscanf(p, "%d", &i);
+        fclose(p);
+    }
+    return i;
+}
+
+#else
+size_t cache_line_size() {
+    return 0;
+}
+#endif
+
+#endif
+
+#include <emmintrin.h>
+
+static inline void prefetch_range(void *addr, size_t len, size_t cache){
+     char *addr_c = reinterpret_cast<char*>(addr);
+     char *cp;
+     char *end =  addr_c + len;
+
+     for (cp = addr_c; cp < end; cp += cache*4){
+         //__builtin_prefetch(cp);
+         _mm_prefetch(cp, _MM_HINT_T1);
+     }
+
+}
+
+
 void hardware_manager::single_tx_thread(
     param *current_settings,                //(managed internally to the class) user parameter to use for rx setting
     threading_condition* wait_condition,    //before joining wait for that condition
@@ -894,9 +947,9 @@ void hardware_manager::single_tx_thread(
     
     boost::thread* metadata_thread = new boost::thread(boost::bind(&hardware_manager::async_stream,this,tx_stream,front_end));
     
-    SetThreadName(metadata_thread, "TX_metadata_thread");  
+    //SetThreadName(metadata_thread, "TX_metadata_thread");  
     
-    float timeout = 0.1f;   //timeout in seconds(will be used to sync the recv calls)
+    float timeout = 0.01f;   //timeout in seconds(will be used to sync the recv calls)
     if(front_end == 'A'){
         A_tx_thread_operation = true; //class variable to account for thread activity
     }else if(front_end == 'B'){
@@ -905,51 +958,75 @@ void hardware_manager::single_tx_thread(
         print_error("Frontend code not recognized in hardware tx thread");
         return;
     } //class variable to account for thread activity
+    
+    double start_time = main_usrp->get_time_now().get_real_secs();
+    
     uhd::tx_metadata_t metadata_tx;
     
     metadata_tx.start_of_burst = true;
     
     //those two instruction should delay the start of transmirrion of a desired time however the UHD library keep throwing errors (L)
     //if this method is used. The workaround is to bypass this using a software timeout. (implemented few lines below)
-    metadata_tx.time_spec = uhd::time_spec_t(current_settings->delay);
-    metadata_tx.has_time_spec  = current_settings->delay == 0 ? false:true;
-    timeout+=current_settings->delay;
+    //metadata_tx.time_spec = uhd::time_spec_t(current_settings->delay);
+    metadata_tx.time_spec = uhd::time_spec_t(start_time + 0.1f);
+    //metadata_tx.has_time_spec  = current_settings->delay == 0 ? false:true;
+    metadata_tx.has_time_spec  = false;
+    timeout = 0.2f;
     
     //if the number of samples to receive is smaller than the buffer the first packet is also the last one
     //metadata_tx.end_of_burst = current_settings->samples <= current_settings->buffer_len ? true : false;
     metadata_tx.end_of_burst = current_settings->burst_off!=0?true:false;;
     
     //sync to next pps
-    sync_time();
+    //sync_time();
     
     //sync to delay: software timeout used instead of UHD one.
-    std::this_thread::sleep_for(std::chrono::nanoseconds(size_t(1.e9*current_settings->delay)));
-    metadata_tx.time_spec = uhd::time_spec_t(0.f);
-    metadata_tx.has_time_spec  = false;
-    timeout = 0.1f; 
+    //std::this_thread::sleep_for(std::chrono::nanoseconds(size_t(1.e9*current_settings->delay)));
     
+    ///metadata_tx.time_spec = uhd::time_spec_t(0.f);
+    ///metadata_tx.has_time_spec  = false;
+    ///timeout = 0.1f; 
+    
+    /*
+    float2 tx_buffer_test[current_settings->buffer_len];
+    for(int k = 0; k< current_settings->buffer_len; k++){
+        tx_buffer_test[k].x = 1;
+        tx_buffer_test[k].y = 1;
+    }
+    */
+    //optimizations for tx loop
+    size_t max_samples_tx = current_settings->samples;
+    double burst_off = current_settings->burst_off;
+    size_t buffer_len_tx = current_settings->buffer_len;
+    size_t cache = cache_line_size();
+    std::cout<<"Cache value is: "<< cache << " bytes"<<std::endl;
+    uhd::set_thread_priority_safe(1.);
     while(active and (sent_samp < current_settings->samples)){
         try{
-            boost::this_thread::interruption_point();
+            //boost::this_thread::interruption_point();
             if(TX_queue->pop(tx_buffer)){
-
-                if(sent_samp + current_settings->buffer_len >= current_settings->samples)metadata_tx.end_of_burst   = (bool)true;
+            //if(true){
                 
-                if((current_settings->burst_off!=0) and (not first_packet)){
-                    metadata_tx.end_of_burst   = (bool)true;
-                    metadata_tx.start_of_burst = (bool)true;
-                    metadata_tx.has_time_spec = (bool)true;
-                    timeout += current_settings->burst_off;
-                    metadata_tx.time_spec = main_usrp->get_time_now() + uhd::time_spec_t(current_settings->burst_off);
+                if(sent_samp + current_settings->buffer_len >= max_samples_tx) metadata_tx.end_of_burst = true;
+                
+                if(burst_off!=0){
+                    if(not first_packet){
+                        metadata_tx.end_of_burst   = (bool)true;
+                        metadata_tx.start_of_burst = (bool)true;
+                        metadata_tx.has_time_spec = (bool)true;
+                        timeout += current_settings->burst_off;
+                        metadata_tx.time_spec = main_usrp->get_time_now() + uhd::time_spec_t(current_settings->burst_off);
+                    }
                 }
                 
                 
-                tx_stream->send(tx_buffer, current_settings->buffer_len, metadata_tx,timeout);//
-
                 
-                sent_samp += current_settings->buffer_len;
+                prefetch_range(tx_buffer, buffer_len_tx, cache);
+                sent_samp += tx_stream->send(tx_buffer, current_settings->buffer_len, metadata_tx,timeout);
+                metadata_tx.start_of_burst = false;
+                metadata_tx.has_time_spec = false;
                 
-                if(current_settings->burst_off!=0){
+                if(burst_off!=0){
                     first_packet = false;
 
                 }else if(first_packet){
@@ -962,7 +1039,7 @@ void hardware_manager::single_tx_thread(
                 }
                 
                 if(memory)memory->trash(tx_buffer);
-
+            
             }else{
                 std::this_thread::sleep_for(std::chrono::microseconds(1));
 
@@ -1139,10 +1216,13 @@ void hardware_manager::single_rx_thread(
     RX_wrapper warapped_buffer;
     warapped_buffer.usrp_number = this_usrp_number;
     
+    
+    double start_time = main_usrp->get_time_now().get_real_secs();
+    
     //setting the start metadata
     uhd::rx_metadata_t metadata_rx;
     metadata_rx.has_time_spec = true;                               // in this application the time specification is always set
-    metadata_rx.time_spec = uhd::time_spec_t(current_settings->delay);               //set the transmission delay
+    metadata_rx.time_spec = uhd::time_spec_t(start_time + current_settings->delay);               //set the transmission delay
     metadata_rx.start_of_burst = true;
     
     //setting the stream command (isn't it redundant with metadata?)
@@ -1159,9 +1239,10 @@ void hardware_manager::single_rx_thread(
         std::cout<<"stream command is: "<<"STREAM_MODE_NUM_SAMPS_AND_MORE"<<std::endl;
     }
     stream_cmd.stream_now = current_settings->delay == 0 ? true:false;
+    float timeout = start_time+current_settings->delay;
 
-    stream_cmd.time_spec = uhd::time_spec_t(current_settings->delay);
-    
+    stream_cmd.time_spec = uhd::time_spec_t(start_time+current_settings->delay);
+
     //if the number of samples to receive is smaller than the buffer the first packet is also the last one
     metadata_rx.end_of_burst = current_settings->samples <= current_settings->buffer_len ? true : false; 
     
@@ -1172,7 +1253,7 @@ void hardware_manager::single_rx_thread(
     bool tmp;
     
     //main_usrp->set_time_now(0.);
-    sync_time();
+    //sync_time();
     
     //issue the stream command
     rx_stream->issue_stream_cmd(stream_cmd);
@@ -1182,7 +1263,7 @@ void hardware_manager::single_rx_thread(
     //main thread loop
 
 
-
+    uhd::set_thread_priority_safe(+1);
     while(active and acc_samp < current_settings->samples){
         //std::cout<<"samples: "<<acc_samp<<"/"<< current_settings->samples<<std::endl;
         try{
@@ -1203,7 +1284,7 @@ void hardware_manager::single_rx_thread(
                 stream_cmd.stream_now = false;
                 stream_cmd.time_spec = uhd::time_spec_t(current_settings->burst_off);
                 rx_stream->issue_stream_cmd(stream_cmd);
-                std::cout<<"stream command is: "<<"STREAM_MODE_NUM_SAMPS_AND_MORE I should not be here"<<std::endl;
+                std::cout<<"stream command is: "<<"STREAM_MODE_NUM_SAMPS_AND_MORE"<<std::endl;
             }
             
             //this hsould be only one cycle however there are cases in which multiple recv calls are needed
@@ -1215,10 +1296,16 @@ void hardware_manager::single_rx_thread(
                 //how long to wait for new samples //TODO not adapting the timeout can produce O
                 //timeout = std::max((float)samples_remaining/(float)current_settings->rate,0.2f);
 
-                if(first_packet)std::this_thread::sleep_for(std::chrono::nanoseconds(size_t(1.e9*current_settings->delay)));
+                //if(first_packet)std::this_thread::sleep_for(std::chrono::nanoseconds(size_t(1.e9*current_settings->delay)));
 
+                if(first_packet){
+                    
+                    //noop
+                
+                }
+                
                 //receive command
-                num_rx_samps += rx_stream->recv(rx_buffer + num_rx_samps, samples_remaining, metadata_rx,0.3f);//,0.1f
+                num_rx_samps += rx_stream->recv(rx_buffer + num_rx_samps, samples_remaining, metadata_rx,timeout);//,0.1f
                 
                 //interpret errors
                 if(get_rx_errors(&metadata_rx, true)>0)errors++;
@@ -1236,6 +1323,7 @@ void hardware_manager::single_rx_thread(
                     metadata_rx.has_time_spec = current_settings->burst_off == 0? false:true;
                     metadata_rx.time_spec = uhd::time_spec_t(current_settings->burst_off);
                     first_packet = false;
+                    timeout = 0.01;
                 }
                 if(++frag_count>1){
                     std::cout<< "F" << frag_count<<std::flush;
@@ -1317,6 +1405,11 @@ void hardware_manager::flush_rx_streamer(uhd::rx_streamer::sptr &rx_streamer) {
    static float2 dummy_buffer[size];
    static uhd::rx_metadata_t dummy_meta { };
    while (rx_streamer->recv(dummy_buffer, size, dummy_meta, timeout)) {}
+}
+
+size_t hardware_manager::nanosec_next_pps(){
+    //std::this_thread::sleep_for(std::chrono::nanoseconds(
+    return size_t(1.e9*   (double(1) -  (main_usrp->get_time_now().get_real_secs() - main_usrp->get_time_last_pps().get_real_secs()))  );
 }
 
 //used to sync TX and rRX streaming time

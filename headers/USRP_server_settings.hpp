@@ -19,6 +19,7 @@
 #include <iterator>
 #include <algorithm>
 #include <chrono>
+#include <ctime>
 #include <mutex>
 #include <pthread.h>
 #include <thread>
@@ -28,8 +29,8 @@
 #include <uhd/utils/thread.hpp>
 #include <uhd/utils/safe_main.hpp>
 #include <uhd/utils/static.hpp>
-
 #include <uhd/exception.hpp>
+#include <uhd/usrp/multi_usrp.hpp>
 
 #include <boost/math/special_functions/round.hpp>
 #include <boost/format.hpp>
@@ -47,9 +48,8 @@
 #include <boost/exception/diagnostic_information.hpp> 
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/asio/basic_deadline_timer.hpp>
-//! @endcond
 #include <boost/thread/thread.hpp>
-#include <uhd/usrp/multi_usrp.hpp>
+
 #include "USRP_server_console_print.hpp"
 
 #include <cuda_runtime.h>

@@ -1,6 +1,6 @@
 CC=g++
 
-CC_DEF_FLAGS =-std=c++11# -O3
+CC_DEF_FLAGS =-std=c++11 -O2
 CC+=$(CC_DEF_FLAGS)
 
 SRC_DIR := cpp
@@ -64,6 +64,6 @@ $(CUDA_OBJ_FILES): $(CUDA_SRC_FILES) $(CUDA_HPP_FILES)
 
 clean:
 	$(info Cleaning all...)
-	@rm -f usrp_server
+	@rm -f server
 	@rm -rf $(OBJ_DIR)
 	@rm -rf docs/build

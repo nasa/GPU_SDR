@@ -15,8 +15,9 @@
 
 namespace po = boost::program_options;
 
-int main(int argc, char **argv){
 
+int main(int argc, char **argv){
+    uhd::set_thread_priority_safe(1.);
     std::cout << "\033[40;1;32mUSRP GPU Server v 2.0\033[0m" << std::endl;
     
     bool file_write, net_streaming, sw_loop;
@@ -64,7 +65,7 @@ int main(int argc, char **argv){
     
     //look for USER
     Async_server async(true);
-    
+
     while(active){
         std::cout<<"\t\t\tNEW LOOP IN MAIN"<<std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
