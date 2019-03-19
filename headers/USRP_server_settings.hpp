@@ -125,7 +125,7 @@ struct param{
     
     //runtime hardware parameters
     size_t samples;
-    float delay;
+    double delay;
     float burst_on;  //time length of the bursts in seconds
     float burst_off; //time between bursts in seconds
     size_t buffer_len;  //length of the transport buffer (both GPU and USRP). SET to 0 for default.

@@ -27,7 +27,7 @@ def run(rate,freq,front_end):
 
     filename = u.measure_line_delay(rate, freq, front_end, USRP_num=0, tx_gain=0, rx_gain=0, output_filename=None)
 
-    u.analyze_line_delay(filename)
+    u.analyze_line_delay(filename, True)
 
 
 if __name__ == "__main__":

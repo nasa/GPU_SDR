@@ -110,9 +110,9 @@ def measure_line_delay(rate, LO_freq, RF_frontend, USRP_num = 0, tx_gain = 0, rx
 
     # This measure take the undecimated data rate that will most probably exceed the LAN/Disk rate.
     # Using more than few seconds could cause errors.
-    measure_t = .1
+    measure_t = 5
     n_points = (rate * measure_t)
-    number_of_samples = (rate * measure_t)*100000000
+    number_of_samples = (rate * measure_t)
 
     start_f = int(np.floor(rate/2))-1
     last_f = -start_f
@@ -122,7 +122,7 @@ def measure_line_delay(rate, LO_freq, RF_frontend, USRP_num = 0, tx_gain = 0, rx
     delay_command.set(TX_frontend, "mode", "TX")
     delay_command.set(TX_frontend, "buffer_len", 1000000)
     delay_command.set(TX_frontend, "gain", tx_gain)
-    delay_command.set(TX_frontend, "delay", 0)
+    delay_command.set(TX_frontend, "delay", 1)
     delay_command.set(TX_frontend, "samples", number_of_samples)
     delay_command.set(TX_frontend, "rate", rate)
     delay_command.set(TX_frontend, "bw", 2 * rate)
@@ -134,29 +134,11 @@ def measure_line_delay(rate, LO_freq, RF_frontend, USRP_num = 0, tx_gain = 0, rx
     delay_command.set(TX_frontend, "swipe_s", [n_points])
     delay_command.set(TX_frontend, "chirp_t", [measure_t])
     delay_command.set(TX_frontend, "rf", LO_freq)
-    '''
-    TX_frontend2 = "B_TXRX"
-    delay_command.set(TX_frontend2, "mode", "TX")
-    delay_command.set(TX_frontend2, "buffer_len", 1000000)
-    delay_command.set(TX_frontend2, "gain", tx_gain)
-    delay_command.set(TX_frontend2, "delay", 0)
-    delay_command.set(TX_frontend2, "samples", number_of_samples)
-    delay_command.set(TX_frontend2, "rate", rate)
-    delay_command.set(TX_frontend2, "bw", 2 * rate)
 
-    delay_command.set(TX_frontend2, "wave_type", ["CHIRP"])
-    delay_command.set(TX_frontend2, "ampl", [1.])
-    delay_command.set(TX_frontend2, "freq", [start_f])
-    delay_command.set(TX_frontend2, "chirp_f", [last_f])
-    delay_command.set(TX_frontend2, "swipe_s", [n_points])
-    delay_command.set(TX_frontend2, "chirp_t", [measure_t])
-    delay_command.set(TX_frontend2, "rf", LO_freq+2*last_f)
-    '''
-
-    delay_command.set(RX_frontend, "mode", "OFF")
+    delay_command.set(RX_frontend, "mode", "RX")
     delay_command.set(RX_frontend, "buffer_len", 1e6)
     delay_command.set(RX_frontend, "gain", rx_gain)
-    delay_command.set(RX_frontend, "delay", 5)
+    delay_command.set(RX_frontend, "delay", 1+900e-9)
     delay_command.set(RX_frontend, "samples", number_of_samples)
     delay_command.set(RX_frontend, "rate", rate)
     delay_command.set(RX_frontend, "bw", 2 * rate)
@@ -167,7 +149,7 @@ def measure_line_delay(rate, LO_freq, RF_frontend, USRP_num = 0, tx_gain = 0, rx
     delay_command.set(RX_frontend, "swipe_s", [n_points])
     delay_command.set(RX_frontend, "chirp_t", [measure_t])
     delay_command.set(RX_frontend, "rf", LO_freq)
-    delay_command.set(RX_frontend, "decim", 2)
+    delay_command.set(RX_frontend, "decim", 0)
 
     # send command
 
@@ -194,56 +176,51 @@ def measure_line_delay(rate, LO_freq, RF_frontend, USRP_num = 0, tx_gain = 0, rx
 
     return output_filename
 
-def analyze_line_delay(filename):
+def analyze_line_delay(filename, diagnostic_plots = False):
     '''
     Analyze the file delay from a tagged file.
 
     :param filename: the name of the file containing the delay data.
+    :param diagnostic_plots: saves two diagnostic plots in png.
     :return: the delay in seconds.
     '''
 
     print_debug("Analyzing line delay info form file: \'%s\' ..."%(filename))
 
-    Z = openH5file(filename)[0]
     info = get_rx_info(filename, ant=None)
-    decimation = 1
-    #Z =signal.decimate(Z, decimation, ftype='fir')
+    decimation = 1000
+    zz = signal.decimate(openH5file(filename)[0], decimation, ftype="fir")
+    freq, Pxx = signal.welch(zz.real, nperseg=len(zz), fs=int(info['rate'] / float(decimation)), detrend='linear',
+                             scaling='density')
 
-    #pl.plot(np.abs(Z))
-    #pl.plot(np.abs(Z),label = "abs")
-    '''
-    pl.plot(Z.real, label = "real_part")
-    pl.legend()
-    pl.grid()
-    pl.figure()
-    '''
-    pl.plot(np.abs(Z), label="absolute")
-    pl.legend()
-    pl.grid()
+    if diagnostic_plots:
 
-    '''
-    pl.figure()
-    freq, Pxx = signal.welch(Z.real, nperseg=len(Z), fs=int(info['rate']/float(decimation)), detrend='linear', scaling='density')
-    Pxx = 20 * np.log10(Pxx)
-    pl.semilogx(freq, Pxx, label="real")
-    pl.legend()
-    pl.grid()
-    pl.figure()
+        pl.plot(zz.real, label="real")
+        pl.plot(zz.imag, label="imag")
+        pl.plot(np.abs(zz), label="abs")
+        pl.xlabel("Samples")
+        pl.ylabel("ADCu")
+        pl.legend()
+        pl.grid()
+        pl.savefig("Delay_diagnostic.png")
 
-    freq, Pxx = signal.welch(np.abs(Z), nperseg=len(Z), fs=int(info['rate']/float(decimation)), detrend='linear', scaling='density')
-    Pxx = 20 * np.log10(Pxx)
-    pl.semilogx(freq, Pxx, label = "absolute")
+        pl.figure()
+        Pxx = 20 * np.log10(Pxx)
+        pl.xlabel("Frequency [Hz]")
+        pl.ylabel("ADC dB")
+        pl.semilogx(freq, Pxx, label="real")
+        pl.legend()
+        pl.grid()
+        pl.savefig("Delay_diagnostic_FFT.png")
+    
 
-    '''
-    pl.legend()
-    pl.grid()
-    pl.show()
+
 
     coeff = float(info['chirp_t'][0]) / float(np.abs(info['freq'][0] - info['chirp_f'][0]))
 
-    print "Coefficient is: "+str(coeff)
+    print_debug("Coefficient is: "+str(coeff))
 
-    print "Max freq: "+str(freq[Pxx.argmax()])
+    print_debug("Max low freq found: "+str(freq[Pxx.argmax()]))
 
     delay = freq[Pxx.argmax()] * coeff
 

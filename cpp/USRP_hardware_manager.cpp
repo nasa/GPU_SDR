@@ -581,7 +581,7 @@ void hardware_manager::set_streams(){
     if(config.B_RX2.mode == TX or config.B_TXRX.mode == TX){
         //declare unit to be used
         uhd::stream_args_t stream_args("fc32");
-        channel_num[1] = 1;
+        channel_num[0] = 1;
         stream_args.channels = channel_num;
         if(not sw_loop)B_tx_stream = main_usrp->get_tx_stream(stream_args);
     }
@@ -923,7 +923,13 @@ static inline void prefetch_range(void *addr, size_t len, size_t cache){
      }
 
 }
-
+inline float2* get_buffer_ready(tx_queue* __restrict__ TX_queue, size_t buffer_len_tx, size_t cache){
+	float2* tx_buffer;
+    while(not TX_queue->pop(tx_buffer))std::this_thread::sleep_for(std::chrono::nanoseconds(10));
+    //there is no need of the full buffer as the cache may be limited and the access pattern is very regular.
+    prefetch_range(tx_buffer, buffer_len_tx, cache); 
+    return tx_buffer;
+}
 
 void hardware_manager::single_tx_thread(
     param *current_settings,                //(managed internally to the class) user parameter to use for rx setting
@@ -934,22 +940,18 @@ void hardware_manager::single_tx_thread(
     char front_end
 ){
     
-
-    //the wait condition is implemented so to wait this thread to transmit the given number of samples
-    //wait_condition->rearm();
-    
-    //needed to change metadata only once
-    bool first_packet = true;
+    uhd::set_thread_priority_safe(1.);
     bool active = true;
-    bool started = false; //Only needed for warning purposes
     size_t sent_samp = 0;       //total number of samples sent
     float2* tx_buffer;  //the buffer pointer
+    float2* tx_next_buffer;  //the buffer pointer next
     
-    boost::thread* metadata_thread = new boost::thread(boost::bind(&hardware_manager::async_stream,this,tx_stream,front_end));
     
     //SetThreadName(metadata_thread, "TX_metadata_thread");  
+    std::stringstream ss;
+    ss<< "TX worker " << front_end;
+    set_this_thread_name(ss.str());
     
-    float timeout = 0.01f;   //timeout in seconds(will be used to sync the recv calls)
     if(front_end == 'A'){
         A_tx_thread_operation = true; //class variable to account for thread activity
     }else if(front_end == 'B'){
@@ -959,97 +961,54 @@ void hardware_manager::single_tx_thread(
         return;
     } //class variable to account for thread activity
     
-    double start_time = main_usrp->get_time_now().get_real_secs();
+    
+    //double start_time = main_usrp->get_time_now().get_real_secs();
     
     uhd::tx_metadata_t metadata_tx;
     
+    BOOST_LOG_TRIVIAL(info) <<"Starting metadata thread";
+    boost::thread* metadata_thread = new boost::thread(boost::bind(&hardware_manager::async_stream,this,tx_stream,front_end));
+
     metadata_tx.start_of_burst = true;
-    
-    //those two instruction should delay the start of transmirrion of a desired time however the UHD library keep throwing errors (L)
-    //if this method is used. The workaround is to bypass this using a software timeout. (implemented few lines below)
-    //metadata_tx.time_spec = uhd::time_spec_t(current_settings->delay);
-    metadata_tx.time_spec = uhd::time_spec_t(start_time + 0.1f);
-    //metadata_tx.has_time_spec  = current_settings->delay == 0 ? false:true;
-    metadata_tx.has_time_spec  = false;
-    timeout = 0.2f;
-    
-    //if the number of samples to receive is smaller than the buffer the first packet is also the last one
-    //metadata_tx.end_of_burst = current_settings->samples <= current_settings->buffer_len ? true : false;
-    metadata_tx.end_of_burst = current_settings->burst_off!=0?true:false;;
-    
-    //sync to next pps
-    //sync_time();
-    
-    //sync to delay: software timeout used instead of UHD one.
-    //std::this_thread::sleep_for(std::chrono::nanoseconds(size_t(1.e9*current_settings->delay)));
-    
-    ///metadata_tx.time_spec = uhd::time_spec_t(0.f);
-    ///metadata_tx.has_time_spec  = false;
-    ///timeout = 0.1f; 
-    
-    /*
-    float2 tx_buffer_test[current_settings->buffer_len];
-    for(int k = 0; k< current_settings->buffer_len; k++){
-        tx_buffer_test[k].x = 1;
-        tx_buffer_test[k].y = 1;
-    }
-    */
+    metadata_tx.end_of_burst = false;
+    metadata_tx.has_time_spec  = true;
+    metadata_tx.time_spec = uhd::time_spec_t(1.0+current_settings->delay);
+
     //optimizations for tx loop
     size_t max_samples_tx = current_settings->samples;
     double burst_off = current_settings->burst_off;
     size_t buffer_len_tx = current_settings->buffer_len;
     size_t cache = cache_line_size();
-    std::cout<<"Cache value is: "<< cache << " bytes"<<std::endl;
-    uhd::set_thread_priority_safe(1.);
+    
+    
+    std::future<float2*> handle;
+    //tx_next_buffer = get_buffer_ready(TX_queue, buffer_len_tx, cache);
+    BOOST_LOG_TRIVIAL(info) <<"Starting main loop";
     while(active and (sent_samp < current_settings->samples)){
         try{
-            //boost::this_thread::interruption_point();
-            if(TX_queue->pop(tx_buffer)){
-            //if(true){
+        
+            boost::this_thread::interruption_point();
                 
-                if(sent_samp + current_settings->buffer_len >= max_samples_tx) metadata_tx.end_of_burst = true;
-                
-                if(burst_off!=0){
-                    if(not first_packet){
-                        metadata_tx.end_of_burst   = (bool)true;
-                        metadata_tx.start_of_burst = (bool)true;
-                        metadata_tx.has_time_spec = (bool)true;
-                        timeout += current_settings->burst_off;
-                        metadata_tx.time_spec = main_usrp->get_time_now() + uhd::time_spec_t(current_settings->burst_off);
-                    }
-                }
-                
-                
-                
-                prefetch_range(tx_buffer, buffer_len_tx, cache);
-                sent_samp += tx_stream->send(tx_buffer, current_settings->buffer_len, metadata_tx,timeout);
-                metadata_tx.start_of_burst = false;
-                metadata_tx.has_time_spec = false;
-                
-                if(burst_off!=0){
-                    first_packet = false;
-
-                }else if(first_packet){
-                    started = true;
-                    metadata_tx.start_of_burst = false;
-                    metadata_tx.has_time_spec = false;
-                    first_packet = false;
-                    timeout = 0.1f;
-
-                }
-                
-                if(memory)memory->trash(tx_buffer);
+            if(sent_samp + buffer_len_tx >= max_samples_tx) metadata_tx.end_of_burst = true;
             
-            }else{
-                std::this_thread::sleep_for(std::chrono::microseconds(1));
+            //tx_buffer = tx_next_buffer;
+            
+            //handle = std::async(std::launch::async, get_buffer_ready, TX_queue, buffer_len_tx, cache);
+            
+            while(not TX_queue->pop(tx_buffer))std::this_thread::sleep_for(std::chrono::nanoseconds(10));
+            
+            sent_samp += tx_stream->send(tx_buffer, buffer_len_tx, metadata_tx);
+            
+            metadata_tx.start_of_burst = false;
+            metadata_tx.has_time_spec = false;
 
-                if(active and started){
-                    print_error("TX queue is empty, cannot transmit buffer!");
-                }
-                //should I push an error?
-            }
+			//tx_next_buffer = handle.get();
+            
+            if(memory)memory->trash(tx_buffer);
+            
         }catch (boost::thread_interrupted &){
             active = false;
+            BOOST_LOG_TRIVIAL(info) <<"Interrupt received";
         }
 
     }
@@ -1062,6 +1021,7 @@ void hardware_manager::single_tx_thread(
     if(not active and sent_samp < current_settings->samples){
         print_warning("TX thread was joined without transmitting the specified samples");
         std::cout<< "Missing "<< current_settings->samples - sent_samp<<" samples"<<std::endl;
+        BOOST_LOG_TRIVIAL(info) <<"Thread was joined without transmitting "<< current_settings->samples - sent_samp<<" samples";
     }
     
     metadata_thread->interrupt();
@@ -1076,7 +1036,8 @@ void hardware_manager::single_tx_thread(
         B_tx_thread_operation = false;
     }
     tx_stream.reset();
-    //wait_condition->release();
+    
+    BOOST_LOG_TRIVIAL(info) <<"Joining";
 }
 
 //ment to be in a thread. receive messages asyncronously on metadata
@@ -1205,7 +1166,7 @@ void hardware_manager::single_rx_thread(
     size_t num_rx_samps = 0;   //number of samples received in a single loop
     size_t acc_samp = 0;  //total number of samples received
     size_t frag_count = 0;     //fragmentation count used for very long buffer
-    //float timeout = 0.1f;   //timeout in seconds(will be used to sync the recv calls)
+    float timeout = 0.1f;   //timeout in seconds(will be used to sync the recv calls)
     size_t counter = 0;        //internal packet number
     size_t errors = 0;         //error counter (per loop)
     size_t samples_remaining;  //internal loop samples counter
@@ -1217,13 +1178,12 @@ void hardware_manager::single_rx_thread(
     warapped_buffer.usrp_number = this_usrp_number;
     
     
-    double start_time = main_usrp->get_time_now().get_real_secs();
     
     //setting the start metadata
     uhd::rx_metadata_t metadata_rx;
-    metadata_rx.has_time_spec = true;                               // in this application the time specification is always set
-    metadata_rx.time_spec = uhd::time_spec_t(start_time + current_settings->delay);               //set the transmission delay
-    metadata_rx.start_of_burst = true;
+    //metadata_rx.has_time_spec = true;                               // in this application the time specification is always set
+    //metadata_rx.time_spec = uhd::time_spec_t(1.0 + current_settings->delay);               //set the transmission delay
+    //metadata_rx.start_of_burst = true;
     
     //setting the stream command (isn't it redundant with metadata?)
     uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
@@ -1239,9 +1199,8 @@ void hardware_manager::single_rx_thread(
         std::cout<<"stream command is: "<<"STREAM_MODE_NUM_SAMPS_AND_MORE"<<std::endl;
     }
     stream_cmd.stream_now = current_settings->delay == 0 ? true:false;
-    float timeout = start_time+current_settings->delay;
 
-    stream_cmd.time_spec = uhd::time_spec_t(start_time+current_settings->delay);
+    stream_cmd.time_spec = uhd::time_spec_t(1.0+current_settings->delay);
 
     //if the number of samples to receive is smaller than the buffer the first packet is also the last one
     metadata_rx.end_of_burst = current_settings->samples <= current_settings->buffer_len ? true : false; 
@@ -1256,11 +1215,12 @@ void hardware_manager::single_rx_thread(
     //sync_time();
     
     //issue the stream command
+    stream_cmd.stream_now = false;
+    stream_cmd.num_samps = current_settings->buffer_len;
+    stream_cmd.time_spec = uhd::time_spec_t(1.0+current_settings->delay);
+    timeout = 1.0+current_settings->delay;
+    stream_cmd.stream_mode = uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS ;
     rx_stream->issue_stream_cmd(stream_cmd);
-    
-    //sync_time(current_settings->delay);
-    //std::this_thread::sleep_for(std::chrono::microseconds(int(1.e6*current_settings->delay)));
-    //main thread loop
 
 
     uhd::set_thread_priority_safe(+1);
@@ -1280,12 +1240,14 @@ void hardware_manager::single_rx_thread(
             counter++;
 
             //issue an other command for the burst mode
+            /*
             if(stream_cmd.stream_mode == uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE and not first_packet){
                 stream_cmd.stream_now = false;
                 stream_cmd.time_spec = uhd::time_spec_t(current_settings->burst_off);
                 rx_stream->issue_stream_cmd(stream_cmd);
                 std::cout<<"stream command is: "<<"STREAM_MODE_NUM_SAMPS_AND_MORE"<<std::endl;
             }
+            */
             
             //this hsould be only one cycle however there are cases in which multiple recv calls are needed
             while(num_rx_samps<current_settings->buffer_len){
@@ -1298,15 +1260,9 @@ void hardware_manager::single_rx_thread(
 
                 //if(first_packet)std::this_thread::sleep_for(std::chrono::nanoseconds(size_t(1.e9*current_settings->delay)));
 
-                if(first_packet){
-                    
-                    //noop
-                
-                }
-                
                 //receive command
                 num_rx_samps += rx_stream->recv(rx_buffer + num_rx_samps, samples_remaining, metadata_rx,timeout);//,0.1f
-                
+                timeout = 0.01f;
                 //interpret errors
                 if(get_rx_errors(&metadata_rx, true)>0)errors++;
                 
@@ -1323,7 +1279,6 @@ void hardware_manager::single_rx_thread(
                     metadata_rx.has_time_spec = current_settings->burst_off == 0? false:true;
                     metadata_rx.time_spec = uhd::time_spec_t(current_settings->burst_off);
                     first_packet = false;
-                    timeout = 0.01;
                 }
                 if(++frag_count>1){
                     std::cout<< "F" << frag_count<<std::flush;
@@ -1350,6 +1305,7 @@ void hardware_manager::single_rx_thread(
             if(current_settings->samples < acc_samp + current_settings->buffer_len) metadata_rx.end_of_burst = true;
             
             //wrap the buffer
+
             warapped_buffer.buffer = rx_buffer;
             warapped_buffer.packet_number = counter;
             warapped_buffer.length = num_rx_samps;

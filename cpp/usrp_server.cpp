@@ -69,10 +69,10 @@ int main(int argc, char **argv){
     //look for USER
     Async_server async(true);
 	
-	BOOST_LOG_TRIVIAL(info) << "Main loop";
+	
 	
     while(active){
-        std::cout<<"\t\t\tNEW LOOP IN MAIN"<<std::endl;
+        BOOST_LOG_TRIVIAL(info) << "Main loop";
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         if(async.connected()){
             usrp_param global_parameters;
@@ -97,7 +97,6 @@ int main(int argc, char **argv){
                     boost::this_thread::sleep_for(boost::chrono::milliseconds{500});
                     //if (async.chk_new_command())done = thread_manager.stop(true); //this is not working
                 }
-                print_debug("sending response message...",0);
                 json_res = new std::string(server_ack("EOM: end of measurement"));
                 async.send_async(json_res);
             }

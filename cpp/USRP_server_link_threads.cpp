@@ -238,6 +238,8 @@ void TXRX::start(usrp_param* global_param){
     int rx_threads = 0;
     int tx_threads = 0;
     
+    hardware->main_usrp->set_time_unknown_pps(uhd::time_spec_t(0.0));
+    
     //current_tx_param is nullptr if no param struct in global_param has TX mode
     if(global_param->A_TXRX.mode!=OFF){
         if(not hardware->check_A_tx_status()){
@@ -426,6 +428,8 @@ bool TXRX::stop(bool force){
     if(tcp_streaming)if (TCP_streamer->NEED_RECONNECT == true)force = true;
     
     bool status = true;
+    
+    
     if(A_current_rx_param or B_current_rx_param){
         
         bool data_output_status;
@@ -479,7 +483,12 @@ bool TXRX::stop(bool force){
         
     }
     
+    
     if(A_current_tx_param or B_current_tx_param){
+    	if(diagnostic){
+			print_debug("TX_status ",TX_status);
+			print_debug("hardware->check_tx_status() ",hardware->check_tx_status());
+		}
         if((not TX_status and not hardware->check_tx_status()) or force){
         
             //close the rx interface thread
