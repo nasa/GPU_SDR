@@ -6,13 +6,18 @@
 #include <uhd/types/metadata.hpp>
 #include <chrono>
 
+//! @brief Set the htread name reported in the logging.
+void set_this_thread_name(std::string thread_name);
+
 //print on screen error description
 void interptet_rx_error(uhd::rx_metadata_t::error_code_t error);
 
 int get_rx_errors(uhd::rx_metadata_t *metadata, bool verbose = false);
 
+//! @brief Interpret tx errors from the async usrp comunication.
 int get_tx_error(uhd::async_metadata_t *async_md, bool verbose = false);
 
+//! @brief Print parameters on the terminal in a readable way.
 void print_params(usrp_param my_parameter);
 
 class stop_watch{
@@ -53,6 +58,10 @@ class stop_watch{
         bool state = false;   
         
 };
+
+//! @brief initialize the logger for the server.
+//! Creates or access the folder logs. each time the server starts, creates an enumerated log file.
+void init_logger();
 
 #endif
 

@@ -1,5 +1,12 @@
 #include "USRP_server_diagnostic.hpp"
 
+//Set the htread name reported in the logging.
+void set_this_thread_name(std::string thread_name){
+
+    boost::log::core::get()->add_thread_attribute("ThreadName",
+            boost::log::attributes::constant< std::string >(thread_name));
+            
+}
 
 //print on screen error description
 void interptet_rx_error(uhd::rx_metadata_t::error_code_t error){
@@ -382,6 +389,45 @@ double stop_watch::get_time(){
     boost::chrono::nanoseconds ns = boost::chrono::high_resolution_clock::now() - start_t;
     return 1e-9 * ns.count();
 }
-        
 
+// The formatting logic for the severity level
+template< typename CharT, typename TraitsT >
+inline std::basic_ostream< CharT, TraitsT >& operator<< (
+    std::basic_ostream< CharT, TraitsT >& strm, severity_level lvl)
+{
+    static const char* const str[] =
+    {
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL",
+        "TRACE"
+    };
+    if (static_cast< std::size_t >(lvl) < (sizeof(str) / sizeof(*str)))
+        strm << str[lvl];
+    else
+        strm << static_cast< int >(lvl);
+    return strm;
+}
+
+void init_logger(){
+    boost::log::register_simple_formatter_factory< boost::log::trivial::severity_level, char >("Severity");
+    logging::add_file_log
+    (
+        keywords::file_name = "logs/%Y%m%d_%H%M%S_%5N.log",
+        keywords::rotation_size = 10 * 1024 * 1024,
+        keywords::auto_flush = true,
+        keywords::time_based_rotation = sinks::file::rotation_at_time_point(0, 0, 0),
+        keywords::format = "%TimeStamp%;%ThreadName%;%Severity%;%Message%"
+    );
+    logging::core::get()->add_global_attribute("ThreadName", boost::log::attributes::constant<std::string> ("Unknown"));
+
+    /*
+    logging::core::get()->set_filter
+    (
+        logging::trivial::severity >= logging::trivial::info
+    );
+    */
+}
 

@@ -1,6 +1,6 @@
 CC=g++
 
-CC_DEF_FLAGS =-std=c++11 -O2
+CC_DEF_FLAGS =-std=c++11 -O2 -DBOOST_LOG_DYN_LINK
 CC+=$(CC_DEF_FLAGS)
 
 SRC_DIR := cpp
@@ -11,7 +11,7 @@ HDF5_PATH_INC = /usr/include/hdf5/serial
 
 CINCLUDE =-I$(HDF5_PATH_INC) -I$(HPP_DIR)
 CLINK = -lz -lsz -ldl 
-CLINK += -lpthread -lboost_system -lboost_program_options -lboost_chrono -lboost_thread 
+CLINK += -lpthread -lboost_system -lboost_program_options -lboost_chrono -lboost_thread -lboost_log -lboost_log_setup
 
 CLINK += -luhd  
 CLINK += -lhdf5_hl_cpp -lhdf5_cpp -lhdf5_serial 
