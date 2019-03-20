@@ -5,5 +5,8 @@
 *.iml
 server
 /data
+/scripts/data/
+scripts/data/
 /lib_docs
+/logs
 /server_docs/build

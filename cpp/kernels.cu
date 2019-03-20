@@ -712,6 +712,8 @@ void _cudaGetErrorEnum(cublasStatus_t error)
     }
 }
 #endif
+
+// Used in the VNA as lock-in decimator.
 void cublas_decim(
         float2* __restrict__ input,
         float2* __restrict__ output,

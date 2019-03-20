@@ -110,12 +110,15 @@ def measure_line_delay(rate, LO_freq, RF_frontend, USRP_num = 0, tx_gain = 0, rx
 
     # This measure take the undecimated data rate that will most probably exceed the LAN/Disk rate.
     # Using more than few seconds could cause errors.
-    measure_t = 5
+    measure_t = 20
     n_points = (rate * measure_t)
     number_of_samples = (rate * measure_t)
 
     start_f = int(np.floor(rate/2))-1
     last_f = -start_f
+
+    # This is not lock-in decimation. Lock-in decimation only happens if decimation parm == 1.
+    gpu_decim = 200
 
     delay_command = global_parameter()
 
@@ -138,7 +141,7 @@ def measure_line_delay(rate, LO_freq, RF_frontend, USRP_num = 0, tx_gain = 0, rx
     delay_command.set(RX_frontend, "mode", "RX")
     delay_command.set(RX_frontend, "buffer_len", 1e6)
     delay_command.set(RX_frontend, "gain", rx_gain)
-    delay_command.set(RX_frontend, "delay", 1+900e-9)
+    delay_command.set(RX_frontend, "delay", 1)
     delay_command.set(RX_frontend, "samples", number_of_samples)
     delay_command.set(RX_frontend, "rate", rate)
     delay_command.set(RX_frontend, "bw", 2 * rate)
@@ -149,7 +152,7 @@ def measure_line_delay(rate, LO_freq, RF_frontend, USRP_num = 0, tx_gain = 0, rx
     delay_command.set(RX_frontend, "swipe_s", [n_points])
     delay_command.set(RX_frontend, "chirp_t", [measure_t])
     delay_command.set(RX_frontend, "rf", LO_freq)
-    delay_command.set(RX_frontend, "decim", 0)
+    delay_command.set(RX_frontend, "decim", gpu_decim)
 
     # send command
 
@@ -168,13 +171,24 @@ def measure_line_delay(rate, LO_freq, RF_frontend, USRP_num = 0, tx_gain = 0, rx
         parameters=delay_command,
         timeout=None,
         filename=output_filename,
-        dpc_expected=number_of_samples,
+        dpc_expected=number_of_samples/gpu_decim,
         meas_type = "delay", **kwargs
     )
 
     print_debug("Line delay acquisition terminated.")
 
     return output_filename
+
+def write_delay_to_file(filename, delay):
+    '''
+    Wrapper around h5py functions to write the delay on file.
+
+    :param filename: Name of the file containing the delay data.
+    :param delay: Delay from analysis function.
+    :return: Nothing.
+    '''
+
+    
 
 def analyze_line_delay(filename, diagnostic_plots = False):
     '''
@@ -187,9 +201,11 @@ def analyze_line_delay(filename, diagnostic_plots = False):
 
     print_debug("Analyzing line delay info form file: \'%s\' ..."%(filename))
 
-    info = get_rx_info(filename, ant=None)
-    decimation = 1000
+
+    decimation = 10
     zz = signal.decimate(openH5file(filename)[0], decimation, ftype="fir")
+    info = get_rx_info(filename, ant=None)
+    decimation *= info['decim']
     freq, Pxx = signal.welch(zz.real, nperseg=len(zz), fs=int(info['rate'] / float(decimation)), detrend='linear',
                              scaling='density')
 
@@ -198,6 +214,7 @@ def analyze_line_delay(filename, diagnostic_plots = False):
         pl.plot(zz.real, label="real")
         pl.plot(zz.imag, label="imag")
         pl.plot(np.abs(zz), label="abs")
+        pl.title("Delay acquisition diagnostic.\n total decimation: %d"%decimation)
         pl.xlabel("Samples")
         pl.ylabel("ADCu")
         pl.legend()
@@ -205,6 +222,7 @@ def analyze_line_delay(filename, diagnostic_plots = False):
         pl.savefig("Delay_diagnostic.png")
 
         pl.figure()
+        pl.title("Delay acquisition diagnostic.")
         Pxx = 20 * np.log10(Pxx)
         pl.xlabel("Frequency [Hz]")
         pl.ylabel("ADC dB")
@@ -213,8 +231,6 @@ def analyze_line_delay(filename, diagnostic_plots = False):
         pl.grid()
         pl.savefig("Delay_diagnostic_FFT.png")
     
-
-
 
     coeff = float(info['chirp_t'][0]) / float(np.abs(info['freq'][0] - info['chirp_f'][0]))
 

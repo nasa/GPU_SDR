@@ -1192,11 +1192,9 @@ void hardware_manager::single_rx_thread(
     if(current_settings->burst_off == 0){
         stream_cmd.stream_mode = uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS ;
         stream_cmd.num_samps = 0;
-        std::cout<<"stream command is: "<<"STREAM_MODE_START_CONTINUOUS"<<std::endl;
     }else{
         stream_cmd.stream_mode = uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE;
         stream_cmd.num_samps = current_settings->buffer_len;
-        std::cout<<"stream command is: "<<"STREAM_MODE_NUM_SAMPS_AND_MORE"<<std::endl;
     }
     stream_cmd.stream_now = current_settings->delay == 0 ? true:false;
 
@@ -1214,7 +1212,7 @@ void hardware_manager::single_rx_thread(
     //main_usrp->set_time_now(0.);
     //sync_time();
     
-    //issue the stream command
+    //issue the stream command (ignoring the code above @todo)
     stream_cmd.stream_now = false;
     stream_cmd.num_samps = current_settings->buffer_len;
     stream_cmd.time_spec = uhd::time_spec_t(1.0+current_settings->delay);

@@ -226,7 +226,8 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
 
     spc_acc = 0
 
-    # this variable disciminate between a timeout condition generated on purpose to wait the queue and one reached because of an error
+    # this variable discriminate between a timeout condition generated
+    # on purpose to wait the queue and one reached because of an error
     legit_off = False
 
     if filename == None:
@@ -236,15 +237,15 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
     H5_file_pointer = create_h5_file(str(filename))
     Param_to_H5(H5_file_pointer, parameters, **kwargs)
     CLIENT_STATUS["measure_running_now"] = True
-    if dpc_expected != None:
+    if dpc_expected is not None:
         widgets = [progressbar.Percentage(), progressbar.Bar()]
-        bar = progressbar.ProgressBar(widgets=widgets, max_value=dpc_expected).start()
+        bar = progressbar.ProgressBar(widgets=widgets, max_value=dpc_expected)
     else:
         widgets = [progressbar.FormatLabel(
             '\033[7;1;32mReceived: %(value)d samples per channel in: %(elapsed)s\033[0m')]
         bar = progressbar.ProgressBar(widgets=widgets)
     data_warning = True
-
+    bar.start()
     while (not acquisition_end_flag):
         try:
             meta_data, data = USRP_data_queue.get(timeout=0.1)
@@ -265,7 +266,9 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
 
                 spc_acc += meta_data['length'] / meta_data['channels']
                 try:
+                    #print "max expected: %d total received %d"%(dpc_expected, spc_acc)
                     bar.update(spc_acc)
+
                 except:
                     if data_warning:
                         bar.update(dpc_expected)
@@ -291,12 +294,14 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
             bar.update(spc_acc)
         except:
             if (more_sample_than_expected_WARNING): print_debug("Sync RX received more data than expected.")
-        bar.finish()
+
         EOM_cond.acquire()
         if END_OF_MEASURE:
             timeout = .5
             legit_off = True
         EOM_cond.release()
+
+    bar.finish()
 
     EOM_cond.acquire()
     END_OF_MEASURE = False

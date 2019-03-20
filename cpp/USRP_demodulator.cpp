@@ -42,7 +42,7 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
     int in_out_len = 0;
     
     //if there is a valid decimation enable the decimator
-    decimator_active = (parameters->decim > 1)?true:false;
+    decimator_active = (parameters->decim > 0)?true:false;
     //print_debug("decimator is active?",decimator_active);
     //initialize the memory pointer for eventual spare buffers
     spare_size = 0;
@@ -159,9 +159,9 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
             if(decimator_active){
                 
                 //set the decimator parameter
-                ppt = h_parameter.length;
-                print_debug("PPT is: ",ppt);
-                print_debug("Buffer_len is: ",parameters->buffer_len);
+                ppt = h_parameter.length * parameters->decim;
+
+                if(parameters->decim>1)print_warning("A decimation factor >1 requested in chirp demodulation. There is interpreted as ppt*decim");
                 
                 vna_helper = new VNA_decimator_helper(ppt, parameters->buffer_len);
                 
