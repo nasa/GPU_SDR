@@ -106,13 +106,13 @@ void TXRX::set(usrp_param* global_param){
                 break;
                 
             case RX:
-                std::cout<<"Allocating RF frontend "<<(char)(i<2?'A':'B')<<" RX memory buffer: "<< (modes[i]->buffer_len * sizeof(float2))/(1024.*1024.)<< " MB per buffer..."<<std::flush;
+                std::cout<<"Allocating RF frontend "<<(char)(i<2?'A':'B')<<" RX memory buffer: "<< (modes[i]->buffer_len * sizeof(float2))/(1024.*1024.)<< " MB per buffer..."<<std::endl;
                 if(i<2){
                     if(A_rx_buffer_len != modes[i]->buffer_len or not A_rx_memory){
                         if(A_rx_memory)A_rx_memory->close();
                         A_rx_memory = new preallocator<float2>(A_rx_buffer_len,RX_QUEUE_LENGTH,this_thread_n);
                     }else{
-                        std::cout<<"(already allocated).."<<std::flush;
+                        std::cout<<"(already allocated).."<<std::endl;
                     }
                     A_rx_buffer_len = modes[i]->buffer_len;
                     
@@ -127,7 +127,7 @@ void TXRX::set(usrp_param* global_param){
                         if(B_rx_memory)B_rx_memory->close();
                         B_rx_memory = new preallocator<float2>(B_rx_buffer_len,RX_QUEUE_LENGTH,this_thread_n);
                     }else{
-                        std::cout<<"(already allocated).."<<std::flush;
+                        std::cout<<"(already allocated).."<<std::endl;
                     }
                     B_rx_buffer_len = modes[i]->buffer_len;
                     
@@ -137,17 +137,15 @@ void TXRX::set(usrp_param* global_param){
                     B_current_rx_param = modes[i];        
                 }
                     
-                std::cout<<"\tdone."<<std::endl;
                 rx_thread_n.push_back(this_thread_n);
                 thread_counter +=1;
                 
                 if ((output_memory_size!=modes[i]->buffer_len or not rx_output_memory) or modes[i]->buffer_len>output_memory_size){
-                    std::cout<<"Allocating RX output memory buffer: "<< (modes[i]->buffer_len * sizeof(float2))/(1024.*1024.)<< " MB per buffer..."<<std::flush;
-                    if(modes[i]->buffer_len>output_memory_size and output_memory_size>0)std::cout<<" (updating buffer size)"<<std::flush;
+                    std::cout<<"Allocating RX output memory buffer: "<< (modes[i]->buffer_len * sizeof(float2))/(1024.*1024.)<< " MB per buffer..."<<std::endl;
+                    if(modes[i]->buffer_len>output_memory_size and output_memory_size>0)std::cout<<" (updating buffer size)"<<std::endl;
                     if(rx_output_memory) rx_output_memory->close();
                     output_memory_size = modes[i]->buffer_len;
                     rx_output_memory = new preallocator<float2>(output_memory_size,RX_QUEUE_LENGTH);
-                    std::cout<<"\tdone."<<std::endl;
                 }else{
                     std::cout<<" RX output memory buffer requirements already satisfaid."<<std::endl;
                 }

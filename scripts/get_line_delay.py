@@ -21,13 +21,18 @@ def run(rate,freq,front_end):
     :return: None
     '''
 
-    if not u.Connect():
-        u.print_error("Cannot find the GPU server!")
-        return
+    filename = u.measure_line_delay(rate, freq, front_end, USRP_num=0, tx_gain=0, rx_gain=0, output_filename=None, compensate = True)
 
-    filename = u.measure_line_delay(rate, freq, front_end, USRP_num=0, tx_gain=0, rx_gain=0, output_filename=None)
+    delay = u.analyze_line_delay(filename, True)
 
-    u.analyze_line_delay(filename, True)
+    try:
+        delay += u.LINE_DELAY[str(int(rate/1e6))]*1e-9
+    except KeyError:
+        pass
+
+    u.write_delay_to_file(filename, delay)
+
+    u.load_delay_from_file(filename)
 
 
 if __name__ == "__main__":
@@ -48,4 +53,10 @@ if __name__ == "__main__":
 
     os.chdir(args.folder)
 
-    run(rate = args.rate*1e6, freq = args.freq*1e6, front_end = args.frontend)
+    if not u.Connect():
+        u.print_error("Cannot find the GPU server!")
+        exit()
+
+    while True:
+        run(rate = args.rate*1e6, freq = args.freq*1e6, front_end = args.frontend)
+        raw_input("Press to measure again...")

@@ -43,6 +43,7 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
     
     //if there is a valid decimation enable the decimator
     decimator_active = (parameters->decim > 0)?true:false;
+    if(decimator_active)std::cout<<"Decimator is active"<<std::endl;
     //print_debug("decimator is active?",decimator_active);
     //initialize the memory pointer for eventual spare buffers
     spare_size = 0;

@@ -76,11 +76,9 @@ def get_rx_info(filename, ant=None):
     '''
     Retrive RX information from file.
 
-    Arguments:
-        - optional ant string to specify receiver. Default is the first found.
+    :param ant (optional) string to specify receiver. Default is the first found.
+    :return Parameter dictionary
 
-    Return:
-        Parameter dictionary
     '''
     filename = format_filename(filename)
     parameters = global_parameter()
@@ -91,6 +89,8 @@ def get_rx_info(filename, ant=None):
         ant = str(ant)
 
     return parameters.parameters[ant]
+
+
 
 
 def openH5file(filename, ch_list=None, start_sample=None, last_sample=None, usrp_number=None, front_end=None,
@@ -628,7 +628,7 @@ class global_parameter(object):
         else:
             return False
 
-        print_debug("check function is not complete yet. In case something goes unexpected, double check parameters.")
+        #print_debug("check function is not complete yet. In case something goes unexpected, double check parameters.")
         return True
 
     def from_dict(self, ant, dictionary):
@@ -920,8 +920,6 @@ def Param_to_H5(H5fp, parameters_class, **kwargs):
                 data_len = 0
 
             data_shape_max = (n_chan, data_len)
-            data_shape = (0, 0)
-            print "dataset initial length is %d" % data_len
             rx_group.create_dataset("data", data_shape_max, dtype=np.complex64, maxshape=(None, None),
                                     chunks=True)  # , compression = H5PY_compression
             rx_group.create_dataset("errors", (0, 0), dtype=np.dtype(np.int64),
