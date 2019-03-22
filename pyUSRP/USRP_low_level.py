@@ -45,6 +45,9 @@ parallel_backend = 'multiprocessing'
 # usrp output power at 0 tx gain
 USRP_power = -6.15
 
+# USRP calibration for float units in Vrms
+USRP_calibration = 112.069e-3
+
 # Colors used for plotting
 COLORS = ['black', 'red', 'green', 'blue', 'violet', 'brown', 'purple']
 
@@ -184,3 +187,31 @@ def get_timestamp():
         string containing the timestamp.
     '''
     return str(datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
+
+
+def vrms2dbm(vp):
+    """
+    Converts a scalar or a numpy array from volts RMS to dbm assuming there is an impedence of 50 Ohm
+
+    Arguments:
+        - vp: scalar or numpy array containig values in volt RMS to be converted in dmb
+
+    Returns:
+        - scalar or numpy array containing the result
+
+    """
+    return 10. * np.log10(20. * (vp) ** 2.)
+
+
+def dbm2vrms(dbm):
+    """
+    Converts a scalar or a numpy array from dbm to volts RMS assuming there is an impedence of 50 Ohm
+
+    Arguments:
+        - vp: scalar or numpy array containig values in volt RMS to be converted in dmb
+
+    Returns:
+        - scalar or numpy array containing the result
+
+    """
+    return np.sqrt((10. ** (dbm / 10.)) / 20.)

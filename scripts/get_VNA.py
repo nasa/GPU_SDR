@@ -72,7 +72,7 @@ if __name__ == "__main__":
     filenames = []
     while cmd != "S":
         f = run(rate = args.rate*1e6, freq = args.freq*1e6, front_end = args.frontend, f0 = args.f0*1e6, f1 = args.f1*1e6, lapse = args.time, points = args.points)
-        cmd = raw_input("Press enter to measure again or type S to stop and analyze")
+        cmd = raw_input("Press enter to measure again or type S to stop.")
         filenames.append(f)
 
-    # Data analysis and plotting
+    # Data analysis and plotting will be in an other python script

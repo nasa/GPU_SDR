@@ -235,10 +235,12 @@ def VNA_analysis(filename):
     freq_axis = np.asarray([],dtype = np.float64)
     S21_axis = np.asarray([],dtype = np.complex128)
     length = []
+    calibration = []
     fr = 0
     for single_frontend in info:
         iterations = int((single_frontend['samples']/single_frontend['rate'])/single_frontend['chirp_t'][0])
         print_debug("Frontend \'%s\' has %d VNA iterations" % (front_ends[fr], iterations))
+        calibration.append( (1./single_frontend['ampl'][0])*USRP_calibration/10**((USRP_power + single_frontend['gain'])/20.) )
         if single_frontend['decim'] == 1:
             # Lock-in decimated case -> direct map.
             freq_axis_tmp = np.linspace(single_frontend['freq'][0],single_frontend['chirp_f'][0], single_frontend['swipe_s'][0],
@@ -291,14 +293,70 @@ def VNA_analysis(filename):
         vna_grp = f.create_group("VNA")
 
     vna_grp.attrs.create("scan_lengths", length)
-
+    vna_grp.attrs.create("calibration", calibration)
+    
     vna_grp.create_dataset("frequency", data = freq_axis, dtype=np.float64)
     vna_grp.create_dataset("S21", data = S21_axis, dtype=np.complex128)
 
     f.close()
 
     print_debug("Analysis of file \'%s\' concluded."%filename)
-    
+
+def is_VNA_analyzed(filename):
+    '''
+    Check if the VNA file has been preanalyzed. Basically checks the presence of the VNA group inside the file.
+    :param filename: The file to check.
+    :return: boolean results of the check.
+    '''
+    filename = format_filename(filename)
+    f = bound_open(filename)
+    try:
+        grp = f['VNA']
+        if grp['frequency'] is not None: pass
+        if grp['S21'] is not None: pass
+        return True
+    except KeyError:
+        return False
+
+def get_VNA_data(filename):
+    '''
+    Get the frequency and S21 data in a preanalyzed vna file.
+    :param filename: the name of the HDF5 file containing the data.
+    :return: frequency and S21 axis.
+    '''
+    if is_VNA_analyzed(filename):
+        filename = format_filename(filename)
+        f = bound_open(filename)
+    else:
+        err_msg = "Cannot get VNA data from file \'%s\' as it is not analyzed." % filename
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    return np.asarray(f['VNA']['frequency']), np.asarray(f['VNA']['S21'])
+
+
+def plot_VNA(filenames, backend = "matplotlib", **kwargs):
+    '''
+    Plot the VNA data from various files.
+    :param filenames: list of strings containing the filenames to be plotted.
+    :param backend: "matplotlib", "plotly" or "bokeh" are supported.
+    :param kwargs: figsize=(xx,yy) for bokeh and matplotlib backends; Comments = ["..","..",".."] fore commenting each
+           file in the legend; html only to return a html text instead of nothing in case of bokeh or plotly backend.
+    '''
+
+    filenames = to_list_of_str(filenames)
+    freq_axes = []
+    S21_axes = []
+    for filename in filenames:
+        freq_tmp, S21_tmp = get_VNA_data(filename)
+
+        freq_axes.append(freq_tmp)
+        S21_axes.append(S21_tmp)
+
+    del S21_tmp
+    del freq_tmp
+
+
 def Get_noise(tones, measure_t, rate, decimation = None, powers = None, RF = None, filename = None, Front_end = None, Device = None):
     '''
     Perform a noise acquisition using fixed tone technique.
