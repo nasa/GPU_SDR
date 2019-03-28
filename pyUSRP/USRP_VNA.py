@@ -100,9 +100,17 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
     
     if not Device_chk(Device):
         return ""
-        
+
+    if Front_end is None:
+        Front_end = 'A'
+
     if not Front_end_chk(Front_end):
-        return ""
+        err_msg = "Cannot detect front_end: "+str(Front_end)
+        print_error(err_msg)
+        raise ValueError(err_msg)
+    else:
+        TX_frontend = Front_end+"_TXRX"
+        RX_frontend = Front_end+"_RX2"
         
     if Multitone_compensation == None:
         Amplitude = 1.
@@ -142,38 +150,38 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
         
     vna_command = global_parameter()
     
-    vna_command.set("A_TXRX","mode", "TX")
-    vna_command.set("A_TXRX","buffer_len", 1e6)
-    vna_command.set("A_TXRX","gain", tx_gain)
-    vna_command.set("A_TXRX","delay", 1)
-    vna_command.set("A_TXRX","samples", number_of_samples)
-    vna_command.set("A_TXRX","rate", Rate)
-    vna_command.set("A_TXRX","bw", 2*Rate)
+    vna_command.set(TX_frontend,"mode", "TX")
+    vna_command.set(TX_frontend,"buffer_len", 1e6)
+    vna_command.set(TX_frontend,"gain", tx_gain)
+    vna_command.set(TX_frontend,"delay", 1)
+    vna_command.set(TX_frontend,"samples", number_of_samples)
+    vna_command.set(TX_frontend,"rate", Rate)
+    vna_command.set(TX_frontend,"bw", 2*Rate)
     
-    vna_command.set("A_TXRX","wave_type", ["CHIRP"])
-    vna_command.set("A_TXRX","ampl", [Amplitude])
-    vna_command.set("A_TXRX","freq", [start_f])
-    vna_command.set("A_TXRX","chirp_f", [last_f])
-    vna_command.set("A_TXRX","swipe_s", [n_points])
-    vna_command.set("A_TXRX","chirp_t", [measure_t])
-    vna_command.set("A_TXRX","rf", RF)
+    vna_command.set(TX_frontend,"wave_type", ["CHIRP"])
+    vna_command.set(TX_frontend,"ampl", [Amplitude])
+    vna_command.set(TX_frontend,"freq", [start_f])
+    vna_command.set(TX_frontend,"chirp_f", [last_f])
+    vna_command.set(TX_frontend,"swipe_s", [n_points])
+    vna_command.set(TX_frontend,"chirp_t", [measure_t])
+    vna_command.set(TX_frontend,"rf", RF)
     
-    vna_command.set("A_RX2","mode", "RX")
-    vna_command.set("A_RX2","buffer_len", 1e6)
-    vna_command.set("A_RX2","gain", 0)
-    vna_command.set("A_RX2","delay", 1+delay)
-    vna_command.set("A_RX2","samples", number_of_samples)
-    vna_command.set("A_RX2","rate", Rate)
-    vna_command.set("A_RX2","bw", 2*Rate)
+    vna_command.set(RX_frontend,"mode", "RX")
+    vna_command.set(RX_frontend,"buffer_len", 1e6)
+    vna_command.set(RX_frontend,"gain", 0)
+    vna_command.set(RX_frontend,"delay", 1+delay)
+    vna_command.set(RX_frontend,"samples", number_of_samples)
+    vna_command.set(RX_frontend,"rate", Rate)
+    vna_command.set(RX_frontend,"bw", 2*Rate)
     
-    vna_command.set("A_RX2","wave_type", ["CHIRP"])
-    vna_command.set("A_RX2","ampl", [Amplitude])
-    vna_command.set("A_RX2","freq", [start_f])
-    vna_command.set("A_RX2","chirp_f", [last_f])
-    vna_command.set("A_RX2","swipe_s", [n_points])
-    vna_command.set("A_RX2","chirp_t", [measure_t])
-    vna_command.set("A_RX2","rf", RF)
-    vna_command.set("A_RX2","decim", decimation) # THIS only activate the decimation.
+    vna_command.set(RX_frontend,"wave_type", ["CHIRP"])
+    vna_command.set(RX_frontend,"ampl", [Amplitude])
+    vna_command.set(RX_frontend,"freq", [start_f])
+    vna_command.set(RX_frontend,"chirp_f", [last_f])
+    vna_command.set(RX_frontend,"swipe_s", [n_points])
+    vna_command.set(RX_frontend,"chirp_t", [measure_t])
+    vna_command.set(RX_frontend,"rf", RF)
+    vna_command.set(RX_frontend,"decim", decimation) # THIS only activate the decimation.
     
     if vna_command.self_check():
         if(verbose):
@@ -203,15 +211,17 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
 
     return output_filename
 
-def VNA_analysis(filename):
+def VNA_analysis(filename, usrp_number = 0):
     '''
     Open a H5 file containing data collected with the function single_VNA() and analyze them as a VNA scan.
     Write the results in a corresponding VNA# group in the root of the H5 file.
 
     :param filename: string containing the name of the H5 file.
+    :param usrp_number: usrp server number.
 
     '''
 
+    usrp_number = int(usrp_number)
 
     try:
         filename = format_filename(filename)
@@ -219,7 +229,7 @@ def VNA_analysis(filename):
         print_error("Cannot interpret filename while opening a H5 file in Single_VNA_analysis function")
         raise ValueError("Cannot interpret filename while opening a H5 file in Single_VNA_analysis function")
 
-    print_debug("Anlyzing VNA file \'%s\'..."%filename)
+    print("Anlyzing VNA file \'%s\'..."%filename)
 
     parameters = global_parameter()
     parameters.retrive_prop_from_file(filename)
@@ -286,11 +296,11 @@ def VNA_analysis(filename):
         raise ValueError("Cannot open "+str(filename)+" file in Single_VNA_analysis function: "+ str(msg))
 
     try:
-        vna_grp = f.create_group("VNA")
+        vna_grp = f.create_group("VNA_%d"%(usrp_number))
     except ValueError:
         print_warning("Overwriting VNA group")
-        del f["VNA"]
-        vna_grp = f.create_group("VNA")
+        del f["VNA_%d"%(usrp_number)]
+        vna_grp = f.create_group("VNA_%d"%(usrp_number))
 
     vna_grp.attrs.create("scan_lengths", length)
     vna_grp.attrs.create("calibration", calibration)
@@ -302,27 +312,35 @@ def VNA_analysis(filename):
 
     print_debug("Analysis of file \'%s\' concluded."%filename)
 
-def is_VNA_analyzed(filename):
+def is_VNA_analyzed(filename, usrp_number = 0):
     '''
     Check if the VNA file has been preanalyzed. Basically checks the presence of the VNA group inside the file.
     :param filename: The file to check.
+    :param usrp_number: usrp server number.
     :return: boolean results of the check.
     '''
     filename = format_filename(filename)
     f = bound_open(filename)
     try:
-        grp = f['VNA']
+        grp = f["VNA_%d"%(usrp_number)]
         if grp['frequency'] is not None: pass
         if grp['S21'] is not None: pass
-        return True
+        ret = True
     except KeyError:
-        return False
+        ret = False
+    f.close()
+    return ret
 
-def get_VNA_data(filename):
+def get_VNA_data(filename, calibrated = True, usrp_number = 0):
     '''
     Get the frequency and S21 data in a preanalyzed vna file.
     :param filename: the name of the HDF5 file containing the data.
+    :param calibrated: if True returns the S21 data in linear ratio units (Vrms(in)/Vrms(out)). if False returns S21 in ADC units.
+    :param usrp_number: usrp server number.
     :return: frequency and S21 axis.
+
+    TO DO:
+        - Calibrarion for frontend A could be different from frontend B. This could lead to a wrong calibration.
     '''
     if is_VNA_analyzed(filename):
         filename = format_filename(filename)
@@ -331,23 +349,82 @@ def get_VNA_data(filename):
         err_msg = "Cannot get VNA data from file \'%s\' as it is not analyzed." % filename
         print_error(err_msg)
         raise ValueError(err_msg)
+    if not calibrated:
+        ret =  np.asarray(f["VNA_%d"%(usrp_number)]['frequency']), np.asarray(f["VNA_%d"%(usrp_number)]['S21'])
+    else:
+        ret =  np.asarray(f["VNA_%d"%(usrp_number)]['frequency']), np.asarray(f["VNA_%d"%(usrp_number)]['S21']* f['VNA_%d'%(usrp_number)].attrs.get('calibration')[0])
 
-    return np.asarray(f['VNA']['frequency']), np.asarray(f['VNA']['S21'])
+    f.close()
+    return ret
 
 
-def plot_VNA(filenames, backend = "matplotlib", **kwargs):
+def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_phase = True, **kwargs):
     '''
     Plot the VNA data from various files.
     :param filenames: list of strings containing the filenames to be plotted.
-    :param backend: "matplotlib", "plotly" or "bokeh" are supported.
-    :param kwargs: figsize=(xx,yy) for bokeh and matplotlib backends; Comments = ["..","..",".."] fore commenting each
-           file in the legend; html only to return a html text instead of nothing in case of bokeh or plotly backend.
+    :param backend: "matplotlib", "plotly" are supported.
+    :param output_filename: filename of the output figure without extension. Default is VNA(_compare)_timestamp.xxx.
+    :param unwrap_phase: if False the angle of S21 is not unwrapped.
+    :param kwargs:
+        - figsize=(xx,yy) inches for matplotlib backends.
+        - add_info = ["..","..",".."] fore commenting each file in the legend.
+        - html only to return a html text instead of nothing in case of plotly backend.
+        - title is a string containing the title.
+        - att: external attenuation: changes the label in the plot from readout power to on-chip power if given.
+        - auto_open: for plotly backend. If True opens the plot in a browser. Default is True.
+
+   :return The filename of the file just created. if kwargs['html'] is True returns the html of the file instead.
     '''
 
+    try:
+        html_output = kwargs['html']
+    except KeyError:
+        html_output = False
+
+    try:
+        att = kwargs['att']
+    except KeyError:
+        att = None
+
+    try:
+        auto_open = kwargs['auto_open']
+    except KeyError:
+        auto_open = True
+
+    try:
+        fig_size = kwargs['figsize']
+    except KeyError:
+        fig_size = None
+
     filenames = to_list_of_str(filenames)
+
+    try:
+        add_info_labels = kwargs['add_info']
+        if len(add_info_labels) != len(filenames):
+            print_warning("Cannot add info labels. add_info has to be the same length of filenames")
+            add_info_labels = None
+    except KeyError:
+        add_info_labels = None
+
+    try:
+        title = kwargs['title']
+    except KeyError:
+        if len(filenames) == 1:
+            title = "VNA plot from file %s"%filenames[0]
+        else:
+            title = "VNA comparison plot"
+
+    if len(filenames) == 0:
+        err_msg = "File list empty, cannot plot VNA"
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
     freq_axes = []
     S21_axes = []
+    final_filename = ""
+
     for filename in filenames:
+        print("Plotting VNA from file \'%s\'"%filename)
         freq_tmp, S21_tmp = get_VNA_data(filename)
 
         freq_axes.append(freq_tmp)
@@ -356,23 +433,141 @@ def plot_VNA(filenames, backend = "matplotlib", **kwargs):
     del S21_tmp
     del freq_tmp
 
+    if output_filename is None:
+        output_filename = "VNA"
+        if len(filenames)>1:
+            output_filename+="_compare"
+        output_filename+="_"+get_timestamp()
 
-def Get_noise(tones, measure_t, rate, decimation = None, powers = None, RF = None, filename = None, Front_end = None, Device = None):
-    '''
-    Perform a noise acquisition using fixed tone technique.
-    
-    Arguments:
-        - tones: list of tones frequencies in Hz (absolute if RF is not given, relative to RF otherwise).
-        - measure_t: duration of the measure in seconds.
-        - decimation: the decimation factor to use for the acquisition. Default is maximum.
-        - powers: a list of linear power to use with each tone. Must be the same length of tones arg; will be normalized. Default is equally splitted power.
-        - RF: central up/down mixing frequency. Default is deducted by other arguments.
-        - filename: eventual filename. default is datetime.
-        - Front_end: the front end to be used on the USRP. default is A.
-        - Device: the on-server device number to use. default is 0.
-        
-    Returns:
-        - filename where the measure is or empty string if something went wrong.
-    '''
-    
-    
+    if backend == "matplotlib":
+        print_debug("Using matplotlib backend...")
+
+        fig, ax = pl.subplots(nrows=2, ncols=1, sharex=True)
+
+        if fig_size is None:
+            fig_size = (16, 10)
+
+        fig.set_size_inches(fig_size[0], fig_size[1])
+
+        fig.suptitle(title)
+
+        for i in range(len(filenames)):
+
+            mag = vrms2dbm(np.abs(S21_axes[i]))
+
+            if unwrap_phase:
+                phase = linear_phase(np.angle(S21_axes[i]))
+            else:
+                phase = np.angle(S21_axes[i])
+
+            label = filenames[i]
+            resolution = freq_axes[i][1] - freq_axes[i][0]
+
+            if resolution < 1e3:
+                label += "\nResolution %d Hz" % int(resolution)
+            else:
+                label += "\nResolution %.1f kHz" % (resolution/1e3)
+
+            readout_power = get_readout_power(filenames[i], 0)
+
+            if att is None:
+                label+="\nReadout power: %.2f dBm"%readout_power
+            else:
+                label += "\nOn-chip power: %.2f dBm"%(readout_power-att)
+
+            if add_info_labels is not None:
+                label += "\n"+str(add_info_labels[i])
+
+            color = get_color(i)
+
+            ax[0].plot(freq_axes[i], mag, color = color, label = label)
+            ax[1].plot(freq_axes[i], phase, color = color)
+
+        ax[0].set_ylabel("Magnitude [dB]")
+        ax[1].set_ylabel("Phase [Rad]")
+        ax[1].set_xlabel("Frequency [Hz]")
+
+        formatter0 = EngFormatter(unit='Hz')
+        ax[1].xaxis.set_major_formatter(formatter0)
+
+        ax[0].legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+        ax[0].grid()
+        ax[1].grid()
+        final_filename = output_filename+".png"
+        pl.savefig(final_filename, bbox_inches="tight")
+
+    elif backend == "plotly":
+
+        fig = tools.make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.003)
+
+        fig['layout'].update(title=title)
+        fig['layout']['xaxis1'].update(title='Frequency [Hz]')
+        fig['layout']['xaxis1'].update(exponentformat='SI')
+        fig['layout']['xaxis1'].update(ticksuffix='Hz')
+
+        fig['layout']['yaxis1'].update(title='Magnitude [dB]')
+        fig['layout']['yaxis2'].update(title='Phase [Rad]')
+
+        for i in range(len(filenames)):
+
+            color = get_color(i)
+
+            label = filenames[i]
+            resolution = freq_axes[i][1] - freq_axes[i][0]
+
+            if resolution < 1e3:
+                label += "<br>Resolution %d Hz" % int(resolution)
+            else:
+                label += "<br>Resolution %.1f kHz" % (resolution / 1e3)
+
+            readout_power = get_readout_power(filenames[i], 0)
+
+            if att is None:
+                label += "<br>Readout power: %.2f dBm" % readout_power
+            else:
+                label += "<br>On-chip power: %.2f dBm" % (readout_power - att)
+
+            if add_info_labels is not None:
+                label += "<br>" + str(add_info_labels[i])
+
+
+            mag = vrms2dbm(np.abs(S21_axes[i]))
+
+            if unwrap_phase:
+                phase = linear_phase(np.angle(S21_axes[i]))
+            else:
+                phase = np.angle(S21_axes[i])
+
+            traceM = go.Scattergl(
+                x=freq_axes[i],
+                y=mag,
+                name=label,
+                mode='lines',
+                line=dict(color=color),
+                legendgroup=filenames[i]
+            )
+
+            traceP = go.Scattergl(
+                x=freq_axes[i],
+                y=phase,
+                name="Phase",
+                mode='lines',
+                line=dict(color=color),
+                legendgroup=filenames[i],
+                showlegend=False
+            )
+
+            fig.append_trace(traceM, 1, 1)
+            fig.append_trace(traceP, 2, 1)
+
+        final_filename = output_filename + ".html"
+        plotly.offline.plot(fig, filename=final_filename + ".html", auto_open=auto_open)
+
+    else:
+        err_msg = "Backend \'%s\' is not implemented. Cannot plot VNA"%backend
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    return final_filename
+
+

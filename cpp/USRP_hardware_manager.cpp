@@ -7,8 +7,13 @@ auto start = std::chrono::system_clock::now();
 //! @todo TODO: the multi_usrp object has to be passed as argument to this initializer. Multiple usrp's will crash as the obj is not ts
 hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init, int usrp_number){
 
+	BOOST_LOG_TRIVIAL(info) << "Initializing hardware manager";
+	
+
     //software loop mode exclude the hardware
     sw_loop = sw_loop_init;
+    
+    if(sw_loop)BOOST_LOG_TRIVIAL(debug) << "Software loop enabled";
     
     //in any case a gpu is necessary
     cudaSetDevice(settings->GPU_device_index);
@@ -76,18 +81,29 @@ hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init,
     B_rx_stream = nullptr;
     B_tx_stream = nullptr;
 
-    main_usrp->set_time_now(0.);
+    if(not sw_loop)main_usrp->set_time_now(0.);
+    
+    BOOST_LOG_TRIVIAL(info) << "Hardware manager initilaized";
 }
 
 //! @brief This function set the USRP device with user parameters.
 //! It's really a wrappe raround the private methods apply(), set_streams() and check_tuning() of this class.
 //! @todo TODO catch exceptions and return a boolean
 bool hardware_manager::preset_usrp(usrp_param* requested_config){
+
+	if(not sw_loop){
+		BOOST_LOG_TRIVIAL(info) << "Presetting USRP";
+	}else{
+		BOOST_LOG_TRIVIAL(info) << "Presetting sw loop queue";
+	}
+
     apply(requested_config);
     set_streams();
     if(not sw_loop){
         check_tuning();
     }
+    
+    BOOST_LOG_TRIVIAL(info) << "Preset done";
     return true;
     
 }
@@ -145,6 +161,8 @@ void hardware_manager::start_tx(
     char front_end,                         //must be "A" or "B"
 preallocator<float2>* memory                //if the thread is transmitting a buffer that requires dynamical allocation than a pointer to  custo memory manager class has to be passed
 ){
+
+	BOOST_LOG_TRIVIAL(debug) << "Starting tx threads";
     bool tx_thread_operation;
     
     if(front_end=='A'){
@@ -200,6 +218,8 @@ preallocator<float2>* memory                //if the thread is transmitting a bu
         ss << "Cannot start TX thread, a tx thread associated with USRP "<< this_usrp_number <<" is already running";
         print_error(ss.str());
     }
+    
+    BOOST_LOG_TRIVIAL(debug) << "tx threads started";
 }
 
 //! @brief Start a receiver thread.
@@ -212,7 +232,7 @@ void hardware_manager::start_rx(
     char front_end //must be "A" or "B"
     
     ){
-    
+    BOOST_LOG_TRIVIAL(debug) << "Starting rx threads";
     bool rx_thread_operation;
     
     if(front_end=='A'){
@@ -265,6 +285,7 @@ void hardware_manager::start_rx(
         ss << "Cannot start RX thread, a rx threead associated with USRP "<< this_usrp_number <<" is already running";
         print_error(ss.str());
     }
+    BOOST_LOG_TRIVIAL(debug) << "rx threads started";
 }
 //! @brief Force close the tx uploading threads if active (thread safe)
 void hardware_manager::close_tx(){
@@ -316,6 +337,7 @@ void hardware_manager::close_rx(){
 //! Before closing the queue (as the queue used supports multiple consumers) the frontend operation MUST be terminated.
 int hardware_manager::clean_tx_queue(tx_queue* TX_queue, preallocator<float2>* memory){
 
+	BOOST_LOG_TRIVIAL(info) << "Cleaning tx queue";
     //temporary wrapper
     float2* buffer;
     
@@ -333,11 +355,14 @@ int hardware_manager::clean_tx_queue(tx_queue* TX_queue, preallocator<float2>* m
         ss << "TX queue cleaned of "<< counter <<"buffer(s)";
         print_warning(ss.str());
     } 
+    BOOST_LOG_TRIVIAL(info) << "tx queue cleaned of packets: "<< counter;
     return counter;
 }
 //! @brief close a RX queue object preventing memory leaks.
 //! Before closing the queue (as the queue used supports multiple consumers) the frontend operation MUST be terminated.
 int hardware_manager::clean_rx_queue(rx_queue* RX_queue, preallocator<float2>* memory){
+
+	BOOST_LOG_TRIVIAL(info) << "Cleaning rx queue";
 
     //temporary wrapper
     RX_wrapper warapped_buffer;
@@ -356,12 +381,13 @@ int hardware_manager::clean_rx_queue(rx_queue* RX_queue, preallocator<float2>* m
         ss << "RX queue cleaned of "<< counter <<"buffer(s)";
         print_warning(ss.str());
     } 
+    BOOST_LOG_TRIVIAL(info) << "rx queue cleaned of packets: "<< counter;
     return counter;
 }
 
 
 void hardware_manager::apply(usrp_param* requested_config){
-
+	BOOST_LOG_TRIVIAL(info) << "Applying USRP configuration";
     //transfer the usrp index to the setting parameters
     requested_config->usrp_number = this_usrp_number;
 
@@ -434,11 +460,11 @@ void hardware_manager::apply(usrp_param* requested_config){
     ss<<apply_antenna_config(&(requested_config->B_RX2), &config.B_RX2,1);
 
     std::cout<<ss.str();
-
+	BOOST_LOG_TRIVIAL(info) << "USRP configuration applied";
 }
 
 bool hardware_manager::check_tuning(){
-
+	BOOST_LOG_TRIVIAL(info) << "Checking tuning";
     //both rx and tx must be locked if selected
     bool rx = true;
     bool tx = true;
@@ -510,12 +536,14 @@ bool hardware_manager::check_tuning(){
             tx = true;
         }
     }
-    
+    BOOST_LOG_TRIVIAL(info) << "Tuning checked with results tx: "<< tx << " and rx: "<< rx ;
     return rx and tx;
 
 }
 
 void hardware_manager::set_streams(){
+
+	BOOST_LOG_TRIVIAL(info) << "Presetting streams";
 
     //in this function config is an object representing the current paramenters.
     
@@ -586,7 +614,7 @@ void hardware_manager::set_streams(){
         if(not sw_loop)B_tx_stream = main_usrp->get_tx_stream(stream_args);
     }
     
-
+	BOOST_LOG_TRIVIAL(info) << "Stream preset";
 };
 
 void hardware_manager::clear_streams(){
@@ -836,6 +864,10 @@ void hardware_manager::software_tx_thread(
     tx_queue* sw_loop_queue,
     char front_end
     ){
+    std::stringstream thread_name;
+    thread_name << "Software tx thread "<<front_end;
+    set_this_thread_name(thread_name.str());
+    BOOST_LOG_TRIVIAL(debug) << "Thread started";
     float2* tx_buffer;          //the buffer pointer
     if(front_end == 'A'){
         A_tx_thread_operation = true; //class variable to account for thread activity
@@ -876,6 +908,7 @@ void hardware_manager::software_tx_thread(
     }else if(front_end == 'B'){
         B_tx_thread_operation = false;
     }
+    BOOST_LOG_TRIVIAL(debug) << "Thread joined";
 }
 
 
@@ -939,6 +972,10 @@ void hardware_manager::single_tx_thread(
     preallocator<float2>* memory,            //custom memory preallocator
     char front_end
 ){
+
+	std::stringstream thread_name;
+    thread_name << "Hardware tx thread "<<front_end;
+    set_this_thread_name(thread_name.str());
     
     uhd::set_thread_priority_safe(1.);
     bool active = true;
@@ -966,7 +1003,7 @@ void hardware_manager::single_tx_thread(
     
     uhd::tx_metadata_t metadata_tx;
     
-    BOOST_LOG_TRIVIAL(info) <<"Starting metadata thread";
+    BOOST_LOG_TRIVIAL(debug) <<"Starting metadata thread";
     boost::thread* metadata_thread = new boost::thread(boost::bind(&hardware_manager::async_stream,this,tx_stream,front_end));
 
     metadata_tx.start_of_burst = true;
@@ -1037,7 +1074,7 @@ void hardware_manager::single_tx_thread(
     }
     tx_stream.reset();
     
-    BOOST_LOG_TRIVIAL(info) <<"Joining";
+    BOOST_LOG_TRIVIAL(debug) << "Thread joined";
 }
 
 //ment to be in a thread. receive messages asyncronously on metadata
@@ -1085,7 +1122,10 @@ void hardware_manager::software_rx_thread(
     tx_queue* sw_loop_queue,
     char front_end
 ){
-    
+	std::stringstream thread_name;
+    thread_name << "Software rx thread "<<front_end;
+    set_this_thread_name(thread_name.str());
+    BOOST_LOG_TRIVIAL(debug) << "Thread started";
     if(front_end == 'A'){
         A_rx_thread_operation = true; //class variable to account for thread activity
     }else if(front_end == 'B'){
@@ -1135,6 +1175,7 @@ void hardware_manager::software_rx_thread(
     }else if(front_end == 'B'){
         B_rx_thread_operation = false;
     }
+    BOOST_LOG_TRIVIAL(debug) << "Thread joined";
 }
     
 
@@ -1147,6 +1188,11 @@ void hardware_manager::single_rx_thread(
     char front_end                          //front end code for operation accountability
     
 ){
+
+	std::stringstream thread_name;
+    thread_name << "Hardware rx thread  "<<front_end;
+    set_this_thread_name(thread_name.str());
+	BOOST_LOG_TRIVIAL(debug) << "Thread started";
     if(front_end == 'A'){
         A_rx_thread_operation = true; //class variable to account for thread activity
     }else if(front_end == 'B'){
@@ -1349,7 +1395,7 @@ void hardware_manager::single_rx_thread(
     }
     
     rx_stream.reset();
-    
+    BOOST_LOG_TRIVIAL(debug) << "Thread joined";
     //wait_condition->wait();
 }
 
@@ -1361,12 +1407,15 @@ void hardware_manager::flush_rx_streamer(uhd::rx_streamer::sptr &rx_streamer) {
    while (rx_streamer->recv(dummy_buffer, size, dummy_meta, timeout)) {}
 }
 
+
+
+//DEPRECATED WILL BE REMOVED
 size_t hardware_manager::nanosec_next_pps(){
     //std::this_thread::sleep_for(std::chrono::nanoseconds(
     return size_t(1.e9*   (double(1) -  (main_usrp->get_time_now().get_real_secs() - main_usrp->get_time_last_pps().get_real_secs()))  );
 }
 
-//used to sync TX and rRX streaming time
+//DEPRECATED WILL BE REMOVED
 void hardware_manager::sync_time(){
     
     main_usrp->set_time_next_pps(uhd::time_spec_t(0.));

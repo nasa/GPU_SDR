@@ -43,13 +43,16 @@ N_CORES = 10
 parallel_backend = 'multiprocessing'
 
 # usrp output power at 0 tx gain
-USRP_power = -6.15
+USRP_power = -6.00
 
-# USRP calibration for float units in Vrms
-USRP_calibration = 112.069e-3
+# USRP rates that does not cause additional CIC filtering
+USRP_accepted_rates = [int(1e6), int(2e6), int(5e6), int(1e7), int(2e7), int(5e7), int(1e8), int(2e8)]
+
+# USRP calibration for float units in Vpp
+USRP_calibration = 0.317
 
 # Colors used for plotting
-COLORS = ['black', 'red', 'green', 'blue', 'violet', 'brown', 'purple']
+COLORS = ['black', 'red', 'green', 'blue', 'orange', 'violet', 'brown', 'purple']
 
 # this enable disable warning generated when more data that expected is received in the h5 file.
 dynamic_alloc_warning = True
@@ -215,3 +218,15 @@ def dbm2vrms(dbm):
 
     """
     return np.sqrt((10. ** (dbm / 10.)) / 20.)
+
+
+def find_nearest(array, value):
+    '''
+    Utility function to find the nearest value in an array.
+    :param array: array of numbers.
+    :param value: value to find.
+    :return: closest index.
+    '''
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return int(idx)

@@ -94,11 +94,21 @@ def get_rx_info(filename, ant=None):
 
 
 def openH5file(filename, ch_list=None, start_sample=None, last_sample=None, usrp_number=None, front_end=None,
-               verbose=False, error_coord=False):
+               verbose=False, error_coord=False, big_file = False):
     '''
-    Arguments:
-        error_coord: if True returns (samples, err_coord) where err_coord is a list of tuples containing start and end sample of each faulty packet.
-
+    Retrive Raw data from an hdf5 file generated with pyUSRP.
+    :param filename: Name of the file to open
+    :param ch_list: a list containing the channel number tp open.
+    :param start_sample: first sample returned.
+    :param last_sample: last sample returned.
+    :param usrp_number: if the file contains more than one USRP data, select the usrp server number.
+    :param front_end: select the front end for data sourcing. Default is automatically detected or A.
+    :param verbose: print more information about the opening process.
+    :param error_coord: If True returns (samples, err_coord) where err_coord is a list of tuples containing start and end sample of each faulty packet.
+    :param big_file: default is False. if True last_sample and start_sample are ignored and the hdf5 object containing the raw data is returned. This is usefull when dealing with very large files. IMPORTANT: is user responsability to close the file if big_file is True, see return sepcs.
+    :return: array-like object containing the data in the form data[channel][samples].
+    :return: In case big_file is True returns the file object (so the user is able to close it) and the raw dataset. (file_pointer, dataset)
+    :return: in case of error_coord True returns also the erorrs coordinate ((file_pointer,) dataset, errors)
     '''
 
     try:
@@ -253,7 +263,7 @@ def openH5file(filename, ch_list=None, start_sample=None, last_sample=None, usrp
                     z.append(sub_group[dataset_name][ch_list, truncate_initial:truncate_final])
             except KeyError:
                 if skip_warning:
-                    print_warning("Cannot find one or more datasets in the h5 file")
+                    print_warning("Cannot find one or more dataset(s) in the h5 file")
                     skip_warning = False
 
             if verbose:
@@ -277,19 +287,26 @@ def openH5file(filename, ch_list=None, start_sample=None, last_sample=None, usrp
             samples = last_sample
         if len(sub_group["errors"]) > 0:
             print_warning("The measure opened contains %d erorrs!" % len(sub_group["errors"]))
-        if error_coord:
-            data = sub_group["data"][ch_list, start_sample:last_sample]
-            errors = sub_group["errors"][:]
-            if errors is None:
-                errors = []
-            f.close()
-            return data, errors
 
-        data = sub_group["data"][ch_list, start_sample:last_sample]
-        print_debug(
-            "Shape returned from openH5file(%s) call: %s is (channels,samples)" % (filename, str(np.shape(data))))
-        f.close()
-        return data
+        if not big_file:
+            if error_coord:
+                data = sub_group["data"][ch_list, start_sample:last_sample]
+                errors = sub_group["errors"][:]
+                if errors is None:
+                    errors = []
+                f.close()
+                return data, errors
+            data = sub_group["data"][ch_list, start_sample:last_sample]
+            print_debug(
+                "Shape returned from openH5file(%s) call: %s is (channels,samples)" % (filename, str(np.shape(data))))
+            f.close()
+            return data
+        else:
+            if error_coord:
+                errors = sub_group["errors"][:]
+                return f,sub_group["data"],errors
+            return f,sub_group["data"]
+
 
 
 def get_noise(filename, usrp_number=0, front_end=None, channel_list=None):
@@ -850,17 +867,14 @@ def Front_end_chk(Front_end):
     Check if the front end code is recognised by the server or assign to A by default.
 
     Arguments:
-        - front end code (A or B) or None.
+        - front end code (A or B).
 
     Returns:
         - boolean representing the result of the check or true is assigned by default.
     '''
-    if Front_end == None:
-        Front_end = "A"
-        return True
 
-    if (Front_end != "A") or (Front_end != "B"):
-        print_error("Front end \"" + str(Front_end) + "\" not recognised in VNA scan setting.")
+    if (Front_end != "A") and (Front_end != "B"):
+        print_error("Front end \"" + str(Front_end) + "\" not recognised.")
         return False
 
     return True

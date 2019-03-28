@@ -455,7 +455,7 @@ float2* tone_gen(
     tone_parameters* info, //tone information (all host side)
     int sampling_rate,
     float scale, //scale the whole buffer (all tones) for a scalar
-    bool device //the function return device buffer instead
+    bool device //the function return device buffer pointer instead
     ){
 
     //base for the fft. will be used as buffer recipient later.

@@ -35,6 +35,7 @@ import colorlover as cl
 # matplotlib stuff
 import matplotlib.pyplot as pl
 import matplotlib.patches as mpatches
+from matplotlib.ticker import EngFormatter
 
 # needed to print the data acquisition process
 import progressbar
@@ -58,150 +59,6 @@ def get_color(N):
     return COLORS[N % len(COLORS)]
 
 
-def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info=None, backend='matplotlib',
-                    cryostat_attenuation=0, auto_open=True, output_filename=None, **kwargs):
-    '''
-    Plot the noise spectra of given, pre-analized, H5 files.
-
-    Arguments:
-        - filenames: list of strings containing the filenames.
-        - channel_list:
-        - max_frequency: maximum frequency to plot.
-        - title_info: add a custom line to the plot title
-        - backend: see plotting backend section for informations.
-        - auto_open: open the plot in default system browser if plotly backend is selected (non-blocking) or open the matplotlib figure (blocking). Default is True.
-        - output_filename: string: if given the function saves the plot (in png for matplotlib backend and html for plotly backend) with the given name.
-        - kwargs: usrp_number and front_end can be passed to the openH5file() function. tx_front_end can be passed to manually determine the tx frontend to calculate the readout power. add_info could be a list of the same length og filenames containing additional leggend informations.
-    '''
-    filenames = to_list_of_str(filenames)
-
-    add_info_labels = None
-    try:
-        add_info_labels = kwargs['add_info']
-    except KeyError:
-        pass
-
-    plot_title = 'USRP Noise spectra from '
-    if len(filenames) < 2:
-        plot_title += "file: " + filenames[0] + "."
-    else:
-        plot_title += "multiple files."
-
-    if backend == 'matplotlib':
-        fig, ax = pl.subplots(nrows=1, ncols=1)
-        try:
-            fig.set_size_inches(kwargs['size'][0], kwargs['size'][1])
-        except KeyError:
-            pass
-        ax.set_xlabel("Frequency [Hz]")
-
-    elif backend == 'plotly':
-        fig = tools.make_subplots(rows=1, cols=1)
-        fig['layout']['xaxis1'].update(title="Frequency [Hz]", type='log')
-
-    y_name_set = True
-    rate_tag_set = True
-
-    try:
-        usrp_number = kwargs['usrp_number']
-    except KeyError:
-        usrp_number = None
-    try:
-        front_end = kwargs['front_end']
-    except KeyError:
-        front_end = None
-    try:
-        tx_front_end = kwargs['tx_front_end']
-    except KeyError:
-        tx_front_end = None
-    f_count = 0
-    for filename in filenames:
-        info, freq, real, imag = get_noise(
-            filename,
-            usrp_number=usrp_number,
-            front_end=front_end,
-            channel_list=channel_list
-        )
-        if y_name_set:
-            y_name_set = False
-
-            if backend == 'matplotlib':
-                if info['dbc']:
-                    ax.set_ylabel("PSD [dBc]")
-                else:
-                    ax.set_ylabel("PSD [dBm/sqrt(Hz)]")
-
-            elif backend == 'plotly':
-                if info['dbc']:
-                    fig['layout']['yaxis1'].update(title="PSD [dBc]")
-                else:
-                    fig['layout']['yaxis1'].update(title="PSD [dBm/sqrt(Hz)]")
-
-        if rate_tag_set:
-            rate_tag_set = False
-            if info['rate'] / 1e6 > 1.:
-                plot_title += "Effective rate: %.2f Msps" % (info['rate'] / 1e6)
-            else:
-                plot_title += "Effective rate: %.2f ksps" % (info['rate'] / 1e3)
-
-        for i in range(len(info['tones'])):
-            readout_power = get_readout_power(filename, i, tx_front_end, usrp_number) - cryostat_attenuation
-            label = "%.2f MHz" % (info['tones'][i] / 1e6)
-            R = 10 * np.log10(real[i])
-            I = 10 * np.log10(imag[i])
-            if backend == 'matplotlib':
-                label += "\nReadout pwr %.1f dBm" % (readout_power)
-                if add_info_labels is not None:
-                    label += "\n" + add_info_labels[f_count]
-                ax.semilogx(freq, R, '--', color=get_color(f_count + i), label="Real " + label)
-                ax.semilogx(freq, I, color=get_color(f_count + i), label="Imag " + label)
-            elif backend == 'plotly':
-                label += "<br>Readout pwr %.1f dBm" % (readout_power)
-                if add_info_labels is not None:
-                    label += "<br>" + add_info_labels[f_count]
-                fig.append_trace(go.Scatter(
-                    x=freq,
-                    y=R,
-                    name="Real " + label,
-                    legendgroup="group" + str(i) + "file" + str(f_count),
-                    line=dict(color=get_color(f_count + i)),
-                    mode='lines'
-                ), 1, 1)
-                fig.append_trace(go.Scatter(
-                    x=freq,
-                    y=I,
-                    name="Imag " + label,
-                    legendgroup="group" + str(i) + "file" + str(f_count),
-                    line=dict(color=get_color(f_count + i), dash='dot'),
-                    mode='lines'
-                ), 1, 1)
-        # increase file counter
-        f_count += 1
-
-    if backend == 'matplotlib':
-        if title_info is not None:
-            plot_title += "\n" + title_info
-        fig.suptitle(plot_title)
-        handles, labels = ax.get_legend_handles_labels()
-        fig.legend(handles, labels, loc=7)
-        ax.grid(True)
-        if output_filename is not None:
-            fig.savefig(output_filename + '.png')
-        if auto_open:
-            pl.show()
-        else:
-            pl.close()
-
-    elif backend == 'plotly':
-        if title_info is not None:
-            plot_title += "<br>" + title_info
-
-        fig['layout'].update(title=plot_title)
-        if output_filename is None:
-            output_filename = "raw_data_plot"
-
-        plotly.offline.plot(fig, filename=output_filename + ".html", auto_open=auto_open)
-
 
 def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib', output_filename=None,
                   channel_list=None, mode='IQ', start_time=None, end_time=None, auto_open=True, **kwargs):
@@ -219,17 +76,17 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
                 - size: size of the plot. Default is plotly default.
             * bokeh: use bokeh to generate an interactive html file containing the IQ plane and the magnitude/phase timestream.
 
-        - output_filename: string: if given the function saves the plot (in png for matplotlib backend and html for plotly backend) with the given name.
+        - output_filename: string: name of the file saved. Default is a timestamp.
         - channel_list: select only al list of channels to plot.
         - mode: [string] how to print the IQ signals. Allowed modes are:
             * IQ: default. Just plot the IQ signal with no processing.
             * PM: phase and magnitude. The fase will be unwrapped and the offset will be removed.
         - start_time: time where to start plotting. Default is 0.
         - end_time: time where to stop plotting. Default is end of the measure.
-        - auto_open: open the plot in default system browser if plotly backend is selected (non-blocking) or open the matplotlib figure (blocking). Default is True.
+        - auto_open: open the plot in default system browser if plotly backend is selected (non-blocking). Default is True.
         - kwargs:
             * usrp_number and front_end can be passed to the openH5file() function.
-            * size: the size of matplotlib figure.
+            * fig_size: the size of matplotlib figure.
             * add_info: list of strings as long as the file list to add info to the legend.
 
     Returns:
@@ -238,6 +95,14 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
     Note:
         - Possible errors are signaled on the plot.
     '''
+
+    try:
+        fig_size = kwargs['figsize']
+    except KeyError:
+        fig_size = None
+
+    if output_filename is None:
+        output_filename = "USRP_raw_data_"+get_timestamp()
     try:
         add_info_labels = kwargs['add_info']
     except KeyError:
@@ -245,17 +110,24 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
     plot_title = 'USRP raw data acquisition. '
     if backend == 'matplotlib':
         fig, ax = pl.subplots(nrows=2, ncols=1, sharex=True)
-        try:
-            fig.set_size_inches(kwargs['size'][0], kwargs['size'][1])
-        except KeyError:
-            pass
+        if fig_size is None:
+            fig_size = (16, 10)
+        fig.set_size_inches(fig_size[0], fig_size[1])
         ax[1].set_xlabel("Time [s]")
+        formatter0 = EngFormatter(unit='s')
+        ax[1].xaxis.set_major_formatter(formatter0)
         if mode == 'IQ':
+            formatter1 = EngFormatter(unit='')
             ax[0].set_ylabel("I [fp ADC]")
             ax[1].set_ylabel("Q [fp ADC]")
+            ax[0].yaxis.set_major_formatter(formatter1)
+            ax[1].yaxis.set_major_formatter(formatter1)
         elif mode == 'PM':
+            #formatter1 = EngFormatter(unit='')
             ax[0].set_ylabel("Magnitude [abs(ADC)]")
             ax[1].set_ylabel("Phase [Rad]")
+            #ax[0].yaxis.set_major_formatter(formatter1)
+            #ax[1].yaxis.set_major_formatter(formatter1)
 
     elif backend == 'plotly':
         if mode == 'IQ':
@@ -263,6 +135,8 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
                                       shared_xaxes=True)
             fig['layout']['yaxis1'].update(title='I [fp ADC]')
             fig['layout']['yaxis2'].update(title='Q [fp ADC]')
+            fig['layout']['xaxis1'].update(exponentformat='SI')
+            fig['layout']['xaxis2'].update(exponentformat='SI')
         elif mode == 'PM':
             fig = tools.make_subplots(rows=2, cols=1, subplot_titles=('Magnitude', 'Phase'), shared_xaxes=True)
             fig['layout']['yaxis1'].update(title='Magnitude [abs(ADC)]')
@@ -363,9 +237,9 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
                 Y1 = signal.decimate(Y1, decimation, ftype='fir')
                 Y2 = signal.decimate(Y2, decimation, ftype='fir')
             else:
-                decimation = 1.
+                decimation = 1
 
-            X = np.arange(len(Y1)) / float(effective_rate / decimation) + file_start_time
+            X = np.arange(len(Y1)) / float(effective_rate / decimation) + file_start_time / float(effective_rate)
 
             if effective_rate / 1e6 > 1:
                 rate_tag = 'DAQ rate: %.2f Msps' % (effective_rate / 1e6)
@@ -380,22 +254,22 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
             if backend == 'matplotlib':
                 if add_info_labels is not None:
                     label += "\n" + add_info_labels[file_count]
-                ax[0].plot(X, Y1, color=get_color(i + file_count), label=label)
-                ax[1].plot(X, Y2, color=get_color(i + file_count))
+                ax[0].plot(X[decimation:-decimation], Y1[decimation:-decimation], color=get_color(i + file_count), label=label)
+                ax[1].plot(X[decimation:-decimation], Y2[decimation:-decimation], color=get_color(i + file_count))
             elif backend == 'plotly':
                 if add_info_labels is not None:
                     label += "<br>" + add_info_labels[file_count]
                 fig.append_trace(go.Scatter(
-                    x=X,
-                    y=Y1,
+                    x=X[decimation:-decimation],
+                    y=Y1[decimation:-decimation],
                     name=label,
                     legendgroup="group" + str(i) + "file" + str(file_count),
                     line=dict(color=get_color(i + file_count)),
                     mode='lines'
                 ), 1, 1)
                 fig.append_trace(go.Scatter(
-                    x=X,
-                    y=Y2,
+                    x=X[decimation:-decimation],
+                    y=Y2[decimation:-decimation],
                     # name = "channel %d"%i,
                     showlegend=False,
                     legendgroup="group" + str(i) + "file" + str(file_count),
@@ -403,6 +277,7 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
                     mode='lines'
                 ), 2, 1)
         file_count += 1
+    final_filename = ""
     if backend == 'matplotlib':
         for error in errors:
             err_start_coord = (error[0] - decimation / 2) / float(effective_rate) + file_start_time
@@ -415,24 +290,20 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
             yellow_patch = mpatches.Patch(color='yellow', label='ERRORS')
             handles.append(yellow_patch)
             labels.append('ERRORS')
-        fig.legend(handles, labels, loc=7)
+        #fig.legend(handles, labels, loc=7)
+        ax[0].legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
         ax[0].grid(True)
         ax[1].grid(True)
-        if output_filename is not None:
-            fig.savefig(output_filename + '.png')
-        if auto_open:
-            pl.show()
-        else:
-            pl.close()
+        final_filename = output_filename + '.png'
+        fig.savefig(final_filename, bbox_inches="tight")
+        pl.close(fig)
 
     if backend == 'plotly':
-
+        final_filename = output_filename + ".html"
         fig['layout'].update(title=plot_title + "<br>" + rate_tag)
+        plotly.offline.plot(fig, filename=final_filename, auto_open=auto_open)
 
-        if output_filename is None:
-            output_filename = "PFB_waterfall"
-        plotly.offline.plot(fig, filename=output_filename + ".html", auto_open=auto_open)
-
+    return final_filename
 
 def plot_all_pfb(filename, decimation=None, low_pass=None, backend='matplotlib', output_filename=None, start_time=None,
                  end_time=None, auto_open=True, **kwargs):

@@ -13,9 +13,14 @@ except ImportError:
 import argparse
 
 def run(backend, files):
-    for f in files:
-        u.VNA_analysis(f)
-    u.plot_VNA(files, backend = backend)
+    #for f in files:
+    #    u.calculate_noise(f, verbose = True, welch = 10, dbc = True, clip = 0.1)
+
+    #print u.plot_noise_spec(files, channel_list=None, max_frequency=None, title_info=None, backend=backend,
+    #                cryostat_attenuation=0, auto_open=True, output_filename=None)
+
+    u.plot_raw_data(files, decimation=None, low_pass=None, backend='matplotlib', output_filename=None,
+                  channel_list=None, mode='PM', start_time=1, end_time=1.1, auto_open=True)
 
 
 
@@ -36,7 +41,7 @@ if __name__ == "__main__":
 
     os.chdir(args.folder)
 
-    files = glob.glob("USRP_VNA*.h5")
+    files = glob.glob("USRP_Noise*.h5")
 
     run(backend = args.backend, files = files)
 
