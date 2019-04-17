@@ -53,7 +53,7 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
 
     '''
     Perform a VNA scan.
-    
+
     Arguments:
         - start_f: frequency in Hz where to start scanning (absolute if RF is not given, relative to RF otherwise).
         - last_f: frequency in Hz where to stop scanning (absolute if RF is not given, relative to RF otherwise).
@@ -69,13 +69,14 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
         - Multitone_compensation: integer representing the number of tones: compensate the amplitude of the signal to match a future multitones accuisition.
         - Iterations: by default a single VNA scan pass is performed.
         - verbose: if True outputs on terminal some diagnostic info. deafult is False.
-        
+        - keyword arguments: Each keyword argument will be interpreted as an attribute to add to the raw_data group of the h5 file.
+
     Returns:
         - filename where the measure is or empty string if something went wrong.
     '''
 
     global USRP_data_queue, REMOTE_FILENAME, END_OF_MEASURE, LINE_DELAY
-    
+
     if measure_t <= 0:
         print_error("Cannot execute a VNA measure with "+str(measure_t)+"s duration.")
         return ""
@@ -90,14 +91,14 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
         print "Setting RF central frequency to %.2f MHz"%(RF/1.e6)
     else:
         delta_f = max(start_f,last_f) - min(start_f,last_f)
-        
+
     if delta_f > 1.6e8:
         print_error("Frequency range for the VNA scan is too large compared to maximum system bandwidth")
         return ""
     elif delta_f > 1e8:
         print_error("Frequency range for the VNA scan is too large compared to actual system bandwidth")
         return ""
-    
+
     if not Device_chk(Device):
         return ""
 
@@ -111,12 +112,12 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
     else:
         TX_frontend = Front_end+"_TXRX"
         RX_frontend = Front_end+"_RX2"
-        
+
     if Multitone_compensation == None:
         Amplitude = 1.
     else:
         Amplitude = 1./Multitone_compensation
-       
+
     if decimation:
         decimation = 1
     else:
@@ -147,9 +148,9 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
     print_debug("Writing VNA data on file \'%s\'"%output_filename)
 
     number_of_samples = Rate* measure_t*Iterations
-        
+
     vna_command = global_parameter()
-    
+
     vna_command.set(TX_frontend,"mode", "TX")
     vna_command.set(TX_frontend,"buffer_len", 1e6)
     vna_command.set(TX_frontend,"gain", tx_gain)
@@ -157,7 +158,7 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
     vna_command.set(TX_frontend,"samples", number_of_samples)
     vna_command.set(TX_frontend,"rate", Rate)
     vna_command.set(TX_frontend,"bw", 2*Rate)
-    
+
     vna_command.set(TX_frontend,"wave_type", ["CHIRP"])
     vna_command.set(TX_frontend,"ampl", [Amplitude])
     vna_command.set(TX_frontend,"freq", [start_f])
@@ -165,7 +166,7 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
     vna_command.set(TX_frontend,"swipe_s", [n_points])
     vna_command.set(TX_frontend,"chirp_t", [measure_t])
     vna_command.set(TX_frontend,"rf", RF)
-    
+
     vna_command.set(RX_frontend,"mode", "RX")
     vna_command.set(RX_frontend,"buffer_len", 1e6)
     vna_command.set(RX_frontend,"gain", 0)
@@ -173,7 +174,7 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
     vna_command.set(RX_frontend,"samples", number_of_samples)
     vna_command.set(RX_frontend,"rate", Rate)
     vna_command.set(RX_frontend,"bw", 2*Rate)
-    
+
     vna_command.set(RX_frontend,"wave_type", ["CHIRP"])
     vna_command.set(RX_frontend,"ampl", [Amplitude])
     vna_command.set(RX_frontend,"freq", [start_f])
@@ -182,14 +183,14 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
     vna_command.set(RX_frontend,"chirp_t", [measure_t])
     vna_command.set(RX_frontend,"rf", RF)
     vna_command.set(RX_frontend,"decim", decimation) # THIS only activate the decimation.
-    
+
     if vna_command.self_check():
         if(verbose):
             print "VNA command succesfully checked"
             vna_command.pprint()
 
         Async_send(vna_command.to_json())
-        
+
     else:
         print_warning("Something went wrong with the setting of VNA command.")
         return ""
@@ -304,7 +305,7 @@ def VNA_analysis(filename, usrp_number = 0):
 
     vna_grp.attrs.create("scan_lengths", length)
     vna_grp.attrs.create("calibration", calibration)
-    
+
     vna_grp.create_dataset("frequency", data = freq_axis, dtype=np.float64)
     vna_grp.create_dataset("S21", data = S21_axis, dtype=np.complex128)
 
@@ -358,13 +359,14 @@ def get_VNA_data(filename, calibrated = True, usrp_number = 0):
     return ret
 
 
-def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_phase = True, **kwargs):
+def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_phase = True, verbose = False, **kwargs):
     '''
     Plot the VNA data from various files.
     :param filenames: list of strings containing the filenames to be plotted.
     :param backend: "matplotlib", "plotly" are supported.
     :param output_filename: filename of the output figure without extension. Default is VNA(_compare)_timestamp.xxx.
     :param unwrap_phase: if False the angle of S21 is not unwrapped.
+    :param verbose: print some debug line.
     :param kwargs:
         - figsize=(xx,yy) inches for matplotlib backends.
         - add_info = ["..","..",".."] fore commenting each file in the legend.
@@ -375,6 +377,8 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
 
    :return The filename of the file just created. if kwargs['html'] is True returns the html of the file instead.
     '''
+
+    print("Plotting VNA(s)...")
 
     try:
         html_output = kwargs['html']
@@ -424,7 +428,7 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
     final_filename = ""
 
     for filename in filenames:
-        print("Plotting VNA from file \'%s\'"%filename)
+        if verbose: print_debug("Plotting VNA from file \'%s\'"%filename)
         freq_tmp, S21_tmp = get_VNA_data(filename)
 
         freq_axes.append(freq_tmp)
@@ -440,7 +444,7 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
         output_filename+="_"+get_timestamp()
 
     if backend == "matplotlib":
-        print_debug("Using matplotlib backend...")
+        if verbose: print_debug("Using matplotlib backend...")
 
         fig, ax = pl.subplots(nrows=2, ncols=1, sharex=True)
 
@@ -497,6 +501,8 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
         pl.savefig(final_filename, bbox_inches="tight")
 
     elif backend == "plotly":
+
+        if verbose: print_debug("Using plotly backend")
 
         fig = tools.make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.003)
 
@@ -567,7 +573,5 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
         err_msg = "Backend \'%s\' is not implemented. Cannot plot VNA"%backend
         print_error(err_msg)
         raise ValueError(err_msg)
-
+    print("Plotting complete")
     return final_filename
-
-

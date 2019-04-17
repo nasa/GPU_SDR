@@ -13,3 +13,4 @@ from .USRP_files import *
 from .USRP_delay import *
 from .USRP_VNA import *
 from .USRP_noise import *
+from .USRP_fitting import *

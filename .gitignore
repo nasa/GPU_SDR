@@ -3,6 +3,8 @@
 *.xml
 *.pyc
 *.iml
+*.DS_Store
+.DS_Store
 server
 /data
 /scripts/data/

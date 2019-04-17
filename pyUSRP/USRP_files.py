@@ -46,7 +46,9 @@ def format_filename(filename):
     return os.path.splitext(filename)[0]+".h5"
 
 def bound_open(filename):
-
+    '''
+    Return pointer to file. It's user responsability to call the close() method.
+    '''
     try:
         filename = format_filename(filename)
         f = h5py.File(filename,'r')
@@ -89,8 +91,6 @@ def get_rx_info(filename, ant=None):
         ant = str(ant)
 
     return parameters.parameters[ant]
-
-
 
 
 def openH5file(filename, ch_list=None, start_sample=None, last_sample=None, usrp_number=None, front_end=None,
