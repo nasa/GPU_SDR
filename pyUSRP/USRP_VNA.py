@@ -47,12 +47,234 @@ from USRP_files import *
 from USRP_data_analysis import *
 from USRP_delay import *
 
+def Dual_VNA(start_f_A, last_f_A, start_f_B, last_f_B, measure_t, n_points, tx_gain_A, tx_gain_B, Rate = None, decimation = True, RF_A = None, RF_B = None,
+               Device = None, output_filename = None, Multitone_compensation_A = None, Multitone_compensation_B = None, Iterations = 1, verbose = False, **kwargs):
+
+    '''
+    Perform a VNA scan using a two different frontens of a single USRP device.
+
+    Arguments:
+        - start_f_A: frequency in Hz where to start scanning for frontend A (absolute if RF is not given, relative to RF otherwise).
+        - last_f_A: frequency in Hz where to stop scanning for frontend A (absolute if RF is not given, relative to RF otherwise).
+        - start_f_B: frequency in Hz where to start scanning for frontend B (absolute if RF is not given, relative to RF otherwise).
+        - last_f_B: frequency in Hz where to stop scanning for frontend B (absolute if RF is not given, relative to RF otherwise).
+        - measure_t: duration of the measure in seconds.
+        - n_points: number of points to use in the VNA scan.
+        - tx_gain_A: transmission amplifier gain for frontend A.
+        - tx_gain_B: transmission amplifier gain for frontend B.
+        - Rate: Optional parameter to control the scan rate. Default is calculate from start_f an last_f args.
+        - decimation: if True the decimation of the signal will occur on-server. Default is True.
+        - RF_A: central up/down mixing frequency for frontend A. Default is deducted by other arguments.
+        - RF_B: central up/down mixing frequency for frontend B. Default is deducted by other arguments.
+        - output_filename: eventual filename. default is datetime.
+        - Device: the on-server device number to use. default is 0.
+        - Multitone_compensation_A: integer representing the number of tones: compensate the amplitude of the signal to match a future multitones accuisition for frontend A.
+        - Multitone_compensation_B: integer representing the number of tones: compensate the amplitude of the signal to match a future multitones accuisition for frontend B.
+        - Iterations: by default a single VNA scan pass is performed.
+        - verbose: if True outputs on terminal some diagnostic info. deafult is False.
+        - keyword arguments: Each keyword argument will be interpreted as an attribute to add to the raw_data group of the h5 file.
+
+    Returns:
+        - filename where the measure is or empty string if something went wrong.
+    '''
+    global USRP_data_queue, REMOTE_FILENAME, END_OF_MEASURE, LINE_DELAY
+
+    if measure_t <= 0:
+        err_msg = "Cannot execute a VNA measure with "+str(measure_t)+"s duration."
+        print_error(err_msg)
+        raise ValueError(err_msg)
+    if n_points <= 0:
+        err_msg = "Cannot execute a VNA measure with "+str(n_points)+" points."
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    if RF_A == None:
+        delta_f_A = np.abs(start_f_A - last_f_A)
+        RF_A = delta_f_A/2.
+        start_f_A -= RF_A
+        last_f_A -= RF_A
+        print "Setting RF (frontend A) central frequency to %.2f MHz"%(RF_A/1.e6)
+    else:
+        delta_f_A = max(start_f_A,last_f_A) - min(start_f_A,last_f_A)
+
+    if delta_f_A > 1.6e8:
+        err_msg = "Frequency range for the VNA scan (frontend A) is too large compared to maximum system bandwidth"
+        print_error(err_msg)
+        raise ValueError(err_msg)
+    elif delta_f_A > 1e8:
+        err_msg = "Frequency range for the VNA (frontend A) scan is too large compared to actual system bandwidth"
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    if RF_B == None:
+        delta_f_B = np.abs(start_f_B - last_f_B)
+        RF_B = delta_f_B/2.
+        start_f_B -= RF_B
+        last_f_B -= RF_B
+        print "Setting RF (frontend B) central frequency to %.2f MHz"%(RF_B/1.e6)
+    else:
+        delta_f_B = max(start_f_B,last_f_B) - min(start_f_B,last_f_B)
+
+    if delta_f_B > 1.6e8:
+        err_msg = "Frequency range for the VNA scan (frontend B) is too large compared to maximum system bandwidth"
+        print_error(err_msg)
+        raise ValueError(err_msg)
+    elif delta_f_B > 1e8:
+        err_msg = "Frequency range for the VNA (frontend B) scan is too large compared to actual system bandwidth"
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    if not Device_chk(Device):
+        err_msg = "Something is wrong with the device check in the VNA function."
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    if Multitone_compensation_A == None:
+        Amplitude_A = 1.
+    else:
+        Amplitude_A = 1./Multitone_compensation_A
+
+    if Multitone_compensation_B == None:
+        Amplitude_B = 1.
+    else:
+        Amplitude_B = 1./Multitone_compensation_B
+
+    if decimation:
+        decimation = 1
+    else:
+        decimation = 0
+
+    if Iterations <= 0:
+        print_warning("Iterations can only be a bigger than 0 integer. Setting it to 1")
+        Iterations = 1
+    else:
+        Iterations = int(Iterations)
+
+    if Rate is None:
+        Rate = 100e6
+
+    try:
+        delay = LINE_DELAY[str(int(Rate/1e6))]
+        delay *= 1e-9
+    except KeyError:
+        print_warning("Cannot find associated line delay for a rate of %d Msps. Performance may be negatively affected"%(int(rate/1e6)))
+        delay = 0
+
+    if output_filename is None:
+        output_filename = "USRP_VNA_"+get_timestamp()
+    else:
+        output_filename = str(output_filename)
+
+    print_debug("Writing VNA data on file \'%s\'"%output_filename)
+
+    number_of_samples = Rate* measure_t*Iterations
+
+    vna_command = global_parameter()
+    TX_frontend_A = "A_TXRX"
+    RX_frontend_A = "A_RX2"
+    TX_frontend_B = "B_TXRX"
+    RX_frontend_B = "B_RX2"
+    vna_command.set(TX_frontend_A,"mode", "TX")
+    vna_command.set(TX_frontend_A,"buffer_len", 1e6)
+    vna_command.set(TX_frontend_A,"gain", tx_gain_A)
+    vna_command.set(TX_frontend_A,"delay", 1)
+    vna_command.set(TX_frontend_A,"samples", number_of_samples)
+    vna_command.set(TX_frontend_A,"rate", Rate)
+    vna_command.set(TX_frontend_A,"bw", 2*Rate)
+
+    vna_command.set(TX_frontend_A,"wave_type", ["CHIRP"])
+    vna_command.set(TX_frontend_A,"ampl", [Amplitude_A])
+    vna_command.set(TX_frontend_A,"freq", [start_f_A])
+    vna_command.set(TX_frontend_A,"chirp_f", [last_f_A])
+    vna_command.set(TX_frontend_A,"swipe_s", [n_points])
+    vna_command.set(TX_frontend_A,"chirp_t", [measure_t])
+    vna_command.set(TX_frontend_A,"rf", RF_A)
+
+    vna_command.set(RX_frontend_A,"mode", "RX")
+    vna_command.set(RX_frontend_A,"buffer_len", 1e6)
+    vna_command.set(RX_frontend_A,"gain", 0)
+    vna_command.set(RX_frontend_A,"delay", 1+delay)
+    vna_command.set(RX_frontend_A,"samples", number_of_samples)
+    vna_command.set(RX_frontend_A,"rate", Rate)
+    vna_command.set(RX_frontend_A,"bw", 2*Rate)
+
+    vna_command.set(RX_frontend_A,"wave_type", ["CHIRP"])
+    vna_command.set(RX_frontend_A,"ampl", [Amplitude_A])
+    vna_command.set(RX_frontend_A,"freq", [start_f_A])
+    vna_command.set(RX_frontend_A,"chirp_f", [last_f_A])
+    vna_command.set(RX_frontend_A,"swipe_s", [n_points])
+    vna_command.set(RX_frontend_A,"chirp_t", [measure_t])
+    vna_command.set(RX_frontend_A,"rf", RF_A)
+    vna_command.set(RX_frontend_A,"decim", decimation) # THIS only activate the decimation.
+
+    vna_command.set(TX_frontend_B,"mode", "TX")
+    vna_command.set(TX_frontend_B,"buffer_len", 1e6)
+    vna_command.set(TX_frontend_B,"gain", tx_gain_A)
+    vna_command.set(TX_frontend_B,"delay", 1)
+    vna_command.set(TX_frontend_B,"samples", number_of_samples)
+    vna_command.set(TX_frontend_B,"rate", Rate)
+    vna_command.set(TX_frontend_B,"bw", 2*Rate)
+
+    vna_command.set(TX_frontend_B,"wave_type", ["CHIRP"])
+    vna_command.set(TX_frontend_B,"ampl", [Amplitude_B])
+    vna_command.set(TX_frontend_B,"freq", [start_f_B])
+    vna_command.set(TX_frontend_B,"chirp_f", [last_f_B])
+    vna_command.set(TX_frontend_B,"swipe_s", [n_points])
+    vna_command.set(TX_frontend_B,"chirp_t", [measure_t])
+    vna_command.set(TX_frontend_B,"rf", RF_B)
+
+    vna_command.set(RX_frontend_B,"mode", "RX")
+    vna_command.set(RX_frontend_B,"buffer_len", 1e6)
+    vna_command.set(RX_frontend_B,"gain", 0)
+    vna_command.set(RX_frontend_B,"delay", 1+delay)
+    vna_command.set(RX_frontend_B,"samples", number_of_samples)
+    vna_command.set(RX_frontend_B,"rate", Rate)
+    vna_command.set(RX_frontend_B,"bw", 2*Rate)
+
+    vna_command.set(RX_frontend_B,"wave_type", ["CHIRP"])
+    vna_command.set(RX_frontend_B,"ampl", [Amplitude_B])
+    vna_command.set(RX_frontend_B,"freq", [start_f_B])
+    vna_command.set(RX_frontend_B,"chirp_f", [last_f_B])
+    vna_command.set(RX_frontend_B,"swipe_s", [n_points])
+    vna_command.set(RX_frontend_B,"chirp_t", [measure_t])
+    vna_command.set(RX_frontend_B,"rf", RF_B)
+    vna_command.set(RX_frontend_B,"decim", decimation) # THIS only activate the decimation.
+
+    if vna_command.self_check():
+        if(verbose):
+            print "VNA command succesfully checked"
+            vna_command.pprint()
+
+        Async_send(vna_command.to_json())
+
+    else:
+        print_warning("Something went wrong with the setting of VNA command.")
+        return ""
+
+    if decimation:
+        expected_samples = 2* Iterations * n_points
+    else:
+        expected_samples = 2* number_of_samples
+
+    Packets_to_file(
+        parameters = vna_command,
+        timeout = None,
+        filename = output_filename,
+        dpc_expected = expected_samples,
+        meas_type = "VNA", **kwargs
+    )
+
+    print_debug("VNA acquisition terminated.")
+
+    return output_filename
+
+
 
 def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decimation = True, RF = None, Front_end = None,
                Device = None, output_filename = None, Multitone_compensation = None, Iterations = 1, verbose = False, **kwargs):
 
     '''
-    Perform a VNA scan.
+    Perform a VNA scan using a single frontend of a single USRP device.
 
     Arguments:
         - start_f: frequency in Hz where to start scanning (absolute if RF is not given, relative to RF otherwise).
@@ -78,11 +300,14 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
     global USRP_data_queue, REMOTE_FILENAME, END_OF_MEASURE, LINE_DELAY
 
     if measure_t <= 0:
-        print_error("Cannot execute a VNA measure with "+str(measure_t)+"s duration.")
-        return ""
+        err_msg = "Cannot execute a VNA measure with "+str(measure_t)+"s duration."
+        print_error(err_msg)
+        raise ValueError(err_msg)
     if n_points <= 0:
-        print_error("Cannot execute a VNA measure with "+str(n_points)+" points.")
-        return ""
+        err_msg = "Cannot execute a VNA measure with "+str(n_points)+" points."
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
     if RF == None:
         delta_f = np.abs(start_f - last_f)
         RF = delta_f/2.
@@ -93,14 +318,18 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
         delta_f = max(start_f,last_f) - min(start_f,last_f)
 
     if delta_f > 1.6e8:
-        print_error("Frequency range for the VNA scan is too large compared to maximum system bandwidth")
-        return ""
+        err_msg = "Frequency range for the VNA scan is too large compared to maximum system bandwidth"
+        print_error(err_msg)
+        raise ValueError(err_msg)
     elif delta_f > 1e8:
-        print_error("Frequency range for the VNA scan is too large compared to actual system bandwidth")
-        return ""
+        err_msg = "Frequency range for the VNA scan is too large compared to actual system bandwidth"
+        print_error(err_msg)
+        raise ValueError(err_msg)
 
     if not Device_chk(Device):
-        return ""
+        err_msg = "Something is wrong with the device check in the VNA function."
+        print_error(err_msg)
+        raise ValueError(err_msg)
 
     if Front_end is None:
         Front_end = 'A'
@@ -573,5 +802,5 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
         err_msg = "Backend \'%s\' is not implemented. Cannot plot VNA"%backend
         print_error(err_msg)
         raise ValueError(err_msg)
-    print("Plotting complete")
+    print("VNA plotting complete")
     return final_filename

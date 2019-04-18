@@ -922,7 +922,7 @@ def Sync_RX(CLIENT_STATUS, Sync_RX_condition, USRP_data_queue):
             else:
                 # USRP_data_queue.put((metadata,formatted_data))
                 fill_queue(metadata, formatted_data)
-    '''                
+    '''
     except KeyboardInterrupt:
             print_warning("Keyboard interrupt aborting connection...")
             internal_status = False
@@ -994,6 +994,3 @@ def Stop_Sync_RX(CLIENT_STATUS=CLIENT_STATUS):
         Sync_RX_loop.terminate()  # I do not know why it's alive even if it exited all the loops
         # Sync_RX_loop.join(timeout = 5)
     print "Sync RX stopped"
-
-
-

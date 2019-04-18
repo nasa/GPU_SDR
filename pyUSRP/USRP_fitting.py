@@ -525,7 +525,7 @@ def get_fit_param(filename, verbose = False):
         ret.append({
             'f0':resonator["f0"],
             'A':resonator["A"],
-            'phi'::resonator["phi"],
+            'phi':resonator["phi"],
             'D':resonator["D"],
             'Qi':resonator["Qi"],
             'Qr':resonator["Qr"],
