@@ -573,7 +573,7 @@ void hardware_manager::set_streams(){
         channel_num[0] = 0;
         stream_args.channels = channel_num;
         if(not sw_loop)A_rx_stream = main_usrp->get_rx_stream(stream_args);
-		BOOST_LOG_TRIVIAL(indo) << "Config done";
+		BOOST_LOG_TRIVIAL(info) << "Config done";
     }else if(config.A_RX2.mode == RX){
 		BOOST_LOG_TRIVIAL(info) << "Config A_RX2 as RX";
 		uhd::stream_args_t stream_args("fc32");
@@ -581,7 +581,7 @@ void hardware_manager::set_streams(){
         channel_num[0] = 0;
         stream_args.channels = channel_num;
         if(not sw_loop)A_rx_stream = main_usrp->get_rx_stream(stream_args);
-		BOOST_LOG_TRIVIAL(indo) << "Config done";
+		BOOST_LOG_TRIVIAL(info) << "Config done";
     }
 
     if(config.B_TXRX.mode == RX){
@@ -592,7 +592,7 @@ void hardware_manager::set_streams(){
         channel_num[0] = 1;
         stream_args.channels = channel_num;
         if(not sw_loop)B_rx_stream = main_usrp->get_rx_stream(stream_args);
-		BOOST_LOG_TRIVIAL(indo) << "Config done";
+		BOOST_LOG_TRIVIAL(info) << "Config done";
 
     }else if(config.B_RX2.mode == RX){
         BOOST_LOG_TRIVIAL(info) << "Config B_RX2 as RX";
@@ -601,7 +601,7 @@ void hardware_manager::set_streams(){
         channel_num[0] = 1;
         stream_args.channels = channel_num;
         if(not sw_loop)B_rx_stream = main_usrp->get_rx_stream(stream_args);
-		BOOST_LOG_TRIVIAL(indo) << "Config done";
+		BOOST_LOG_TRIVIAL(info) << "Config done";
     }
 
 
@@ -611,7 +611,7 @@ void hardware_manager::set_streams(){
         channel_num[0] = 0;
         stream_args.channels = channel_num;
         if(not sw_loop)A_tx_stream = main_usrp->get_tx_stream(stream_args);
-		BOOST_LOG_TRIVIAL(indo) << "Config done";
+		BOOST_LOG_TRIVIAL(info) << "Config done";
     }
 
     if(config.B_RX2.mode == TX or config.B_TXRX.mode == TX){
@@ -621,7 +621,7 @@ void hardware_manager::set_streams(){
         channel_num[0] = 1;
         stream_args.channels = channel_num;
         if(not sw_loop)B_tx_stream = main_usrp->get_tx_stream(stream_args);
-		BOOST_LOG_TRIVIAL(indo) << "Config done";
+		BOOST_LOG_TRIVIAL(info) << "Config done";
     }
 
 	BOOST_LOG_TRIVIAL(info) << "Stream presetting done";
