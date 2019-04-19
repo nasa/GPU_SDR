@@ -97,12 +97,7 @@ class hardware_manager{
         //! @brief Release the memory associated with pointers holded by a rx queue using the respective memory allocator.
         int clean_rx_queue(rx_queue* RX_queue, preallocator<float2>* memory);
 
-/*
-uhd::stream_args_t stream_args_A_RX("fc32");
-uhd::stream_args_t stream_args_B_RX("fc32");
-uhd::stream_args_t stream_args_A_TX("fc32");
-uhd::stream_args_t stream_args_B_TX("fc32");
-*/
+
     private:
 
         //! @brief Describe the state of the TX settling time for the A front_end.

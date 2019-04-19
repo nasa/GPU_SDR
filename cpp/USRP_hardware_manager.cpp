@@ -697,11 +697,11 @@ std::string hardware_manager::apply_antenna_config(param *parameters, param *old
                             main_usrp->get_rx_sensor("lo_locked",chan).to_bool();
                             if(not parameters->tuning_mode){
 
-                                uhd::tune_request_t tune_request(parameters->tone,0);
+                                uhd::tune_request_t tune_request(parameters->tone-OFFSET_F,OFFSET_F);
                                 tune_request.args = uhd::device_addr_t("mode_n=integer");
                                 main_usrp->set_rx_freq(tune_request,chan);
                             }else{
-                                uhd::tune_request_t tune_request(parameters->tone,0);
+                                uhd::tune_request_t tune_request(parameters->tone-OFFSET_F,OFFSET_F);
                                 main_usrp->set_rx_freq(tune_request,chan);
                                 //main_usrp->set_rx_freq(parameters->tone,chan);
                             }
@@ -724,11 +724,11 @@ std::string hardware_manager::apply_antenna_config(param *parameters, param *old
                         main_usrp->get_tx_sensor("lo_locked",chan).to_bool();
                         if(not parameters->tuning_mode){
 
-                            uhd::tune_request_t tune_request(parameters->tone,0);
+                            uhd::tune_request_t tune_request(parameters->tone- OFFSET_F,OFFSET_F);
                             tune_request.args = uhd::device_addr_t("mode_n=integer");
                             main_usrp->set_tx_freq(tune_request,chan);
                         }else{
-                            uhd::tune_request_t tune_request(parameters->tone,0);
+                            uhd::tune_request_t tune_request(parameters->tone-OFFSET_F,OFFSET_F);
                             main_usrp->set_tx_freq(tune_request,chan);
                             //main_usrp->set_tx_freq(parameters->tone,chan);
                         }

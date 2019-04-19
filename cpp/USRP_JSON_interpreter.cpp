@@ -18,9 +18,9 @@ std::vector<T> as_vector(boost::property_tree::ptree const& pt,
 //convert a json string into a parameter object
 bool string2param(std::string data, usrp_param &my_parameter){
     short device;
-            
+
     std::stringstream serial_json(data);
-    
+
     boost::property_tree::ptree parameters;
 
     try{
@@ -28,13 +28,13 @@ bool string2param(std::string data, usrp_param &my_parameter){
         device = parameters.get<int>("device");
         std::cout << "Setting parameters for USRP # " << device <<std::endl;
         my_parameter.usrp_number = device;
-        
+
     }catch (boost::exception &error){
         std::cerr <<boost::diagnostic_information(error)<< std::endl;
         print_error("missing device ID or wrong JSON string");
         return false;
     }
-    
+
     try{
         my_parameter.A_TXRX.mode = ant_mode_from_string( parameters.get_child("A_TXRX").get<std::string>("mode"));
         my_parameter.B_TXRX.mode = ant_mode_from_string( parameters.get_child("B_TXRX").get<std::string>("mode"));
@@ -45,7 +45,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"mode\" match the specifications!");
         return false;
     }
-    try{     
+    try{
         my_parameter.A_TXRX.tone = parameters.get_child("A_TXRX").get<double>("rf");
         my_parameter.B_TXRX.tone = parameters.get_child("B_TXRX").get<double>("rf");
         my_parameter.A_RX2.tone  = parameters.get_child("A_RX2").get<double>("rf");
@@ -55,7 +55,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"rf\" match the specifications!");
         return false;
     }
-    try{ 
+    try{
         my_parameter.A_TXRX.tuning_mode = parameters.get_child("A_TXRX").get<size_t>("tuning_mode");
         my_parameter.B_TXRX.tuning_mode = parameters.get_child("B_TXRX").get<size_t>("tuning_mode");
         my_parameter.A_RX2.tuning_mode  = parameters.get_child("A_RX2").get<size_t>("tuning_mode");
@@ -65,7 +65,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"tuning_mode\" match the specifications!");
         return false;
     }
-    try{ 
+    try{
         my_parameter.A_TXRX.rate = parameters.get_child("A_TXRX").get<double>("rate");
         my_parameter.B_TXRX.rate = parameters.get_child("B_TXRX").get<double>("rate");
         my_parameter.A_RX2.rate  = parameters.get_child("A_RX2").get<double>("rate");
@@ -75,7 +75,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"rate\" match the specifications!");
         return false;
     }
-    try{ 
+    try{
         my_parameter.A_TXRX.decim = parameters.get_child("A_TXRX").get<double>("decim");
         my_parameter.B_TXRX.decim = parameters.get_child("B_TXRX").get<double>("decim");
         my_parameter.A_RX2.decim  = parameters.get_child("A_RX2").get<double>("decim");
@@ -85,7 +85,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"decim\" match the specifications!");
         return false;
     }
-    try{ 
+    try{
         my_parameter.A_TXRX.fft_tones = parameters.get_child("A_TXRX").get<double>("fft_tones");
         my_parameter.B_TXRX.fft_tones = parameters.get_child("B_TXRX").get<double>("fft_tones");
         my_parameter.A_RX2.fft_tones  = parameters.get_child("A_RX2").get<double>("fft_tones");
@@ -95,7 +95,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"fft_tones\" match the specifications!");
         return false;
     }
-    try{ 
+    try{
         my_parameter.A_TXRX.pf_average = parameters.get_child("A_TXRX").get<double>("pf_average");
         my_parameter.B_TXRX.pf_average = parameters.get_child("B_TXRX").get<double>("pf_average");
         my_parameter.A_RX2.pf_average  = parameters.get_child("A_RX2").get<double>("pf_average");
@@ -105,8 +105,8 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"pf_average\" match the specifications!");
         return false;
     }
-    
-    try{ 
+
+    try{
         my_parameter.A_TXRX.samples = parameters.get_child("A_TXRX").get<size_t>("samples");
         my_parameter.B_TXRX.samples = parameters.get_child("B_TXRX").get<size_t>("samples");
         my_parameter.A_RX2.samples  = parameters.get_child("A_RX2").get<size_t>("samples");
@@ -116,7 +116,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"samples\" match the specifications!");
         return false;
     }
-    try{ 
+    try{
         my_parameter.A_TXRX.buffer_len = parameters.get_child("A_TXRX").get<double>("buffer_len");
         my_parameter.B_TXRX.buffer_len = parameters.get_child("B_TXRX").get<double>("buffer_len");
         my_parameter.A_RX2.buffer_len  = parameters.get_child("A_RX2").get<double>("buffer_len");
@@ -126,7 +126,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"buffer_len\" match the specifications!");
         return false;
     }
-    try{ 
+    try{
         my_parameter.A_TXRX.burst_off = parameters.get_child("A_TXRX").get<double>("burst_off");
         my_parameter.B_TXRX.burst_off = parameters.get_child("B_TXRX").get<double>("burst_off");
         my_parameter.A_RX2.burst_off  = parameters.get_child("A_RX2").get<double>("burst_off");
@@ -136,7 +136,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"burst_off\" match the specifications!");
         return false;
     }
-    try{ 
+    try{
         my_parameter.A_TXRX.burst_on = parameters.get_child("A_TXRX").get<double>("burst_on");
         my_parameter.B_TXRX.burst_on = parameters.get_child("B_TXRX").get<double>("burst_on");
         my_parameter.A_RX2.burst_on  = parameters.get_child("A_RX2").get<double>("burst_on");
@@ -146,7 +146,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"burst_on\" match the specifications!");
         return false;
     }
-    try{ 
+    try{
         my_parameter.A_TXRX.bw = parameters.get_child("A_TXRX").get<double>("bw");
         my_parameter.B_TXRX.bw = parameters.get_child("B_TXRX").get<double>("bw");
         my_parameter.A_RX2.bw  = parameters.get_child("A_RX2").get<double>("bw");
@@ -156,7 +156,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"bw\" match the specifications!");
         return false;
     }
-    try{    
+    try{
         my_parameter.A_TXRX.delay = parameters.get_child("A_TXRX").get<double>("delay");
         my_parameter.B_TXRX.delay = parameters.get_child("B_TXRX").get<double>("delay");
         my_parameter.A_RX2.delay  = parameters.get_child("A_RX2").get<double>("delay");
@@ -166,7 +166,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"delay\" match the specifications!");
         return false;
     }
-    try{     
+    try{
         my_parameter.A_TXRX.gain = parameters.get_child("A_TXRX").get<double>("gain");
         my_parameter.B_TXRX.gain = parameters.get_child("B_TXRX").get<double>("gain");
         my_parameter.A_RX2.gain  = parameters.get_child("A_RX2").get<double>("gain");
@@ -176,7 +176,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"gain\" match the specifications!");
         return false;
     }
-    try{     
+    try{
         my_parameter.A_TXRX.freq = as_vector<int>(parameters, "A_TXRX","freq");
         my_parameter.B_TXRX.freq = as_vector<int>(parameters, "B_TXRX","freq");
         my_parameter.A_RX2.freq  = as_vector<int>(parameters, "A_RX2","freq");
@@ -186,7 +186,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"frequency\" match the specifications!");
         return false;
     }
-    try{    
+    try{
         my_parameter.A_TXRX.ampl = as_vector<float>(parameters, "A_TXRX","ampl");
         my_parameter.B_TXRX.ampl = as_vector<float>(parameters, "B_TXRX","ampl");
         my_parameter.A_RX2.ampl  = as_vector<float>(parameters, "A_RX2","ampl");
@@ -196,7 +196,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"amplitude\" match the specifications!");
         return false;
     }
-    try{    
+    try{
         my_parameter.A_TXRX.wave_type = string_to_w_type_vector( as_vector<std::string>(parameters, "A_TXRX","wave_type") );
         my_parameter.B_TXRX.wave_type = string_to_w_type_vector(as_vector<std::string>(parameters, "B_TXRX","wave_type") );
         my_parameter.A_RX2.wave_type  = string_to_w_type_vector(as_vector<std::string>(parameters, "A_RX2","wave_type") );
@@ -206,7 +206,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"wave_type\" match the specifications!");
         return false;
     }
-    try{    
+    try{
         my_parameter.A_TXRX.chirp_t = as_vector<float>(parameters, "A_TXRX","chirp_t");
         my_parameter.B_TXRX.chirp_t = as_vector<float>(parameters, "B_TXRX","chirp_t");
         my_parameter.A_RX2.chirp_t  = as_vector<float>(parameters, "A_RX2","chirp_t");
@@ -216,7 +216,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"chirp_t\" match the specifications!");
         return false;
     }
-    try{    
+    try{
         my_parameter.A_TXRX.chirp_f = as_vector<int>(parameters, "A_TXRX","chirp_f");
         my_parameter.B_TXRX.chirp_f = as_vector<int>(parameters, "B_TXRX","chirp_f");
         my_parameter.A_RX2.chirp_f  = as_vector<int>(parameters, "A_RX2","chirp_f");
@@ -236,10 +236,10 @@ bool string2param(std::string data, usrp_param &my_parameter){
         print_error("could not parse the JSON file correctly: be sure that the data type used for descriptor \"swipe_s\" match the specifications!");
         return false;
     }
-    
+
     std::cout<<"printing parameters..."<<std::endl;
     return true;
-    
+
 }
 
 bool is_pfb_active(param ant_parameter){
@@ -253,9 +253,9 @@ bool is_pfb_active(param ant_parameter){
 //check if the parameters are physically viable
 bool chk_param(usrp_param *parameter){
 
-    
+
     if(parameter->A_TXRX.mode != OFF){
-        
+
         if(is_pfb_active(parameter->A_TXRX)){
             if(parameter->A_TXRX.pf_average <= 0)parameter->A_TXRX.pf_average = 1;
             if(parameter->A_TXRX.fft_tones <= 0){
@@ -296,9 +296,9 @@ bool chk_param(usrp_param *parameter){
             }
         }
     }
-    
+
     if(parameter->B_TXRX.mode != OFF){
-    
+
         if(is_pfb_active(parameter->B_TXRX)){
             if(parameter->B_TXRX.pf_average <= 0)parameter->B_TXRX.pf_average = 1;
             if(parameter->B_TXRX.fft_tones <= 0){

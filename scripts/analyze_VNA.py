@@ -39,5 +39,3 @@ if __name__ == "__main__":
     files = glob.glob("USRP_VNA*.h5")
 
     run(backend = args.backend, files = files)
-
-

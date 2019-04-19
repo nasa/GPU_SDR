@@ -736,6 +736,7 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
         fig = tools.make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.003)
 
         fig['layout'].update(title=title)
+        fig['layout'].update(autosize=True)
         fig['layout']['xaxis1'].update(title='Frequency [Hz]')
         fig['layout']['xaxis1'].update(exponentformat='SI')
         fig['layout']['xaxis1'].update(ticksuffix='Hz')
@@ -796,6 +797,7 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
             fig.append_trace(traceP, 2, 1)
 
         final_filename = output_filename + ".html"
+        #fig['layout'].update(autosize=True)
         plotly.offline.plot(fig, filename=final_filename + ".html", auto_open=auto_open)
 
     else:

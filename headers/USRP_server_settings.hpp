@@ -1,7 +1,7 @@
 //! @file USRP_server_settings.hpp
 /* @brief Containd definitions of variables, macros and functions needed for the server basic settings and definitions.
  *
- * 
+ *
  *
 */
 //! @cond
@@ -23,7 +23,7 @@
 #include <mutex>
 #include <pthread.h>
 #include <thread>
-#include <assert.h> 
+#include <assert.h>
 #include <future>
 
 #include <uhd/utils/thread.hpp>
@@ -45,7 +45,7 @@
 #include <boost/lockfree/spsc_queue.hpp>
 #include <boost/timer/timer.hpp>
 #include <boost/property_tree/json_parser.hpp>
-#include <boost/exception/diagnostic_information.hpp> 
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/asio/basic_deadline_timer.hpp>
 #include <boost/thread/thread.hpp>
@@ -70,6 +70,9 @@ using namespace logging::trivial;
 
 #include <cuda_runtime.h>
 //#include <cufft.h>
+
+//offset for LO tuning.
+#define OFFSET_F 0//100000000
 
 //length of the TX and RX queue. for non real time application longer queue are needed to stack up data
 
@@ -116,13 +119,13 @@ ant_mode ant_mode_from_string(std::string str);
 
 //describe the hardware and software paramenter for a single antenna of the USRP.
 struct param{
-    
+
     //how to use the selected antenna
     ant_mode mode = OFF;
-    
+
     //hardware parameters
     int rate,tone,gain,bw;
-    
+
     //runtime hardware parameters
     size_t samples;
     double delay;
@@ -138,15 +141,15 @@ struct param{
     std::vector<float> chirp_t;
     std::vector<int> chirp_f;
     std::vector<int> swipe_s;
-    
+
     //polyphase filter bank specific
     int fft_tones; // it is an int because of size_t* incompatible with cufft calls
     size_t pf_average;
-    
+
     //returns the maximum output buffer size (not all samples of that size will be always good)
     //TODO something's wrong with this function
     int get_output_buffer_size();
-    
+
     //the execution of this measurement, if TX, requres a dynamical memory allocation?
     bool dynamic_buffer();
 };
@@ -161,14 +164,14 @@ struct usrp_param{
     param B_TXRX;
     param A_RX2;
     param B_RX2;
-    
+
     //how mny rx or tx to set up
     int get_number(ant_mode T);
-    
+
     bool is_A_active();
-    
+
     bool is_B_active();
-    
+
 };
 
 //contains the general setting to use for the USRP
@@ -177,22 +180,22 @@ struct server_settings{
 
     //internal or external clock reference
     std::string clock_reference;
-    
+
     //which gpu use for signal processing on this device
     int GPU_device_index;
-    
+
     //defaults buffer lengths
     int default_rx_buffer_len;
     int default_tx_buffer_len;
-    
+
     //enable TCP streaming
-    bool TCP_streaming;    
-    
+    bool TCP_streaming;
+
     //enable file writing
     bool FILE_writing;
-    
+
     void validate();
-    
+
     void autoset();
 
 };

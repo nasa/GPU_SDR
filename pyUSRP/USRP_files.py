@@ -510,6 +510,7 @@ class global_parameter(object):
                     continue
                 if self.parameters[ant_key]['mode'] != "OFF":
 
+                    self.parameters[ant_key]['rate'] = int(self.parameters[ant_key]['rate'])
                     self.parameters[ant_key]['rf'] = int(self.parameters[ant_key]['rf'])
 
                     try:
@@ -576,6 +577,9 @@ class global_parameter(object):
                         print_warning(
                             "\'wave_type\" attribute in parameters has to be a list, changing value to list...")
                         self.parameters[ant_key]['wave_type'] = [self.parameters[ant_key]['wave_type']]
+
+                    for i in range(len(self.parameters[ant_key]['freq'])):
+                        self.parameters[ant_key]['freq'][i] = int(self.parameters[ant_key]['freq'][i])
 
                     try:
                         len(self.parameters[ant_key]['ampl'])
