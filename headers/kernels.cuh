@@ -112,6 +112,9 @@ float2* make_hamming_window(int length, int side, bool diagnostic = false);
 //note that this is a host function that wraps some device calls
 float2* make_sinc_window(int length, float fc, bool diagnostic);
 
+//! @brief Creates a flattop window in the GPU memory.
+float2* make_flat_window(int length, int side, bool diagnostic);
+
 void print_chirp_params(std::string comment, chirp_parameter cp);
 
 //generate a set of tones and return host pointer to the buffer unless the device option is true.
@@ -155,7 +158,7 @@ void cublas_decim(
 //wrapper for the previous fft decimation function. decimates the pfb output.
 //NOTE: this function does not take care of the reminder and suppose that calculation
 //to determine the output_length has already been externally done.
-void decimate_pfb(        
+void decimate_pfb(
     float2* __restrict__ input, //output of the pfb
     float2* __restrict__ output,//decimated output
     int decim,                  //decimation factor (multiplicative to the pfb one)
@@ -175,7 +178,3 @@ void D_cublas_decim(
     cublasHandle_t* __restrict__ handle
     );
 #endif
-
-
-
-

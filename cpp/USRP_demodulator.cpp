@@ -175,7 +175,7 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
                 one = make_cuComplex (1.0f, 0.0f);
 
                 //creates a profile for filtering and decimation
-                profile = make_hamming_window<float2>(ppt,ppt/10,false);
+                profile = make_flat_window(ppt,ppt/10,false);
 
                 //profile = make_sinc_window(ppt,0.02);
                 //scale_buffer<<<1024,32>>>(profile,ppt,1./parameters->decim);

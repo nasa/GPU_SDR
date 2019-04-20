@@ -12,14 +12,7 @@ except ImportError:
 
 import argparse
 
-def run(rate,freq,front_end, f0,f1, lapse, points):
-    '''
-    Basic test of the line delay functionality.
-    :param rate: USRP sampling rate.
-    :param freq: LO frequncy.
-    :param front_end: A or B front end.
-    :return: None
-    '''
+def run(gain,iter,rate,freq,front_end, f0,f1, lapse, points):
 
     try:
         if u.LINE_DELAY[str(int(rate/1e6))]: pass
@@ -34,8 +27,8 @@ def run(rate,freq,front_end, f0,f1, lapse, points):
 
         u.load_delay_from_file(filename)
 
-    vna_filename = u.Single_VNA(start_f = f0, last_f = f1, measure_t = lapse, n_points = points, tx_gain = 0, Rate=None, decimation=True, RF=freq, Front_end=None,
-               Device=None, output_filename=None, Multitone_compensation=None, Iterations=1, verbose=False)
+    vna_filename = u.Single_VNA(start_f = f0, last_f = f1, measure_t = lapse, n_points = points, tx_gain = gain, Rate=None, decimation=True, RF=freq, Front_end=None,
+               Device=None, output_filename=None, Multitone_compensation=None, Iterations=iter, verbose=False)
 
     return vna_filename
 
@@ -51,7 +44,9 @@ if __name__ == "__main__":
     parser.add_argument('--f0', '-f0', help='Baseband start frequrency in MHz', type=float, default=-45)
     parser.add_argument('--f1', '-f1', help='Baseband end frequrency in MHz', type=float, default=+45)
     parser.add_argument('--points', '-p', help='Number of points used in the scan', type=float, default=50e3)
-    parser.add_argument('--time', '-t', help='Duration of the scan in seconds', type=float, default=10)
+    parser.add_argument('--time', '-t', help='Duration of the scan in seconds per iteration', type=float, default=10)
+    parser.add_argument('--iter', '-i', help='How many iterations to perform', type=float, default=1)
+    parser.add_argument('--gain', '-g', help='set the transmission gain', type=float, default=1)
 
     args = parser.parse_args()
 
@@ -71,7 +66,17 @@ if __name__ == "__main__":
     cmd = ""
     filenames = []
     while cmd != "S":
-        f = run(rate = args.rate*1e6, freq = args.freq*1e6, front_end = args.frontend, f0 = args.f0*1e6, f1 = args.f1*1e6, lapse = args.time, points = args.points)
+        f = run(
+                gain = int(args.gain),
+                iter = int(args.iter),
+                rate = args.rate*1e6,
+                freq = args.freq*1e6,
+                front_end = args.frontend,
+                f0 = args.f0*1e6,
+                f1 = args.f1*1e6,
+                lapse = args.time,
+                points = args.points
+            )
         cmd = raw_input("Press enter to measure again or type S to stop.")
         filenames.append(f)
 

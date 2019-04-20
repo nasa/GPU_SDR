@@ -100,6 +100,56 @@ float2* make_hamming_window<float2>(int length, int side, bool diagnostic){
     cudaDeviceSynchronize();
     return d_win;
 }
+
+float2* make_flat_window(int length, int side, bool diagnostic){
+
+    float2 *d_win,*h_win = (float2*)malloc(length*sizeof(float2));
+
+    //allocate some memory on the GPU
+    cudaMalloc((void **)&d_win, length*sizeof(float2));
+
+
+    //initialize the accumulator used for normalization
+    float scale = 0;
+
+    for(int i = 0; i < side; i++){
+        h_win[i].y = 0;
+        h_win[i].x = 0;
+    }
+    for(int i = length - side; i < length; i++){
+        h_win[i].y = 0;
+        h_win[i].x = 0;
+    }
+    for(int i = 0; i < length - side; i++){
+        h_win[i+side].y = 1.;
+
+        //make flat
+        h_win[i+side].x = 1.;
+        scale += h_win[i+side].x;
+
+    }
+
+    //normalize the window
+    for(int i = 0; i < length; i++) h_win[i].x /= scale;
+
+    //upload the window on the GPU
+    cudaMemcpy(d_win, h_win, length*sizeof(float2),cudaMemcpyHostToDevice);
+
+    if(diagnostic){
+        //write a diagnostic binary file containing the window.
+        //TODO there hsould be a single hdf5 file containing all the diagnostic informations
+        FILE* window_diagnostic = fopen("USRP_hamming_filter_window.dat", "wb");
+        fwrite(static_cast<void*>(h_win), length, sizeof(float2), window_diagnostic);
+        fclose(window_diagnostic);
+    }
+
+    //cleanup
+    free(h_win);
+    cudaDeviceSynchronize();
+    return d_win;
+}
+
+
 //allocates memory on gpu and fills with a real sinc window. returns a pointer to the window on the device.
 //note that this is a host function that wraps some device calls
 float2* make_sinc_window(int length, float fc, bool diagnostic = false){

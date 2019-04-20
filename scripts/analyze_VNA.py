@@ -28,12 +28,6 @@ if __name__ == "__main__":
 
 
     args = parser.parse_args()
-
-    try:
-        os.mkdir(args.folder)
-    except OSError:
-        pass
-
     os.chdir(args.folder)
 
     files = glob.glob("USRP_VNA*.h5")

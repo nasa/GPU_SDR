@@ -10,6 +10,8 @@ import datetime
 import signal as Signal
 import sys
 import socket
+import contextlib
+import io
 from threading import Condition
 import multiprocessing
 from multiprocessing.managers import SyncManager
@@ -117,6 +119,19 @@ CLIENT_STATUS["measure_running_now"] = False
 # threading condition variables for controlling Sync RX thread activity
 Sync_RX_condition = manager.Condition()
 
+@contextlib.contextmanager
+def nostdout():
+    """
+    Silence stdoutput of function within a context.
+
+    Example:
+    >>> with nostdout():
+    >>>     f0,Qi,Qr,zfit,modelwise = do_fit(...)
+    """
+    save_stdout = sys.stdout
+    sys.stdout = io.BytesIO()
+    yield
+    sys.stdout = save_stdout
 
 def to_list_of_str(user_input):
     '''

@@ -212,12 +212,13 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
     info = get_rx_info(filename, ant=None)
     freq, S21 = get_VNA_data(filename, calibrated = True, usrp_number = 0)
 
-    resolution = np.abs(info['freq'] - info['chirp_f'])/float(len(S21))
+    resolution = np.abs(info['freq'][0] - info['chirp_f'][0])/float(len(S21))
     center = info['rf']
 
     phase = np.angle(S21)
     magnitude = np.abs(S21)
     magnitudedb = vrms2dbm(magnitude)
+
 
     # Remove the AA filter for usrp x300 ubx-160 100 Msps
     arbitrary_cut = int(len(magnitudedb)/90)
@@ -225,6 +226,7 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
     phase=phase[arbitrary_cut:-arbitrary_cut]
     magnitudedb=magnitudedb[arbitrary_cut:-arbitrary_cut]
     magnitude = magnitude[arbitrary_cut:-arbitrary_cut]
+
 
     if smoothing is not None:
         if verbose:
@@ -240,8 +242,11 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
 
     if diagnostic_plots:
         diagnostic_folder = "Init_peaks_diagnostic_"+os.path.splitext(filename)[0]
-        os.mkdir(diagnostic_folder)
-        print_debug("Generating diagnostic plots in folder \'%s\'...")
+        try:
+            os.mkdir(diagnostic_folder)
+        except OSError:
+            print_warning("Overwriting initialization diagnostic plots")
+        print_debug("Generating diagnostic plots in folder \'%s\'..."%diagnostic_folder)
 
     #supposed width of each peak
     peak_width /= resolution
@@ -255,33 +260,41 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
     # exclude center frequency
     if exclude_center:
         for ii in range(len(mask)):
-            if np.abs(freq[ii] - center) < (10 * resolution):
+            if np.abs(freq[ii] - center) < (50000):
                 mask[ii] = False
 
     # Optimizing on the magnitude of derivative of S21
     gradS21 = np.abs(np.gradient(S21_val))
-
+    freq_ = freq #mock frequency axis
     iteration_number = 0
 
     while(sum(mask)>0):
-
+        #gradS21 = gradS21[mask]
+        #S21_val = S21_val[mask]
+        #freq_ = freq_[mask]
+        #magnitudedb = magnitudedb[mask]
         #find maximum and fit
-        maximum = np.argmax(gradS21*mask)
-        low_index = max(maximum-peak_width,0)
-        high_index =maximum+peak_width
+        maximum = np.max(gradS21[mask])
+        maximum = np.where(gradS21 == maximum)[0]
+        #pl.plot(gradS21)
+        #pl.scatter(np.argmax(gradS21),gradS21[np.argmax(gradS21)],color = 'red')
+        #pl.show()
+        low_index = int(max(maximum-peak_width,0))
+        high_index = int(min(maximum+peak_width, len(freq_)))
+
         try:
-            with nostdout():
-                f0,Qi,Qr,zfit,modelwise = do_fit(
-                    freq[low_index:high_index],
-                    S21_val.real[low_index:high_index],
-                    S21_val.imag[low_index:high_index],
-                    p0=None
-                )
+            #with nostdout():
+            f0,Qi,Qr,zfit,modelwise = do_fit(
+                freq_[low_index:high_index],
+                S21_val.real[low_index:high_index],
+                S21_val.imag[low_index:high_index],
+                p0=None
+            )
         except RuntimeError:
             Qr = 0
 
         if Qr>Qr_cutoff:
-            print_debug("Resonator found at %.2f MHz"%(freq[maximum]/1.e6))
+            print_debug("Resonator found at %.2f MHz"%(freq_[maximum]/1.e6))
             max_diag.append(maximum)
             q_diag.append(Qr)
             f0s.append(f0)
@@ -296,7 +309,7 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
             fig, ax = pl.subplots(nrows=1, ncols=1)
             fig.suptitle("Peak initialization diagnosic #%d"%iteration_number)
             ax.plot(
-                freq[low_index:high_index],
+                freq_[low_index:high_index],
                 magnitudedb[low_index:high_index],
                 label = label_set,
                 color = col
@@ -314,7 +327,8 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
             break
 
         # Remove points from mask
-        for i in range(len(phase)):
+        #mask = mask[mask]
+        for i in range(len(gradS21)):
             if i >maximum-peak_width and i<maximum+peak_width:
                 mask[i] = False
 
@@ -328,7 +342,7 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
             reso_grp = fv.create_group("Resonators")
         except ValueError:
             print_warning("Overwriting resonator initialization attribute")
-            pass
+            reso_grp = fv["Resonators"]
 
         results = [freq[j] for j in max_diag]
         reso_grp.attrs.__setitem__("tones_init", results)
@@ -342,12 +356,13 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
     else:
         return True
 
-def get_init_peaks(filename):
+def get_init_peaks(filename, verbose = False):
     '''
     Get initialized peaks froma a VNA file.
 
     Arguments:
         - filename: the name of the file containing the peaks.
+        - verbose: print some debug line.
 
     Return:
         - Numpy array containing the frequency of each ninitialized peak in MHz.
@@ -359,10 +374,10 @@ def get_init_peaks(filename):
         inits = file["Resonators"].attrs.get("tones_init")
     except ValueError:
         inits = np.asarray([])
-        print_warning("get_init_peaks() did not find any initialized peak")
+        if(verbose): print_debug("get_init_peaks() did not find any initialized peak")
     except KeyError:
         inits = np.asarray([])
-        print_warning("get_init_peaks() did not find any initialized peak")
+        if(verbose): print_debug("get_init_peaks() did not find any initialized peak")
     file.close()
 
     return np.asarray(inits)

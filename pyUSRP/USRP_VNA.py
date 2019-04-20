@@ -46,6 +46,7 @@ from USRP_plotting import *
 from USRP_files import *
 from USRP_data_analysis import *
 from USRP_delay import *
+from USRP_fitting import *
 
 def Dual_VNA(start_f_A, last_f_A, start_f_B, last_f_B, measure_t, n_points, tx_gain_A, tx_gain_B, Rate = None, decimation = True, RF_A = None, RF_B = None,
                Device = None, output_filename = None, Multitone_compensation_A = None, Multitone_compensation_B = None, Iterations = 1, verbose = False, **kwargs):
@@ -655,13 +656,14 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
     freq_axes = []
     S21_axes = []
     final_filename = ""
-
+    reso_axes = []
     for filename in filenames:
         if verbose: print_debug("Plotting VNA from file \'%s\'"%filename)
         freq_tmp, S21_tmp = get_VNA_data(filename)
 
         freq_axes.append(freq_tmp)
         S21_axes.append(S21_tmp)
+        reso_axes.append( get_init_peaks(filename, verbose = verbose))
 
     del S21_tmp
     del freq_tmp
@@ -671,6 +673,8 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
         if len(filenames)>1:
             output_filename+="_compare"
         output_filename+="_"+get_timestamp()
+
+    fit_label = ""
 
     if backend == "matplotlib":
         if verbose: print_debug("Using matplotlib backend...")
@@ -712,9 +716,29 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
                 label += "\n"+str(add_info_labels[i])
 
             color = get_color(i)
+            if color == 'black':
+                other_color = 'red'
+            else:
+                other_color = 'black'
 
             ax[0].plot(freq_axes[i], mag, color = color, label = label)
             ax[1].plot(freq_axes[i], phase, color = color)
+
+            # if there are initialized resoantor in the file...
+            if len(reso_axes[i]) > 0:
+                x_points = []
+                mag_y_points = []
+                pha_y_points = []
+                for point in reso_axes[i]:
+                    index = find_nearest(freq_axes[i], point)
+                    x_points.append(freq_axes[i][index])
+                    mag_y_points.append(mag[index])
+                    pha_y_points.append(phase[index])
+                if fit_label is not None:
+                    fit_label = "Fit initialization"
+                ax[0].scatter(x_points, mag_y_points, s=80, facecolors='none', edgecolors=other_color, label = fit_label)
+                ax[1].scatter(x_points, pha_y_points, s=80, facecolors='none', edgecolors=other_color)
+                fit_label = None
 
         ax[0].set_ylabel("Magnitude [dB]")
         ax[1].set_ylabel("Phase [Rad]")
@@ -747,7 +771,10 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
         for i in range(len(filenames)):
 
             color = get_color(i)
-
+            if color == 'black':
+                other_color = 'red'
+            else:
+                other_color = 'black'
             label = filenames[i]
             resolution = freq_axes[i][1] - freq_axes[i][0]
 
@@ -796,8 +823,55 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
             fig.append_trace(traceM, 1, 1)
             fig.append_trace(traceP, 2, 1)
 
+            if len(reso_axes[i]) > 0:
+                x_points = []
+                mag_y_points = []
+                pha_y_points = []
+                for point in reso_axes[i]:
+                    index = find_nearest(freq_axes[i], point)
+                    x_points.append(freq_axes[i][index])
+                    mag_y_points.append(mag[index])
+                    pha_y_points.append(phase[index])
+
+
+                fit_label = "Fit initialization"
+                traceP_fit = go.Scattergl(
+                    x=x_points,
+                    y=pha_y_points,
+                    name=fit_label,
+                    mode='markers',
+                    marker = dict(
+                        color = 'rgba(0, 0, 0, 0.)',
+                        size = 10,
+                        line = dict(
+                            color = other_color,
+                            width = 2
+                        )
+                    ),
+                    legendgroup=filenames[i],
+                    showlegend=False
+                )
+                traceM_fit = go.Scattergl(
+                    x=x_points,
+                    y=mag_y_points,
+                    name=fit_label,
+                    mode='markers',
+                    marker = dict(
+                        color = 'rgba(0, 0, 0, 0.)',
+                        size = 10,
+                        line = dict(
+                            color = other_color,
+                            width = 2
+                        )
+                    ),
+                    legendgroup=filenames[i],
+                    showlegend=True
+                )
+
+                fig.append_trace(traceM_fit, 1, 1)
+                fig.append_trace(traceP_fit, 2, 1)
+
         final_filename = output_filename + ".html"
-        #fig['layout'].update(autosize=True)
         plotly.offline.plot(fig, filename=final_filename + ".html", auto_open=auto_open)
 
     else:
