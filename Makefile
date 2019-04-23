@@ -1,6 +1,6 @@
 CC=g++
 
-CC_DEF_FLAGS =-std=c++11 -O2 -DBOOST_LOG_DYN_LINK
+CC_DEF_FLAGS =-std=c++11 -O2 -DBOOST_LOG_DYN_LINK -g -Wall
 CC+=$(CC_DEF_FLAGS)
 
 SRC_DIR := cpp
@@ -10,18 +10,18 @@ OBJ_DIR := obj
 HDF5_PATH_INC = /usr/include/hdf5/serial
 
 CINCLUDE =-I$(HDF5_PATH_INC) -I$(HPP_DIR)
-CLINK = -lz -lsz -ldl 
+CLINK = -lz -lsz -ldl
 CLINK += -lpthread -lboost_system -lboost_program_options -lboost_chrono -lboost_thread -lboost_log -lboost_log_setup
 
-CLINK += -luhd  
-CLINK += -lhdf5_hl_cpp -lhdf5_cpp -lhdf5_serial 
+CLINK += -luhd
+CLINK += -lhdf5_hl_cpp -lhdf5_cpp -lhdf5_serial
 
 NVCC = nvcc
 
 NV_DEF_FLAGS = -std=c++11 -arch=sm_61
 NVCC+=$(NV_DEF_FLAGS)
 
-NVINCLUDE = -I/usr/local/cuda/include/ 
+NVINCLUDE = -I/usr/local/cuda/include/
 NVLINK = -lcudart -lcuda -lcufft -lcublas -lculibos
 
 SRC_FILES := $(wildcard $(SRC_DIR)/*.cpp)
@@ -45,7 +45,7 @@ doc:
 	doxygen server_docs/doc_gen
 	$(info Generating Python documentation...)
 	$(SPHINXBUILD) "$(SPHINXSOURCEDIR)" "$(SPHINXBUILDDIR)" $(SPHINXOPTS) $(O)
-	
+
 server: $(CUDA_OBJ_FILES) $(OBJ_FILES)
 	$(info Linking all using nvcc...)
 	@$(NVCC) $(CLINK) $(NVLINK) -o $@ $^

@@ -61,6 +61,8 @@ if __name__ == "__main__":
         u.print_error("Cannot find the GPU server!")
         exit()
 
+    rr = raw_input("press to start")
+
     # Data acquisition
 
     cmd = ""

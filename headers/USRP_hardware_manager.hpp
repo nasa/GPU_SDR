@@ -13,7 +13,7 @@ class hardware_manager{
     public:
 
         //internally stored usrp number
-        int this_usrp_number;
+        size_t this_usrp_number;
 
         //determine if the hardware has to be replaced by a software loop
         bool sw_loop;
@@ -23,7 +23,7 @@ class hardware_manager{
 
         //! @brief The initializer of the class can be used to select which usrp is controlled by the class
         //! Default call suppose only one USRP is connected
-        hardware_manager(server_settings* settings, bool sw_loop_init, int usrp_number = 0);
+        hardware_manager(server_settings* settings, bool sw_loop_init, size_t usrp_number = 0);
 
         //! @brief Set the USRP device with user parameters
         //! @todo TODO catch exceptions and return a boolean

@@ -1,6 +1,6 @@
 import subprocess as sp
 import sys
-import os
+import os,time
 import argparse
 from PyInquirer import prompt, print_json
 from pprint import pprint
@@ -26,11 +26,16 @@ def config(adapter_name, domains):
         return adapter_name
     print "Running config on "+adapter_name
     for d in domains:
+        print "Setting port speed... (for multi speed addapters only)"
+        out_string = "ethtool -s "+adapter_name+" speed 10000 autoneg off"
+        os.system(out_string)
+        time.sleep(1)
         current_address = prefix + str(d) + final
+        usrp_addr = prefix + str(d) + "."+str(int(2))
         out_string = "ifconfig "+adapter_name+" "+current_address
         print "Changing address to " + current_address
         os.system(out_string)
-        child = sp.Popen("/usr/local/bin/uhd_find_devices", stdout=sp.PIPE,shell=False)
+        child = sp.Popen("/usr/local/bin/uhd_find_devices --args=\"address="+usrp_addr+"\"", stdout=sp.PIPE,shell=True)
         streamdata = child.communicate()[0]
         rc = child.returncode
         if rc == 0:
@@ -41,7 +46,7 @@ def config(adapter_name, domains):
             print "Setting number of descriptors in the NIC..."
             out_string = "sudo ethtool -G "+ adapter_name + " rx 4096 tx 4096"
             os.system(out_string)
-            
+
             print "Setting network buffers..."
             out_string = "sysctl -w net.core.rmem_max=1621498630"
             os.system(out_string)
@@ -62,16 +67,16 @@ def config(adapter_name, domains):
                 print help_message_pci
             os.system("sudo setpci -v -d "+ID_device[0:4]+":"+ID_device[4:]+" e6.b=2e")
             return "you are all set."
-            
+
     return "No USRP found. Maybe it is connected to an other network adapter?"
-        
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    
+
     parser.add_argument('--adapter','-a', help='Name of the adapter. Optional argument, if not given a menu will pop-up.',type = str)
     parser.add_argument('--subnet','-s',help='subnet numbers to use in the address scan in the form 192.168.xx.1', nargs='+', type=int)
-    
-    args = parser.parse_args() 
+
+    args = parser.parse_args()
     if os.getuid()!= 0:
         print "Script must have admin privilege. Try running with sudo."
         exit(-1)
@@ -82,7 +87,7 @@ if __name__ == "__main__":
         for nn in ad_names:
             if len(nn)>2:
                 selected_adapter_names.append(nn)
-                
+
         questions = [
             {
                 'type': 'list',
@@ -98,13 +103,13 @@ if __name__ == "__main__":
         adapter_name = prompt(questions)['adapters']
         if adapter_name == "Exit":
             exit()
-                
+
     else:
         adapter_name = args.adapter
-        
-    
+
+
     print "Looking for usrp on adapter: "+adapter_name
-    
+
     if args.subnet is None:
         print 'No subnet number specified in system arguments. Will changing the ip address to 192.168.xx.1\nDefault is [30,40]'
         questions = [
@@ -164,7 +169,7 @@ if __name__ == "__main__":
         if len(domains)==0:
             print "Selecting default domains."
             domains = [30,40]
-  
+
     else:
         domains = args.subnet
     print  "Scanning on domains: "+str(domains)

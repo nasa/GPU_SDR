@@ -925,11 +925,8 @@ def Param_to_H5(H5fp, parameters_class, **kwargs):
                             parameters_class.parameters[ant_name]['fft_tones'] * max(
                         parameters_class.parameters[ant_name]['decim'], 1))))
             elif parameters_class.parameters[ant_name]['wave_type'][0] == "CHIRP":
-                if parameters_class.parameters[ant_name]['decim'] == 0:
-                    data_len = parameters_class.parameters[ant_name]['samples']
-                # Used in previous scheme.
-                #else:
-                #    data_len = parameters_class.parameters[ant_name]['swipe_s'][0] / parameters_class.parameters[ant_name]['decim']
+                #if parameters_class.parameters[ant_name]['decim'] == 0:
+                data_len = parameters_class.parameters[ant_name]['samples']
             elif parameters_class.parameters[ant_name]['wave_type'][0] == "NOISE":
                 data_len = int(np.ceil(parameters_class.parameters[ant_name]['samples'] / max(
                     parameters_class.parameters[ant_name]['decim'], 1)))

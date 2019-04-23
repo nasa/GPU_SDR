@@ -16,6 +16,9 @@ std::string w_type_to_str(w_type enumerator){
         case(NOISE):
             comp_string = "NOISE";
             break;
+        case(RAMP):
+            comp_string = "RAMP";
+            break;
         case(NODSP):
             comp_string = "NODSP";
             break;
@@ -29,22 +32,22 @@ std::string w_type_to_str(w_type enumerator){
 w_type string_to_w_type(std::string input_string){
     w_type conv = NODSP;
     if(input_string.compare("NODSP") == 0)conv = NODSP;
-    
+
     if(input_string.compare("CHIRP") == 0)conv = CHIRP;
-    
+
     if(input_string.compare("NOISE") == 0)conv = NOISE;
-    
+
     if(input_string.compare("TONES") == 0)conv = TONES;
-    
+
     if(input_string.compare("SWONLY") == 0)conv = SWONLY;
-    
+
     return conv;
-    
+
 }
 
 std::vector<w_type> string_to_w_type_vector(std::vector<std::string> string_vector){
     std::vector<w_type> res(string_vector.size());
-    for(int i = 0; i <string_vector.size(); i++ ){
+    for(size_t i = 0; i <string_vector.size(); i++ ){
         res[i] = string_to_w_type(string_vector[i]);
     }
     return res;
@@ -86,7 +89,7 @@ int param::get_output_buffer_size(){
 //the execution of this measurement, if TX, requres a dynamical memory allocation?
 bool param::dynamic_buffer(){
     bool dynamic = false;
-    for(int i = 0; i< wave_type.size(); i++)if(wave_type[i]!=TONES)dynamic = true;
+    for(size_t i = 0; i< wave_type.size(); i++)if(wave_type[i]!=TONES)dynamic = true;
     return dynamic;
 }
 
@@ -116,7 +119,7 @@ void server_settings::validate(){
         clock_reference = "internal";
     }
     int num_gpus;
-    cudaGetDeviceCount(&num_gpus); 
+    cudaGetDeviceCount(&num_gpus);
     if (num_gpus == 0){
         print_error("No GPU found in the system. This version of the USRP server needs at least one GPU to work.");
         exit(-1);
@@ -182,12 +185,12 @@ void Thread_Prioriry(boost::thread& Thread, int priority, int affinity){
     pthread_t thread_ID = (pthread_t)Thread.native_handle();
     policy = SCHED_FIFO;
     scheme.sched_priority = priority;
-    
-    
+
+
     retcode = pthread_setschedparam(thread_ID, policy, &scheme);
     if(retcode != 0)print_warning("Cannot set thread scheduling policy");
-    
-    
+
+
     print_debug("Setting affinity to ", affinity%SYSTEM_CORES);
     CPU_ZERO(&cpuset);
     CPU_SET(affinity%SYSTEM_CORES, &cpuset);
@@ -198,11 +201,11 @@ void Thread_Prioriry(boost::thread& Thread, int priority, int affinity){
         print_error(ss.str());
     }
     #endif
-    
+
     #if defined(__APPLE__)
     //TODO should find a way to controll the affinity policy on osx and windows
     #endif
-    
+
 }
 
 void SetThreadName(boost::thread* thread, const char* threadName){

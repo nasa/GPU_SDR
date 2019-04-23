@@ -244,7 +244,7 @@ bool string2param(std::string data, usrp_param &my_parameter){
 
 bool is_pfb_active(param ant_parameter){
     bool res = false;
-    for(int i = 0; i< ant_parameter.wave_type.size(); i++){
+    for(size_t i = 0; i< ant_parameter.wave_type.size(); i++){
         if(ant_parameter.wave_type[i] == TONES or ant_parameter.wave_type[i] == NOISE)res = true;
     }
     return res;
@@ -272,7 +272,7 @@ bool chk_param(usrp_param *parameter){
             print_warning(ss.str());
             parameter->A_TXRX.buffer_len = DEFAULT_BUFFER_LEN;
         }
-        for(int i=0; i< parameter->A_TXRX.wave_type.size(); i++){
+        for(size_t i=0; i< parameter->A_TXRX.wave_type.size(); i++){
             try{
                 if(parameter->A_TXRX.wave_type[i] == CHIRP or parameter->A_TXRX.wave_type[i] == TONES){
                     if(std::abs(parameter->A_TXRX.freq.at(i)) > parameter->A_TXRX.rate){
@@ -315,7 +315,7 @@ bool chk_param(usrp_param *parameter){
             print_warning(ss.str());
             parameter->B_TXRX.buffer_len = DEFAULT_BUFFER_LEN;
         }
-        for(int i=0; i< parameter->B_TXRX.wave_type.size(); i++){
+        for(size_t i=0; i< parameter->B_TXRX.wave_type.size(); i++){
             try{
                 if(parameter->B_TXRX.wave_type[i] == CHIRP or parameter->B_TXRX.wave_type[i] == TONES){
                     if(std::abs(parameter->B_TXRX.freq.at(i)) > parameter->B_TXRX.rate){
@@ -356,7 +356,7 @@ bool chk_param(usrp_param *parameter){
             print_warning(ss.str());
             parameter->A_RX2.buffer_len = DEFAULT_BUFFER_LEN;
         }
-        for(int i=0; i< parameter->A_RX2.wave_type.size(); i++){
+        for(size_t i=0; i< parameter->A_RX2.wave_type.size(); i++){
             try{
                 if(parameter->A_RX2.wave_type[i] == CHIRP or parameter->A_RX2.wave_type[i] == TONES){
                     if(std::abs(parameter->A_RX2.freq.at(i)) > parameter->A_RX2.rate){
@@ -397,7 +397,7 @@ bool chk_param(usrp_param *parameter){
             print_warning(ss.str());
             parameter->B_RX2.buffer_len = DEFAULT_BUFFER_LEN;
         }
-        for(int i=0; i< parameter->B_RX2.wave_type.size(); i++){
+        for(size_t i=0; i< parameter->B_RX2.wave_type.size(); i++){
             try{
                 if(parameter->B_RX2.wave_type[i] == CHIRP or parameter->B_RX2.wave_type[i] == TONES){
                     if(std::abs(parameter->B_RX2.freq.at(i)) > parameter->B_RX2.rate){

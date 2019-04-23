@@ -5,7 +5,7 @@ auto start = std::chrono::system_clock::now();
 //! @brief Initializer of the class can be used to select which usrp is controlled by the class
 //! Default call suppose only one USRP is connected
 //! @todo TODO: the multi_usrp object has to be passed as argument to this initializer. Multiple usrp's will crash as the obj is not ts
-hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init, int usrp_number){
+hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init, size_t usrp_number){
 
 	BOOST_LOG_TRIVIAL(info) << "Initializing hardware manager";
 
@@ -366,12 +366,12 @@ int hardware_manager::clean_rx_queue(rx_queue* RX_queue, preallocator<float2>* m
 
     //temporary wrapper
     RX_wrapper warapped_buffer;
-
+	warapped_buffer.buffer = nullptr;
     //counter. Expected to be 0
     int counter = 0;
 
     //cannot execute when the rx thread is going
-    while(not RX_queue->empty() or RX_queue->pop(warapped_buffer)){
+    while(not RX_queue->empty() and RX_queue->pop(warapped_buffer)){
         memory->trash(warapped_buffer.buffer);
         counter ++;
     }
@@ -489,7 +489,7 @@ bool hardware_manager::check_tuning(){
                         std::this_thread::sleep_for(std::chrono::milliseconds(20));
                         if(timeout_counter>500){
                             std::stringstream ss;
-                            ss<<"Cannot tune the RX frontend of channel "<<chan?"A":"B";
+                            ss<<"Cannot tune the RX frontend of channel "<<chan;
                             print_error(ss.str());
                             return false;
                         }
@@ -521,7 +521,7 @@ bool hardware_manager::check_tuning(){
                         std::this_thread::sleep_for(std::chrono::milliseconds(20));
                         if(timeout_counter>500){
                             std::stringstream ss;
-                            ss<<"Cannot tune the TX frontend of channel "<<chan?"A":"B";
+                            ss<<"Cannot tune the TX frontend of channel "<<chan;
                             print_error(ss.str());
                             return false;
                         }
@@ -894,7 +894,7 @@ void hardware_manager::software_tx_thread(
         return;
     } //class variable to account for thread activity
     bool active = true;         //local activity monitor
-    long int sent_samp = 0;     //total number of samples sent
+    size_t sent_samp = 0;     //total number of samples sent
 
     while(active and (sent_samp < current_settings->samples)){
         try{
@@ -929,7 +929,7 @@ void hardware_manager::software_tx_thread(
 
 
 
-
+/*
 
 #ifndef GET_CACHE_LINE_SIZE_H_INCLUDED
 #define GET_CACHE_LINE_SIZE_H_INCLUDED
@@ -979,7 +979,7 @@ inline float2* get_buffer_ready(tx_queue* __restrict__ TX_queue, size_t buffer_l
     prefetch_range(tx_buffer, buffer_len_tx, cache);
     return tx_buffer;
 }
-
+*/
 void hardware_manager::single_tx_thread(
     param *current_settings,                //(managed internally to the class) user parameter to use for rx setting
     threading_condition* wait_condition,    //before joining wait for that condition
@@ -997,7 +997,7 @@ void hardware_manager::single_tx_thread(
     bool active = true;
     size_t sent_samp = 0;       //total number of samples sent
     float2* tx_buffer;  //the buffer pointer
-    float2* tx_next_buffer;  //the buffer pointer next
+    //float2* tx_next_buffer;  //the buffer pointer next
 
 
     //SetThreadName(metadata_thread, "TX_metadata_thread");
@@ -1029,9 +1029,9 @@ void hardware_manager::single_tx_thread(
 
     //optimizations for tx loop
     size_t max_samples_tx = current_settings->samples;
-    double burst_off = current_settings->burst_off;
+    //double burst_off = current_settings->burst_off;
     size_t buffer_len_tx = current_settings->buffer_len;
-    size_t cache = cache_line_size();
+    //size_t cache = cache_line_size();
 
 
     std::future<float2*> handle;
@@ -1158,7 +1158,7 @@ void hardware_manager::software_rx_thread(
     RX_wrapper warapped_buffer;
     float2 *rx_buffer;
     float2 *rx_buffer_cpy;
-    long int acc_samp = 0;  //total number of samples received
+    size_t acc_samp = 0;  //total number of samples received
     int counter = 0;
     while(active and (acc_samp < current_settings->samples)){
 

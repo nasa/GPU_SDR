@@ -13,14 +13,16 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
     //check what kind of demodulator has been requested
     bool mixed_buffer_type = false;
     int chirp_counter = 0;
-    w_type last_w_type;
+
+    w_type last_w_type = NODSP;
 
     //wrapper around the parameters (it could be empty: see default behaviour)
     try{last_w_type = parameters->wave_type.at(0);}catch(const std::out_of_range& e){
         if(diagnostic)print_warning("No signal processing options found. Transmitting full buffer.");
+        last_w_type = NODSP;
     }
 
-    for(int i = 0; i < parameters->wave_type.size(); i++){
+    for(size_t i = 0; i < parameters->wave_type.size(); i++){
         if(parameters->wave_type[i]!=last_w_type)mixed_buffer_type = true;
         if(parameters->wave_type[i]==CHIRP)chirp_counter++;
     }
