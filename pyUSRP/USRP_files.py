@@ -951,3 +951,59 @@ def Param_to_H5(H5fp, parameters_class, **kwargs):
     else:
         print_error("Cannot initialize H5 file without checked parameters.self_check() failed.")
         return []
+
+
+
+def get_VNA_data(filename, calibrated = True, usrp_number = 0):
+    '''
+    Get the frequency and S21 data in a preanalyzed vna file.
+    :param filename: the name of the HDF5 file containing the data.
+    :param calibrated: if True returns the S21 data in linear ratio units (Vrms(in)/Vrms(out)). if False returns S21 in ADC units.
+    :param usrp_number: usrp server number.
+    :return: frequency and S21 axis.
+
+    TO DO:
+        - Calibrarion for frontend A could be different from frontend B. This could lead to a wrong calibration.
+    '''
+    usrp_number = int(usrp_number)
+    if is_VNA_analyzed(filename):
+        filename = format_filename(filename)
+        f = bound_open(filename)
+    else:
+        err_msg = "Cannot get VNA data from file \'%s\' as it is not analyzed." % filename
+        print_error(err_msg)
+        raise ValueError(err_msg)
+    if not calibrated:
+        ret =  np.asarray(f["VNA_%d"%(usrp_number)]['frequency']), np.asarray(f["VNA_%d"%(usrp_number)]['S21'])
+    else:
+        ret =  np.asarray(f["VNA_%d"%(usrp_number)]['frequency']), np.asarray(f["VNA_%d"%(usrp_number)]['S21'])* f['VNA_%d'%(usrp_number)].attrs.get('calibration')[0]
+
+    f.close()
+    return ret
+
+
+def get_init_peaks(filename, verbose = False):
+    '''
+    Get initialized peaks froma a VNA file.
+
+    Arguments:
+        - filename: the name of the file containing the peaks.
+        - verbose: print some debug line.
+
+    Return:
+        - Numpy array containing the frequency of each ninitialized peak in MHz.
+    '''
+
+    file = bound_open(filename)
+
+    try:
+        inits = file["Resonators"].attrs.get("tones_init")
+    except ValueError:
+        inits = np.asarray([])
+        if(verbose): print_debug("get_init_peaks() did not find any initialized peak")
+    except KeyError:
+        inits = np.asarray([])
+        if(verbose): print_debug("get_init_peaks() did not find any initialized peak")
+    file.close()
+
+    return np.asarray(inits)

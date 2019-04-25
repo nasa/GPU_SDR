@@ -46,7 +46,6 @@ from USRP_plotting import *
 from USRP_files import *
 from USRP_data_analysis import *
 from USRP_delay import *
-from USRP_fitting import *
 
 def Dual_VNA(start_f_A, last_f_A, start_f_B, last_f_B, measure_t, n_points, tx_gain_A, tx_gain_B, Rate = None, decimation = True, RF_A = None, RF_B = None,
                Device = None, output_filename = None, Multitone_compensation_A = None, Multitone_compensation_B = None, Iterations = 1, verbose = False, **kwargs):
@@ -559,33 +558,6 @@ def is_VNA_analyzed(filename, usrp_number = 0):
         ret = True
     except KeyError:
         ret = False
-    f.close()
-    return ret
-
-def get_VNA_data(filename, calibrated = True, usrp_number = 0):
-    '''
-    Get the frequency and S21 data in a preanalyzed vna file.
-    :param filename: the name of the HDF5 file containing the data.
-    :param calibrated: if True returns the S21 data in linear ratio units (Vrms(in)/Vrms(out)). if False returns S21 in ADC units.
-    :param usrp_number: usrp server number.
-    :return: frequency and S21 axis.
-
-    TO DO:
-        - Calibrarion for frontend A could be different from frontend B. This could lead to a wrong calibration.
-    '''
-    usrp_number = int(usrp_number)
-    if is_VNA_analyzed(filename):
-        filename = format_filename(filename)
-        f = bound_open(filename)
-    else:
-        err_msg = "Cannot get VNA data from file \'%s\' as it is not analyzed." % filename
-        print_error(err_msg)
-        raise ValueError(err_msg)
-    if not calibrated:
-        ret =  np.asarray(f["VNA_%d"%(usrp_number)]['frequency']), np.asarray(f["VNA_%d"%(usrp_number)]['S21'])
-    else:
-        ret =  np.asarray(f["VNA_%d"%(usrp_number)]['frequency']), np.asarray(f["VNA_%d"%(usrp_number)]['S21'])* f['VNA_%d'%(usrp_number)].attrs.get('calibration')[0]
-
     f.close()
     return ret
 

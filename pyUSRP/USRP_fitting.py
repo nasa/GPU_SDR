@@ -44,7 +44,6 @@ from USRP_low_level import *
 from USRP_files import *
 from USRP_low_level import *
 from scipy import optimize
-from USRP_VNA import *
 
 
 
@@ -355,32 +354,6 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
         return False
     else:
         return True
-
-def get_init_peaks(filename, verbose = False):
-    '''
-    Get initialized peaks froma a VNA file.
-
-    Arguments:
-        - filename: the name of the file containing the peaks.
-        - verbose: print some debug line.
-
-    Return:
-        - Numpy array containing the frequency of each ninitialized peak in MHz.
-    '''
-
-    file = bound_open(filename)
-
-    try:
-        inits = file["Resonators"].attrs.get("tones_init")
-    except ValueError:
-        inits = np.asarray([])
-        if(verbose): print_debug("get_init_peaks() did not find any initialized peak")
-    except KeyError:
-        inits = np.asarray([])
-        if(verbose): print_debug("get_init_peaks() did not find any initialized peak")
-    file.close()
-
-    return np.asarray(inits)
 
 def vna_fit(filename, p0=None, fit_range = 12e4, verbose = False):
     """
