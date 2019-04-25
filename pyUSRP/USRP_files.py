@@ -927,10 +927,8 @@ def Param_to_H5(H5fp, parameters_class, **kwargs):
             elif parameters_class.parameters[ant_name]['wave_type'][0] == "CHIRP":
                 if parameters_class.parameters[ant_name]['decim'] == 0:
                     data_len = parameters_class.parameters[ant_name]['samples']
-                    print "PROBLEM, data len is: %d" % data_len
                 else:
                     data_len = parameters_class.parameters[ant_name]['swipe_s'][0]/parameters_class.parameters[ant_name]['decim']
-                    print "Ok, data len is: %d" % data_len
 
             elif parameters_class.parameters[ant_name]['wave_type'][0] == "NOISE":
                 data_len = int(np.ceil(parameters_class.parameters[ant_name]['samples'] / max(

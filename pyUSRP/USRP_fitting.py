@@ -42,9 +42,9 @@ import progressbar
 # import submodules
 from USRP_low_level import *
 from USRP_files import *
-from USRP_VNA import *
 from USRP_low_level import *
 from scipy import optimize
+from USRP_VNA import *
 
 
 
