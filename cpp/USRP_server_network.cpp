@@ -14,7 +14,6 @@ Sync_server::Sync_server(rx_queue* init_stream_queue, preallocator<float2>* init
     NET_IS_CONNECTED = false;
     NET_IS_STREAMING = false;
     verbose = true;
-    io_service = new boost::asio::io_service;
     option = new boost::asio::socket_base::reuse_address(true);
 }
 
@@ -30,30 +29,38 @@ void Sync_server::connect(int init_tcp_port){
     BOOST_LOG_TRIVIAL(info) << "Connecting sync protocol...";
     boost::asio::socket_base::reuse_address ciao(true);
     if(verbose)std::cout<<"Waiting for TCP data connection on port: "<< init_tcp_port<<" ..."<<std::endl;
+    //std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+    if(io_service == nullptr){
+      io_service = new boost::asio::io_service;
+    }
     acceptor = new tcp::acceptor(*io_service, tcp::endpoint(tcp::v4(), init_tcp_port),true);
     acceptor->set_option(ciao);
     socket = new tcp::socket(*io_service);
-    //socket->set_option(tcp::no_delay(true));
     acceptor->accept(*socket);
     BOOST_LOG_TRIVIAL(info) << "Connected";
     if(verbose)std::cout<<"TCP data connection status update: Connected."<< std::endl;
     NET_IS_CONNECTED = true;
     NEED_RECONNECT = false;
     if(not virtual_pinger_online){
-        //std::cout<<"launching virtual pinger..."<<std::endl;
+        BOOST_LOG_TRIVIAL(info) << "Launching virtual pinger...";
         virtual_pinger_thread = new boost::thread(boost::bind(&Sync_server::virtual_pinger,this));
     }else{
-        //std::cout<<"NO virtual pinger..."<<std::endl;
+        BOOST_LOG_TRIVIAL(warning) << "No virtual pinger will be launched";
     }
     BOOST_LOG_TRIVIAL(info) << "Sync protocol connected";
 }
 
 void Sync_server::reconnect(int init_tcp_port){
+    BOOST_LOG_TRIVIAL(debug) << "debug message from Sync_server::reconnect";
     set_this_thread_name("TCP streamer"); // Just for clarity in the logs.
     // This function is called as a thread so it's not blocking the configuration of other stuff,
     BOOST_LOG_TRIVIAL(debug) << "Sync protocol reconnect() fcn called (temporary thread)";
     //std::this_thread::sleep_for(std::chrono::milliseconds(3000));
     stop(true);
+    //delete io_service;
+    if(io_service != nullptr){
+        io_service->reset();
+    }
     delete acceptor;
     delete socket;
     connect(init_tcp_port);
@@ -63,10 +70,11 @@ void Sync_server::reconnect(int init_tcp_port){
 bool Sync_server::start(param* current_settings){
     if (NEED_RECONNECT){
         print_warning("Before start streaming, data soket has to be reconnected.");
-        BOOST_LOG_TRIVIAL(debug) << "Sync protocol started without with NEED_RECONNECT: "<< NEED_RECONNECT;
+        BOOST_LOG_TRIVIAL(error) << "Sync protocol started with NEED_RECONNECT: "<< NEED_RECONNECT;
         while(NEED_RECONNECT)std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
     if (NET_IS_CONNECTED){
+        BOOST_LOG_TRIVIAL(info) << "Starting TCP worker...";
         TCP_worker = new boost::thread(boost::bind(&Sync_server::tcp_streamer,this, current_settings));
     }else{
         BOOST_LOG_TRIVIAL(warning) << "Cannot start sync protocol if server is not connected. NET_IS_CONNECTED state "<<NET_IS_CONNECTED ;
@@ -85,7 +93,6 @@ bool Sync_server::stop(bool force){
         TCP_worker->join();
         delete TCP_worker;
         TCP_worker = nullptr;
-        //print_debug("force_stopping TCP");
         return NET_IS_STREAMING;
     }else if(NET_IS_CONNECTED){
         //print_debug("stopping TCP");
@@ -139,12 +146,14 @@ void Sync_server::virtual_pinger(){
                 reconnect_data = false; //twice to avoid data race with async
                 NEED_RECONNECT = true;
                 NET_IS_CONNECTED = false;
-                BOOST_LOG_TRIVIAL(info) << "waiting some time before launching reconnect";
-                std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+                //BOOST_LOG_TRIVIAL(info) << "waiting some time before launching reconnect";
+                //std::this_thread::sleep_for(std::chrono::milliseconds(3000));
                 BOOST_LOG_TRIVIAL(info) << "launching reconnect now";
-                reconnect_thread = new boost::thread(boost::bind(&Sync_server::reconnect,this,TCP_SYNC_PORT));
-                BOOST_LOG_TRIVIAL(info) << "waiting some time ater reconnect";
-                std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+                virtual_pinger_online = false;
+                //reconnect_thread = new boost::thread(boost::bind(&Sync_server::reconnect,this,TCP_SYNC_PORT));
+                reconnect(TCP_SYNC_PORT);
+                //BOOST_LOG_TRIVIAL(info) << "waiting some time ater reconnect";
+                //std::this_thread::sleep_for(std::chrono::milliseconds(3000));
                 reconnect_data = false;
                 active = false;
             }
@@ -152,7 +161,7 @@ void Sync_server::virtual_pinger(){
             active = false;
         }
     }
-    virtual_pinger_online = false;
+
     BOOST_LOG_TRIVIAL(info) << "Joined";
 }
 //size_t ilen = 0;
@@ -446,7 +455,9 @@ void Async_server::connect(int init_tcp_port){
         reconnect_async = false;
         if(verbose)std::cout<<"Waiting for TCP async data connection on port: "<< init_tcp_port<<" ..."<<std::endl;;
         boost::asio::socket_base::reuse_address ciao(true);
-        io_service = new boost::asio::io_service();
+        if(io_service == nullptr){
+          io_service = new boost::asio::io_service;
+        }
         acceptor = new tcp::acceptor(*io_service, tcp::endpoint(tcp::v4(), init_tcp_port),true);
         acceptor->set_option(ciao);
 
@@ -461,7 +472,10 @@ void Async_server::connect(int init_tcp_port){
 
 void Async_server::Disconnect(){
     BOOST_LOG_TRIVIAL(info) << "Disconnecting async service";
-    delete io_service;
+    //delete io_service;
+    if(io_service != nullptr){
+      io_service->reset();
+    }
     delete acceptor;
     delete socket;
     ASYNC_SERVER_CONNECTED = false;
@@ -498,25 +512,20 @@ void Async_server::format_header(char* header, std::string* message){
 void Async_server::rx_async(async_queue* link_command_queue){
     set_this_thread_name("Async TCP RX");
     BOOST_LOG_TRIVIAL(debug) << "Thread started";
-
     //preallocate space for the fixed header
     char* header_buffer;
     header_buffer = (char*)malloc(2*sizeof(int));
-
     //declare the message buffer
     char* message_buffer;
     std::string* message_string;
-
     bool active = true;
 
     boost::system::error_code error;
-
 
     while(active){
         BOOST_LOG_TRIVIAL(info) << "main loop started";
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
         try{
-
             boost::this_thread::interruption_point();
             *header_buffer = {0};
             boost::asio::read(
@@ -525,7 +534,6 @@ void Async_server::rx_async(async_queue* link_command_queue){
                 boost::asio::transfer_all(),
                 error
             );
-
 
             int size = error != boost::system::errc::success?0:(reinterpret_cast<int*>(header_buffer))[1];
             if ((reinterpret_cast<int*>(header_buffer))[0]!=0){

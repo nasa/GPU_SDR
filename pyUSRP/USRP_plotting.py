@@ -211,7 +211,7 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
             error_coord=True
         )
 
-        print_debug("plot_raw_data() found %d channels each long %d samples" % (len(samples), len(samples[0])))
+        #print_debug("plot_raw_data() found %d channels each long %d samples" % (len(samples), len(samples[0])))
         if channel_list == None:
             ch_list = range(len(samples))
         else:

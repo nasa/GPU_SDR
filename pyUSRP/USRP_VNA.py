@@ -573,6 +573,7 @@ def get_VNA_data(filename, calibrated = True, usrp_number = 0):
     TO DO:
         - Calibrarion for frontend A could be different from frontend B. This could lead to a wrong calibration.
     '''
+    usrp_number = int(usrp_number)
     if is_VNA_analyzed(filename):
         filename = format_filename(filename)
         f = bound_open(filename)
@@ -583,7 +584,7 @@ def get_VNA_data(filename, calibrated = True, usrp_number = 0):
     if not calibrated:
         ret =  np.asarray(f["VNA_%d"%(usrp_number)]['frequency']), np.asarray(f["VNA_%d"%(usrp_number)]['S21'])
     else:
-        ret =  np.asarray(f["VNA_%d"%(usrp_number)]['frequency']), np.asarray(f["VNA_%d"%(usrp_number)]['S21']* f['VNA_%d'%(usrp_number)].attrs.get('calibration')[0])
+        ret =  np.asarray(f["VNA_%d"%(usrp_number)]['frequency']), np.asarray(f["VNA_%d"%(usrp_number)]['S21'])* f['VNA_%d'%(usrp_number)].attrs.get('calibration')[0]
 
     f.close()
     return ret

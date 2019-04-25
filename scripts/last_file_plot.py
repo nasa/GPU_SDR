@@ -1,22 +1,40 @@
-import pyUSRP.libUSRP2 as u
+import sys
+try:
+    import pyUSRP as u
+except ImportError:
+    try:
+        sys.path.append('..')
+        import pyUSRP as u
+    except ImportError:
+        print "Cannot find the pyUSRP package"
 import numpy as np
-import matplotlib.pyplot as pl
 import os
 import glob
-import vispy
-from scipy import signal
-from vispy.plot import Fig
-
-list_of_files = glob.glob('USRP*.h5')
-latest_file = (max(list_of_files, key=os.path.getctime)).split(".")[0]
-print "Opening " + latest_file
-
-info = u.get_rx_info(latest_file)
-if info['wave_type'][0] == 'NOISE':
-    u.plot_all_pfb(latest_file, decimation = None, low_pass = None, backend = 'matplotlib', size = (12,8), output_filename = "last_file", start_time = None, end_time = None, auto_open = True)
-else:
-    u.plot_raw_data(latest_file, channel_list=None,mode='PM',size = (12,8), output_filename = "last_file", decimation = None,backend = 'matplotlib',end_time = 1)# 
+import argparse
 
 
+'''
+Results = Parallel(n_jobs=-1,verbose=1 )(
+        delayed(u.calculate_noise)(
+            filename, welch = 100, clip = 0.5,dbc = True, rotate = True
+        ) for filename in latest_file
+    )
+'''
 
+if __name__ == "__main__":
 
+    parser = argparse.ArgumentParser(description='Plot the latest file')
+
+    parser.add_argument('--folder', '-fn', help='Name of the folder in which the data are stored', type=str, default = "data")
+
+    args = parser.parse_args()
+
+    os.chdir(args.folder)
+
+    list_of_files = glob.glob('USRP*.h5')
+    latest_file = [x.split(".")[0] for x in (sorted(list_of_files, key=os.path.getctime))]
+    ch_list = [0]
+    print "Opening " + str(latest_file)
+
+    u.plot_raw_data(latest_file, channel_list=ch_list,mode='PM', output_filename = latest_file, end_time = 0.1, decimation = None,backend = 'matplotlib',size = (10,8))#
+    u.plot_raw_data(latest_file, channel_list=ch_list,mode='PM', output_filename = latest_file, end_time = 0.1, decimation = None,backend = 'plotly',size = (10,8))
