@@ -1007,3 +1007,23 @@ def get_init_peaks(filename, verbose = False):
     file.close()
 
     return np.asarray(inits)
+
+
+def is_VNA_analyzed(filename, usrp_number = 0):
+    '''
+    Check if the VNA file has been preanalyzed. Basically checks the presence of the VNA group inside the file.
+    :param filename: The file to check.
+    :param usrp_number: usrp server number.
+    :return: boolean results of the check.
+    '''
+    filename = format_filename(filename)
+    f = bound_open(filename)
+    try:
+        grp = f["VNA_%d"%(usrp_number)]
+        if grp['frequency'] is not None: pass
+        if grp['S21'] is not None: pass
+        ret = True
+    except KeyError:
+        ret = False
+    f.close()
+    return ret

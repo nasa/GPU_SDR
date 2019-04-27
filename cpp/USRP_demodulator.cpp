@@ -1,5 +1,8 @@
 #include "USRP_demodulator.hpp"
 
+
+
+
 //initialization: the parameters are coming directly from the client (from the async communication thread)
 //diagnostic allows to print the window on a binary file and stores some diagnostic information //TODO on a hdf5 file??
 RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_diagnostic){

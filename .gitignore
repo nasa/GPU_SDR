@@ -1,6 +1,7 @@
 .pyc
 .xml
 *.xml
+*.swp
 *.pyc
 *.iml
 *.DS_Store
