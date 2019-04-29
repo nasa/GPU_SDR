@@ -181,7 +181,7 @@ def do_fit(freq, re, im, p0=None):
 
     return f0, Qi, Qr, zfit, modelwise
 
-def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3, Qr_cutoff=5e3, verbose = False, exclude_center = True, diagnostic_plots = False):
+def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3, Qr_cutoff=5e3, a_cutoff = 10, Mag_depth_cutoff = 0.15, verbose = False, exclude_center = True, diagnostic_plots = False):
     """
     This function uses a filter on quality factor estimated using the nonlinear resonator model. This function considers the resonator around the maximum of the unwraped phase trace, tries to fit the resonator and make a decision if it's a resonator or not by parsing the quality factor of the fit with the Qt_vutoff argument. Before iterating excludes a zone of peak_width Hz around the previously considered point.
     Stores in the H5 file the result. This does not count as a fit as only the initialization is stored.
@@ -191,6 +191,8 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
         - smoothing: if the vna is too noise one may consider decimation and fir filtering. dmoothing is the decimation factor.
         - peak_width: minimum distance between each peak.
         - Qr_cutoff: thrashold above wich a fit will result in a resonaton being stored.
+        - a_cutoff: cutoff on asymmetry (if the fit returns a>a_cutoff is discarded)
+        - Mag_depth_cutoff: cutoff on magnitude depth of the resonance in dB.
         - N_peaks: how may peaks to expect. If this number is bigger than the actual number of resonator, the search process will end after all the frequency chunks are masked.
         - verbose: output some diagnostic information.
         - exclude_center: exclude the center (DC) from the fitting.
@@ -267,6 +269,9 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
     freq_ = freq #mock frequency axis
     iteration_number = 0
 
+    #hardcoded maximum quality decimation_factor
+    Qr_max = 500e3
+
     while(sum(mask)>0):
         #gradS21 = gradS21[mask]
         #S21_val = S21_val[mask]
@@ -281,6 +286,11 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
         low_index = int(max(maximum-peak_width,0))
         high_index = int(min(maximum+peak_width, len(freq_)))
 
+        #used in peack rejections
+        half_low_index = int(max(maximum-peak_width/2,0))
+        half_high_index = int(min(maximum+peak_width/2, len(freq_)))
+
+
         try:
             #with nostdout():
             f0,Qi,Qr,zfit,modelwise = do_fit(
@@ -289,18 +299,37 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
                 S21_val.imag[low_index:high_index],
                 p0=None
             )
+
+            # Asymmetry is usually limited to ~10
+            a = modelwise[8]
+
+            #depth filter
+            depth = np.abs(min(vrms2dbm(zfit))-max(vrms2dbm(zfit)))
+
         except RuntimeError:
             Qr = 0
+            depth = 0
+            a = np.inf
 
-        if Qr>Qr_cutoff:
+        #####################################
+        # CONDITIONS FOR ACCEPTING THE INIT #
+        #####################################
+
+        if (Qr>Qr_cutoff) and (Qr<Qr_max) and (f0>freq_[half_low_index]/1e6) and (f0<freq_[half_high_index]/1e6) and (a<a_cutoff) and (depth> Mag_depth_cutoff):
             print_debug("Resonator found at %.2f MHz"%(freq_[maximum]/1.e6))
             max_diag.append(maximum)
             q_diag.append(Qr)
             f0s.append(f0)
-            label_set = "Accepted init:\nQr: %.2fk / %.2fk"%(Qr/1e3, Qr_cutoff/1e3)
+            label_set = "Accepted init:\nQr: %.2fk range: [%.2fk - %.2fk]"%(Qr/1e3, Qr_cutoff/1e3, Qr_max/1e3)
+            label_set += "\nf0 = %.2f MHz range [%.2f - %.2f] MHz" % (f0,freq_[low_index]/1e6,freq_[high_index]/1e6)
+            label_set += "\nAsymmetry: %.2f / %.2f" % (a, a_cutoff)
+            label_set += "\nMagnitude depth = %.2f dB / %.2f dB" % (depth, Mag_depth_cutoff)
             col = 'green'
         else:
-            label_set = "Refused init:\nQr: %.2fk / %.2fk"%(Qr/1e3, Qr_cutoff/1e3)
+            label_set = "Refused init:\nQr: %.2fk range: [%.2fk - %.2fk]"%(Qr/1e3, Qr_cutoff/1e3, Qr_max/1e3)
+            label_set += "\nf0 = %.2f MHz range [%.2f - %.2f] MHz" % (f0,freq_[low_index]/1e6,freq_[high_index]/1e6)
+            label_set += "\nAsymmetry: %.2f / %.2f" % (a, a_cutoff)
+            label_set += "\nMagnitude depth = %.2f dB / %.2f dB" % (depth, Mag_depth_cutoff)
             col = 'red'
 
         if diagnostic_plots:
@@ -313,10 +342,16 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
                 label = label_set,
                 color = col
             )
+            ax.plot(
+                freq_[low_index:high_index],
+                vrms2dbm(np.abs(zfit)),
+                label = "fit",
+                color = "k"
+            )
             ax.set_xlabel("Frequency [Hz]")
             ax.set_ylabel("S21 Magnitude [dB]")
             ax.grid()
-            ax.legend()
+            ax.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
             fig.savefig("init_diag_%d.png"%iteration_number, bbox_inches="tight")
             pl.close(fig)
             os.chdir("..")
