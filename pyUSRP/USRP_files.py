@@ -953,6 +953,25 @@ def Param_to_H5(H5fp, parameters_class, **kwargs):
         return []
 
 
+def is_VNA_analyzed(filename, usrp_number = 0):
+    '''
+    Check if the VNA file has been preanalyzed. Basically checks the presence of the VNA group inside the file.
+    :param filename: The file to check.
+    :param usrp_number: usrp server number.
+    :return: boolean results of the check.
+    '''
+    filename = format_filename(filename)
+    f = bound_open(filename)
+    try:
+        grp = f["VNA_%d"%(usrp_number)]
+        if grp['frequency'] is not None: pass
+        if grp['S21'] is not None: pass
+        ret = True
+    except KeyError:
+        ret = False
+    f.close()
+    return ret
+
 
 def get_VNA_data(filename, calibrated = True, usrp_number = 0):
     '''
@@ -977,6 +996,7 @@ def get_VNA_data(filename, calibrated = True, usrp_number = 0):
         ret =  np.asarray(f["VNA_%d"%(usrp_number)]['frequency']), np.asarray(f["VNA_%d"%(usrp_number)]['S21'])
     else:
         ret =  np.asarray(f["VNA_%d"%(usrp_number)]['frequency']), np.asarray(f["VNA_%d"%(usrp_number)]['S21'])* f['VNA_%d'%(usrp_number)].attrs.get('calibration')[0]
+        print f['VNA_%d'%(usrp_number)].attrs.get('calibration')[0]
 
     f.close()
     return ret

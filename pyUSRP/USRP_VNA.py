@@ -470,6 +470,15 @@ def VNA_analysis(filename, usrp_number = 0):
         if parameters.parameters[ant]['mode'] == "RX" and parameters.parameters[ant]['wave_type'][0] == "CHIRP":
             info.append(parameters.parameters[ant])
 
+    # Nedded for the calibration calculations
+    front_ends_tx= ["A_TXRX", "B_TXRX"]
+    gains = []
+    ampls = []
+    for ant in front_ends_tx:
+        if parameters.parameters[ant]['mode'] == "TX" and parameters.parameters[ant]['wave_type'][0] == "CHIRP":
+            gains.append(parameters.parameters[ant]['gain'])
+            ampls.append(parameters.parameters[ant]['ampl'][0])
+
     print_debug("Found %d active frontends"%len(info))
 
     freq_axis = np.asarray([],dtype = np.float64)
@@ -480,7 +489,11 @@ def VNA_analysis(filename, usrp_number = 0):
     for single_frontend in info:
         iterations = int((single_frontend['samples']/single_frontend['rate'])/single_frontend['chirp_t'][0])
         print_debug("Frontend \'%s\' has %d VNA iterations" % (front_ends[fr], iterations))
-        calibration.append( (1./single_frontend['ampl'][0])*USRP_calibration/10**((USRP_power + single_frontend['gain'])/20.) )
+
+        #effective calibration
+        calibration.append( (1./ampls[fr])*USRP_calibration/(10**((USRP_power + gains[fr])/20.)) )
+        print_debug("Calculating calibration with %d dB gain and %.3f amplitude correction"%(gains[fr],ampls[fr]))
+
         if single_frontend['decim'] == 1:
             # Lock-in decimated case -> direct map.
             freq_axis_tmp = np.linspace(single_frontend['freq'][0],single_frontend['chirp_f'][0], single_frontend['swipe_s'][0],

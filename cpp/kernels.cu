@@ -121,10 +121,9 @@ float2* make_flat_window(int length, int side, bool diagnostic){
         h_win[i].x = 0;
     }
     for(int i = 0; i < length - side; i++){
-        h_win[i+side].y = 1.;
-
         //make flat
         h_win[i+side].x = 1.;
+        h_win[i+side].y = 0.;
         scale += h_win[i+side].x;
 
     }

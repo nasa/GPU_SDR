@@ -17,7 +17,7 @@ import argparse
 
 def run(file_list, backend, attenuation, N_peaks):
     for i in range(len(file_list)):
-        u.initialize_peaks(file_list[i], N_peaks = N_peaks[i], smoothing = 10, peak_width = 90e3, Qr_cutoff=5e3, verbose = True, exclude_center = True, diagnostic_plots = True)
+        u.initialize_peaks(file_list[i], N_peaks = N_peaks[i], smoothing = 5, peak_width = 100e3, Qr_cutoff=20e3, verbose = True, exclude_center = True, diagnostic_plots = True)
 
 
 if __name__ == "__main__":
@@ -27,7 +27,7 @@ if __name__ == "__main__":
     parser.add_argument('--folder', '-fn', help='Name of the folder in which the data are stored', type=str, default = "data")
     parser.add_argument('--backend', '-b', help='backend to use for plotting', type=str, default= "matplotlib")
     parser.add_argument('--att', '-a', help='Line attenuation in dB', type=float, default= None)
-    parser.add_argument('--N_peaks', '-p', help='Listo of numbers containing the number of peaks expected in each VNA in the form -p 1 2 3', nargs='+', required=True)
+    parser.add_argument('--N_peaks', '-p', help='List of numbers containing the number of peaks expected in each VNA in the form -p 1 2 3', nargs='+', required=True)
 
     args = parser.parse_args()
     os.chdir(args.folder)

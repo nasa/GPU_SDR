@@ -30,7 +30,7 @@ class buffer_DSP{
         //! \param out Pointer to CPU output memory.
         virtual size_t process(float2* __restrict__ in, float2* __restrict__ out);
 
-}
+};
 
 class RX_buffer_demodulator{
     public:
