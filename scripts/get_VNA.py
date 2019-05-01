@@ -38,7 +38,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Test the basic VNA functionality.')
 
     parser.add_argument('--folder', '-fn', help='Name of the folder in which the data will be stored', type=str, default = "data")
-    parser.add_argument('--freq', '-f', help='LO frequency in MHz', type=float, default= 300)
+    parser.add_argument('--freq', '-f', help='LO frequency in MHz. Specifying multiple RF frequencies results in multiple scans (per each gain) (default 300 MHz)', nargs='+')
     parser.add_argument('--rate', '-r', help='Sampling frequency in Msps', type=float, default = 100)
     parser.add_argument('--frontend', '-rf', help='front-end character: A or B', type=str, default="A")
     parser.add_argument('--f0', '-f0', help='Baseband start frequrency in MHz', type=float, default=-45)
@@ -46,9 +46,19 @@ if __name__ == "__main__":
     parser.add_argument('--points', '-p', help='Number of points used in the scan', type=float, default=50e3)
     parser.add_argument('--time', '-t', help='Duration of the scan in seconds per iteration', type=float, default=10)
     parser.add_argument('--iter', '-i', help='How many iterations to perform', type=float, default=1)
-    parser.add_argument('--gain', '-g', help='set the transmission gain', type=float, default=0)
+    parser.add_argument('--gain', '-g', help='set the transmission gain. Multiple gains will result in multiple scans (per frequency). Default 0 dB',  nargs='+')
 
     args = parser.parse_args()
+
+    if args.freq is None:
+        frequencies = [300,]
+    else:
+        frequencies = [float(a) for a in args.freq]
+
+    if args.gain is None:
+        gains = [0,]
+    else:
+        gains = [int(float(a)) for a in args.gain]
 
     try:
         os.mkdir(args.folder)
@@ -62,18 +72,19 @@ if __name__ == "__main__":
         exit()
 
     # Data acquisition
-
-    f = run(
-            gain = int(args.gain),
-            iter = int(args.iter),
-            rate = args.rate*1e6,
-            freq = args.freq*1e6,
-            front_end = args.frontend,
-            f0 = args.f0*1e6,
-            f1 = args.f1*1e6,
-            lapse = args.time,
-            points = args.points
-        )
+    for g in gains:
+        for f in frequencies:
+            x = run(
+                    gain = g,
+                    iter = int(args.iter),
+                    rate = args.rate*1e6,
+                    freq = f*1e6,
+                    front_end = args.frontend,
+                    f0 = args.f0*1e6,
+                    f1 = args.f1*1e6,
+                    lapse = args.time,
+                    points = args.points
+                )
 
     u.Disconnect()
     # Data analysis and plotting will be in an other python script

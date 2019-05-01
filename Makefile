@@ -1,6 +1,6 @@
 CC=g++
 
-CC_DEF_FLAGS =-std=c++11 -O2 -DBOOST_LOG_DYN_LINK -g -Wall
+CC_DEF_FLAGS =-std=c++11 -DBOOST_LOG_DYN_LINK -g -Wall -O3
 CC+=$(CC_DEF_FLAGS)
 
 SRC_DIR := cpp

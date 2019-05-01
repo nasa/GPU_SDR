@@ -996,7 +996,6 @@ def get_VNA_data(filename, calibrated = True, usrp_number = 0):
         ret =  np.asarray(f["VNA_%d"%(usrp_number)]['frequency']), np.asarray(f["VNA_%d"%(usrp_number)]['S21'])
     else:
         ret =  np.asarray(f["VNA_%d"%(usrp_number)]['frequency']), np.asarray(f["VNA_%d"%(usrp_number)]['S21'])* f['VNA_%d'%(usrp_number)].attrs.get('calibration')[0]
-        print f['VNA_%d'%(usrp_number)].attrs.get('calibration')[0]
 
     f.close()
     return ret
