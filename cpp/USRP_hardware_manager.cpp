@@ -701,7 +701,6 @@ std::string hardware_manager::apply_antenna_config(param *parameters, param *old
                                 tune_request.args = uhd::device_addr_t("mode_n=integer");
                                 main_usrp->set_rx_freq(tune_request,chan);
                             }else{
-								std::cout<<"EFFECTIVE FREQUENCY REQUESTED: "<< parameters->tone <<std::endl;
                                 uhd::tune_request_t tune_request(parameters->tone);
                                 main_usrp->set_rx_freq(tune_request,chan);
                             }

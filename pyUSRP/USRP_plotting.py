@@ -252,11 +252,13 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
                 label = "Channel %.2f MHz" % (freq[i] / 1.e6)
 
             if backend == 'matplotlib':
+                label += "\n" + filename
                 if add_info_labels is not None:
                     label += "\n" + add_info_labels[file_count]
                 ax[0].plot(X[decimation:-decimation], Y1[decimation:-decimation], color=get_color(i + file_count), label=label)
                 ax[1].plot(X[decimation:-decimation], Y2[decimation:-decimation], color=get_color(i + file_count))
             elif backend == 'plotly':
+                label += "<br>" + filename
                 if add_info_labels is not None:
                     label += "<br>" + add_info_labels[file_count]
                 fig.append_trace(go.Scatter(
@@ -304,115 +306,3 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
         plotly.offline.plot(fig, filename=final_filename, auto_open=auto_open)
 
     return final_filename
-
-def plot_all_pfb(filename, decimation=None, low_pass=None, backend='matplotlib', output_filename=None, start_time=None,
-                 end_time=None, auto_open=True, **kwargs):
-    '''
-    Plot the output of a PFB acquisition as an heatmap.
-    '''
-    filename = format_filename(filename)
-    parameters = global_parameter()
-    parameters.retrive_prop_from_file(filename)
-    ant = parameters.get_active_rx_param()
-    try:
-        usrp_number = kwargs['usrp_number']
-    except KeyError:
-        usrp_number = None
-    if len(ant) > 1:
-        print_error("multiple RX devices not yet supported")
-        return
-
-    if parameters.get(ant[0], 'wave_type')[0] != "NOISE":
-        print_warning("The file selected does not have the PFB acquisition tag. Errors may occour")
-
-    fft_tones = parameters.get(ant[0], 'fft_tones')
-    rate = parameters.get(ant[0], 'rate')
-    channel_width = rate / fft_tones
-    decimation = parameters.get(ant[0], 'decim')
-    integ_time = fft_tones * max(decimation, 1) / rate
-    rf = parameters.get(ant[0], 'rf')
-    if start_time is not None:
-        start_time *= effective_rate
-    else:
-        start_time = 0
-    if end_time is not None:
-        end_time *= effective_rate
-
-    try:
-        front_end = kwargs['front_end']
-    except KeyError:
-        front_end = None
-    samples, errors = openH5file(
-        filename,
-        ch_list=None,
-        start_sample=start_time,
-        last_sample=end_time,
-        usrp_number=usrp_number,
-        front_end=front_end,
-        verbose=False,
-        error_coord=True
-    )
-
-    y_label = np.arange(len(samples[0]) / fft_tones) / (rate / (fft_tones * max(1, decimation)))
-    x_label = (rf + (np.arange(fft_tones) - fft_tones / 2) * (rate / fft_tones)) / 1e6
-    title = "PFB acquisition form file %s" % filename
-    subtitle = "Channel width %.2f kHz; Frame integration time: %.2e s" % (channel_width / 1.e3, integ_time)
-    z = 20 * np.log10(np.abs(samples[0]))
-    try:
-        z_shaped = np.roll(np.reshape(z, (len(z) / fft_tones, fft_tones)), fft_tones / 2, axis=1)
-    except ValueError as msg:
-        print_warning("Error while plotting pfb spectra: " + str(msg))
-        cut = len(z) - len(z) / fft_tones * fft_tones
-        z = z[:-cut]
-        print_debug("Cutting last data (%d samples) to fit" % cut)
-        # z_shaped = np.roll(np.reshape(z,(len(z)/fft_tones,fft_tones)),fft_tones/2,axis = 1)
-        z_shaped = np.roll(np.reshape(z, (len(z) / fft_tones, fft_tones)), fft_tones / 2, axis=1)
-
-    # pl.plot(z_shaped.T, alpha = 0.1, color = "k")
-    # pl.show()
-
-    if backend == 'matplotlib':
-        fig, ax = pl.subplots(nrows=2, ncols=1, sharex=True)
-        try:
-            fig.set_size_inches(kwargs['size'][0], kwargs['size'][1])
-        except KeyError:
-            pass
-        ax[0].set_xlabel("Channel [MHz]")
-        ax[0].set_ylabel("Time [s]")
-        ax[0].set_title(title + "\n" + subtitle)
-        imag = ax[0].imshow(z_shaped, aspect='auto', interpolation='nearest',
-                            extent=[min(x_label), max(x_label), min(y_label), max(y_label)])
-        # fig.colorbar(imag)#,ax=ax[0]
-        for zz in z_shaped[::100]:
-            ax[1].plot(x_label, zz, color='k', alpha=0.1)
-        ax[1].set_xlabel("Channel [MHz]")
-        ax[1].set_ylabel("Power [dBm]")
-        # ax[1].set_title("Trace stack")
-
-        if output_filename is not None:
-            fig.savefig(output_filename + '.png')
-        if auto_open:
-            pl.show()
-        else:
-            pl.close()
-
-    if backend == 'plotly':
-        data = [
-            go.Heatmap(
-                z=z_shaped,
-                x=x_label,
-                y=y_label,
-                colorscale='Viridis',
-            )
-        ]
-
-        layout = go.Layout(
-            title=title + "<br>" + subtitle,
-            xaxis=dict(title="Channel [MHz]"),
-            yaxis=dict(title="Time [s]")
-        )
-
-        fig = go.Figure(data=data, layout=layout)
-        if output_filename is None:
-            output_filename = "PFB_waterfall"
-        plotly.offline.plot(fig, filename=output_filename + ".html", auto_open=auto_open)
