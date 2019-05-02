@@ -513,6 +513,14 @@ class global_parameter(object):
                     self.parameters[ant_key]['rate'] = int(self.parameters[ant_key]['rate'])
                     self.parameters[ant_key]['rf'] = int(self.parameters[ant_key]['rf'])
 
+                    if isinstance(self.parameters[ant_key]['chirp_f'],np.ndarray):
+                        self.parameters[ant_key]['chirp_f'] = self.parameters[ant_key]['chirp_f'].tolist()
+
+                    if isinstance(self.parameters[ant_key]['freq'],np.ndarray):
+                        self.parameters[ant_key]['freq'] = self.parameters[ant_key]['freq'].tolist()
+
+                    if isinstance(self.parameters[ant_key]['ampl'],np.ndarray):
+                        self.parameters[ant_key]['ampl'] = self.parameters[ant_key]['ampl'].tolist()
                     try:
                         len(self.parameters[ant_key]['chirp_f'])
                     except TypeError:

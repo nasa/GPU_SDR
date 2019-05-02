@@ -449,15 +449,17 @@ __global__ void tone_select(
     int effective_batching //how many samples per tone have been effectively calculated
     ){
 
-
-    //this kernel will loop over the output to better coalesh memory
+    //filter_info->eff_n_tones is the number of 'selected' tones
+    //filter_info->n_tones is te number of fft bins
+    //effective_batching counts how many fft's are present in the buffer
+    //filter_info->tones has the information about which are the selected tones
     for(int offset = blockIdx.x * blockDim.x + threadIdx.x;
             offset < effective_batching*filter_info->eff_n_tones;
             offset += gridDim.x*blockDim.x
             ){
 
             //calculate from where to take the sample
-            int index = (offset%effective_batching)*filter_info->n_tones + filter_info->tones[__double2int_rn(double(offset)/double(effective_batching))];
+            int index = (offset/filter_info->eff_n_tones)*filter_info->n_tones + filter_info->tones[offset % filter_info->eff_n_tones];
 
             //write the sample in the output buffer
             output[offset] = input[index];

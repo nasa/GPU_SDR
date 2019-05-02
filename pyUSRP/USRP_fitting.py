@@ -390,7 +390,7 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
     else:
         return True
 
-def vna_fit(filename, p0=None, fit_range = 12e4, verbose = False):
+def vna_fit(filename, p0=None, fit_range = 10e4, verbose = False):
     """
     Open a pre analyzed, pre plotted (with tagged resonator inside) .h5 VNA file and fit the resonances in it. Creates a new group in the ".h5" file called "resonators" and save fitted curve and attributes in it.
 
@@ -417,7 +417,7 @@ def vna_fit(filename, p0=None, fit_range = 12e4, verbose = False):
     peaks_init = get_init_peaks(filename)
     frequency, S21 = get_VNA_data(filename, calibrated = True, usrp_number = 0)
     info = get_rx_info(filename)
-    resolution = np.abs(info['freq'] - info['chirp_f'])/float(len(S21))
+    resolution = np.abs(info['freq'][0] - info['chirp_f'][0])/float(len(S21))
     model = nonlinear_model
 
     if len(peaks_init) == 0:
@@ -425,7 +425,7 @@ def vna_fit(filename, p0=None, fit_range = 12e4, verbose = False):
         print_error(err_msg)
         raise ValueError(err_msg)
 
-    fv = h5py.File(filename+".h5",'r+')
+    fv = h5py.File(filename,'r+')
 
     # there is no try catch on this experssion because it's preceded by get_init_peaks()
     reso_grp = fv['Resonators']
@@ -433,8 +433,10 @@ def vna_fit(filename, p0=None, fit_range = 12e4, verbose = False):
     # WARNING: this number is coherent only in a single file: it may be NOT consistent arcoss multiple files!
     fit_number = 0
 
+    overwriting_warning = True
+
     for tone in peaks_init:
-        if verbose: print_debug("Fitting resonator initialized at %.2f MHz ..."%(tone/1e3))
+        if verbose: print_debug("Fitting resonator initialized at %.2f MHz ..."%(tone/1e6))
 
         # Select a range atound the initialized tone.
         selection = np.abs(frequency - tone) < fit_range
@@ -448,13 +450,19 @@ def vna_fit(filename, p0=None, fit_range = 12e4, verbose = False):
     		print_warning("Something went wrong with the fit of resonator at %.2f MHz"%(tone/1e6))
     	else:
             if verbose: print_debug("Fitted succesfully.")
-
-            single_reso_grp = reso_grp.create_group("reso_%d"%fit_number)
+            try:
+                single_reso_grp = reso_grp.create_group("reso_%d"%fit_number)
+            except ValueError:
+                del reso_grp["reso_%d"%fit_number]
+                single_reso_grp = reso_grp.create_group("reso_%d"%fit_number)
+                if(overwriting_warning):
+                    print_warning("Overwriting resonator group")
+                    overwriting_warning = False
 
             # Write fitting data
-            single_reso_grp.create_dataset("freq", base_fit_freq)
-            single_reso_grp.create_dataset("base_S21", S21[selection])
-            single_reso_grp.create_dataset("fitted_S21", zfit)
+            single_reso_grp.create_dataset("freq", data = base_fit_freq)
+            single_reso_grp.create_dataset("base_S21", data = S21[selection])
+            single_reso_grp.create_dataset("fitted_S21", data = zfit)
 
             # Write fit parameters as attributes
             (f0, A, phi, D, Qi, Qr, Qe_r, Qe_i, a) = modelwise
@@ -469,8 +477,8 @@ def vna_fit(filename, p0=None, fit_range = 12e4, verbose = False):
 
             fit_number += 1
 
-    if len(peaks_init)-1!=fit_number:
-        print_warning("One or more fit went wrong")
+    if len(peaks_init)!=fit_number:
+        print_warning("%d fit(s) went wrong" % (len(peaks_init) - fit_number))
 
     print("Resonator fitted")
     fv.close()
@@ -546,14 +554,14 @@ def get_fit_param(filename, verbose = False):
     ret = []
     for resonator in reso_grp:
         ret.append({
-            'f0':resonator["f0"],
-            'A':resonator["A"],
-            'phi':resonator["phi"],
-            'D':resonator["D"],
-            'Qi':resonator["Qi"],
-            'Qr':resonator["Qr"],
-            'Qe':resonator["Qe"],
-            'a':resonator["a"]
+            'f0':reso_grp[resonator].attrs.get("f0"),
+            'A':reso_grp[resonator].attrs.get("A"),
+            'phi':reso_grp[resonator].attrs.get("phi"),
+            'D':reso_grp[resonator].attrs.get("D"),
+            'Qi':reso_grp[resonator].attrs.get("Qi"),
+            'Qr':reso_grp[resonator].attrs.get("Qr"),
+            'Qe':reso_grp[resonator].attrs.get("Qe"),
+            'a':reso_grp[resonator].attrs.get("a")
         })
     if verbose: print_debug("Resonator parameters collected")
     f.close()
@@ -575,10 +583,10 @@ def get_best_readout(filename, verbose = False):
 
     ret = []
     if verbose: print_debug("Best readout frequency deltas:")
-    for resonator in reso_grp:
-        delta_r = 1./Qr
-    	brf = 1e6*f0 * (1 - a*delta_r)
-        if verbose: print_debug("Resonator %.2f is shifted %.2fkHz"%(f0, 1e3*np.abs(brf/1e6-f0)))
+    for resonator in R:
+        delta_r = 1./resonator['Qr']
+    	brf = 1e6*resonator['f0'] * (1 - resonator['a']*delta_r)
+        if verbose: print_debug("Resonator %.2f is shifted %.2fkHz"%(resonator['f0'], 1e3*np.abs(brf/1e6-resonator['f0'])))
         ret.append(brf)
 
     return ret
@@ -596,14 +604,14 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
         - auto_open: in case of plotly backend this enable or disable the opening of the plot in the browser.
         - keyword args:
             - figsize: figure size for matplotlib backend.
-            - add_info: listo of strings. Must be the same length of the file list. Add information to the legend ion the plot.
+            - add_info: listo of strings. Must be the same lresonreso_grp[resonator]atorength of the file list. Add information to the legend ion the plot.
             - title: Change the title of the plot.
 
     Return:
         - The filename of the saved plot.
     '''
 
-    print("Plotting resonators")
+    print("Plotting resonators...")
     if verbose: print_debug("Froms file(s):")
 
     filenames = to_list_of_str(filenames)
@@ -689,10 +697,10 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
             phase_orig.plot(phase_fit,resonators['frequency'],)
             phase_orig.plot(phase_orig,resonators['frequency'],)
 
-
-
-
-
+    elif backend == "plotly":
+        pass
+    else:
+        print_error("Resonator plot ha no %s backend implemented"%backend)
 
     return final_output_name
 
@@ -719,4 +727,12 @@ def plot_reso_stat(filenames, reso_freq = None, backend = 'matplotlib', title_in
     return
 
 def get_tones(filename, verbose = False):
-    return
+    '''
+    Retun the central frequency and the list with relative tones.
+    '''
+
+    tones = get_best_readout(filename, verbose = verbose)
+    info = get_rx_info(filename, ant=None)
+    tones = tones - info['rf']
+    if len(tones) ==0: print_warning("get_tones() returned an empty array")
+    return info['rf'], tones

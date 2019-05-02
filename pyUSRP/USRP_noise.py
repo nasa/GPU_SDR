@@ -43,7 +43,7 @@ import progressbar
 # import submodules
 from USRP_low_level import *
 from USRP_files import *
-from .USRP_delay import *
+from USRP_delay import *
 
 
 def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF = None, tx_gain = 0, output_filename = None, Front_end = None,
@@ -127,7 +127,7 @@ def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF =
         print("%.1f\t%.2f\t%.1f" % ((RF + tones[i]) / 1e6, USRP_power + 20 * np.log10(amplitudes[i]), tones[i] / 1e6))
         if tones[i] > rate / 2:
             print_error("Out of bandwidth tone!")
-            raise ValueError("Out of bandwidth tone requested.")
+            raise ValueError("Out of bandwidth tone requested. %.2f MHz / %.2f MHz (Nyq)" %(tones[i]/1e6, rate / 2e6) )
 
     if Front_end is None:
         Front_end = 'A'
@@ -176,7 +176,6 @@ def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF =
     number_of_samples = rate * measure_t
 
     expected_samples = int(number_of_samples/final_fft_bins)
-
     noise_command = global_parameter()
 
     noise_command.set(TX_frontend, "mode", "TX")
@@ -286,7 +285,7 @@ def spec_from_samples(samples, sampling_rate=1, welch=None, dbc=False, rotate=Tr
                                          scaling='density')
     Frequencies, ImaginaryPart = signal.welch(samples[start_clip_samples:end_clip_samples].imag, nperseg=welch, fs=sampling_rate, detrend='linear',
                                               scaling='density')
-    
+
 
 
     return Frequencies, 10 * np.log10(RealPart), 10 * np.log10(ImaginaryPart)
@@ -542,7 +541,8 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
 
         for i in range(len(info['tones'])):
             readout_power = get_readout_power(filename, i, tx_front_end, usrp_number) - cryostat_attenuation
-            label = "%.2f MHz" % (info['tones'][i] / 1e6)
+            label = filename+"<br>"
+            label += "%.2f MHz" % (info['tones'][i] / 1e6)
             R = real[i]
             I = imag[i]
             if backend == 'matplotlib':
