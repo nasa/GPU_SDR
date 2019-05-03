@@ -12,7 +12,7 @@ except ImportError:
 
 import argparse
 
-def run(gain,iter,rate,freq,front_end, f0,f1, lapse, points):
+def run(gain,iter,rate,freq,front_end, f0,f1, lapse, points, ntones):
 
     try:
         if u.LINE_DELAY[str(int(rate/1e6))]: pass
@@ -27,8 +27,11 @@ def run(gain,iter,rate,freq,front_end, f0,f1, lapse, points):
 
         u.load_delay_from_file(filename)
 
+        if ntones ==1:
+            ntones = None
+
     vna_filename = u.Single_VNA(start_f = f0, last_f = f1, measure_t = lapse, n_points = points, tx_gain = gain, Rate=None, decimation=True, RF=freq, Front_end=None,
-               Device=None, output_filename=None, Multitone_compensation=None, Iterations=iter, verbose=False)
+               Device=None, output_filename=None, Multitone_compensation=ntones, Iterations=iter, verbose=False)
 
     return vna_filename
 
@@ -47,8 +50,14 @@ if __name__ == "__main__":
     parser.add_argument('--time', '-t', help='Duration of the scan in seconds per iteration', type=float, default=10)
     parser.add_argument('--iter', '-i', help='How many iterations to perform', type=float, default=1)
     parser.add_argument('--gain', '-g', help='set the transmission gain. Multiple gains will result in multiple scans (per frequency). Default 0 dB',  nargs='+')
+    parser.add_argument('--tones', '-tones', help='expected number of resonators',  type=int)
 
     args = parser.parse_args()
+
+    if args.tones is None:
+        ntones = 1
+    else:
+        ntones = args.tones
 
     if args.freq is None:
         frequencies = [300,]
@@ -83,7 +92,8 @@ if __name__ == "__main__":
                     f0 = args.f0*1e6,
                     f1 = args.f1*1e6,
                     lapse = args.time,
-                    points = args.points
+                    points = args.points,
+                    ntones = ntones
                 )
 
     u.Disconnect()

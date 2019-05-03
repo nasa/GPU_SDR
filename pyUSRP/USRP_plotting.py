@@ -135,8 +135,8 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
                                       shared_xaxes=True)
             fig['layout']['yaxis1'].update(title='I [fp ADC]')
             fig['layout']['yaxis2'].update(title='Q [fp ADC]')
-            fig['layout']['xaxis1'].update(exponentformat='SI')
-            fig['layout']['xaxis2'].update(exponentformat='SI')
+            fig['layout']['xaxis'].update(exponentformat='SI')
+            #fig['layout']['xaxis2'].update(exponentformat='SI')
         elif mode == 'PM':
             fig = tools.make_subplots(rows=2, cols=1, subplot_titles=('Magnitude', 'Phase'), shared_xaxes=True)
             fig['layout']['yaxis1'].update(title='Magnitude [abs(ADC)]')
