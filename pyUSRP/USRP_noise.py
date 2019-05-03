@@ -45,27 +45,6 @@ from USRP_low_level import *
 from USRP_files import *
 from USRP_delay import *
 
-def average_tones_diff(tones_original,tones_quantized):
-    if len(tones_original)!=len(tones_quantized):
-        err_msg = "Quantized tones and tones are different in length!"
-        print_error(err_msg)
-        raise TypeError(err_msg)
-
-    x = 0
-    for i in range(len(tones_original)):
-        x += np.abs(tones_original[i] - tones_quantized[i])
-
-    return x/float(len(tones_original))
-
-def quantize_tones(tones, rate, bins):
-    bin_center_axis = np.linspace(-rate/2, rate/2, bins)
-    quantized_tones = []
-    for t in tones:
-        quantized_tones.append(
-            bin_center_axis[find_nearest(bin_center_axis, t)]
-        )
-    print_debug("Average tone quantization error: %.1f Hz"%average_tones_diff(tones,quantized_tones))
-    return np.asarray(quantized_tones)
 
 def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF = None, tx_gain = 0, output_filename = None, Front_end = None,
               Device = None, delay = None, pf_average = 4, **kwargs):
@@ -193,10 +172,10 @@ def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF =
 
     tones = quantize_tones(tones, rate, final_fft_bins)
     number_of_samples = rate * measure_t
-    
+
     print("Tone [MHz]\tPower [dBm]\tOffset [MHz]")
     for i in range(len(tones)):
-        print("%.1f\t%.2f\t%.1f" % ((RF + tones[i]) / 1e6, USRP_power + 20 * np.log10(amplitudes[i]), tones[i] / 1e6))
+        print("%.1f\t%.2f\t%.3f" % ((RF + tones[i]) / 1e6, USRP_power + 20 * np.log10(amplitudes[i]), tones[i] / 1e6))
 
     expected_samples = int(number_of_samples/final_fft_bins)
     noise_command = global_parameter()

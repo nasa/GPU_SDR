@@ -311,7 +311,7 @@ def plot_pfb(filename, decimation=None, low_pass=None, backend='matplotlib', out
         try:
             fig.set_size_inches(kwargs['size'][0], kwargs['size'][1])
         except KeyError:
-            pass
+            fig.set_size_inches(10, 16)
         ax[0].set_xlabel("Channel [MHz]")
         ax[0].set_ylabel("Time [s]")
         ax[0].set_title(title + "\n" + subtitle)

@@ -13,7 +13,9 @@ except ImportError:
 import argparse
 
 def run(backend, files):
-    u.
+    for filename in files:
+        u.plot_pfb(filename, decimation=None, low_pass=None, backend=backend, output_filename=None, start_time=None,
+                     end_time=None, auto_open=True)
 
 
 if __name__ == "__main__":

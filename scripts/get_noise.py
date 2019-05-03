@@ -16,7 +16,7 @@ def run(rate,freq,front_end, tones, lapse, decimation, gain):
 
 
     noise_filename = u.Get_noise(tones, measure_t = lapse, rate = rate, decimation = decimation, amplitudes = None,
-                              RF = freq, output_filename = None, Front_end = front_end,Device = None, delay = None, pf_average = 4, tx_gain = gain)
+                              RF = freq, output_filename = None, Front_end = front_end,Device = None, delay = 1000e-9, pf_average = 4, tx_gain = gain)
 
     return noise_filename
 

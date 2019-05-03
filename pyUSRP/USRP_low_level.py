@@ -245,3 +245,29 @@ def find_nearest(array, value):
     array = np.asarray(array)
     idx = (np.abs(array - value)).argmin()
     return int(idx)
+
+def average_tones_diff(tones_original,tones_quantized):
+    if len(tones_original)!=len(tones_quantized):
+        err_msg = "Quantized tones and tones are different in length!"
+        print_error(err_msg)
+        raise TypeError(err_msg)
+
+    x = 0
+    for i in range(len(tones_original)):
+        x += np.abs(tones_original[i] - tones_quantized[i])
+
+    return x/float(len(tones_original))
+
+def quantize_tones(tones, rate, bins):
+    #note the plus one
+    bin_center_axis = np.linspace(-rate/2, rate/2, bins+1)
+    #for d in range(len(bin_center_axis)):
+    #    print d,bin_center_axis[d]
+    quantized_tones = []
+    for t in tones:
+        quantized_tones.append(
+            bin_center_axis[find_nearest(bin_center_axis, t)]
+
+        )
+    print_debug("Average tone quantization error: %.1f Hz"%average_tones_diff(tones,quantized_tones))
+    return np.asarray(quantized_tones)

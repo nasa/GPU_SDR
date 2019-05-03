@@ -133,7 +133,8 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
                     # print_debug("File writing thread is dynamically extending datasets.")
                     dynamic_alloc_warning = False
                 dataset.resize(data_end, 1)
-            dataset[:, data_start:data_end] = np.reshape(data, (samples_per_channel,metadata['channels'])).T
+            packet = np.reshape(data, (samples_per_channel,metadata['channels'])).T
+            dataset[:, data_start:data_end] = packet
             dataset.attrs.__setitem__("samples", data_end)
 
             if metadata['errors'] != 0:
