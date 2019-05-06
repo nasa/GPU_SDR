@@ -566,7 +566,22 @@ void RX_buffer_demodulator::upload_multitone_parameters(){
     int *tone_bins;
     tone_bins = (int*)malloc(h_param.eff_n_tones*sizeof(int));
 
+    std::vector<double> bin_axis(parameters->fft_tones);
+
+    double bin_size = (double)parameters->rate/(double)parameters->fft_tones;
+
+    for(size_t i = 0; i<bin_axis.size(); i++){
+      bin_axis[i] = i*bin_size - bin_size * (parameters->fft_tones/2);
+      for(int u = 0; u<h_param.eff_n_tones; u++){
+        if((parameters->freq[u] < bin_axis[i] + bin_size) && (parameters->freq[u] > bin_axis[i] - bin_size) ){
+            tone_bins[u] = (i + (parameters->fft_tones/2))%parameters->fft_tones;
+            std::cout<<"parameter f: "<<parameters->freq[u]<<" goes in bin: "<<tone_bins[u]<<std::endl;
+          }
+        }
+    }
+print_debug("testpoint",1);
     //convert the frequency parameter to fft bin
+    /*
     for(int u = 0; u<h_param.eff_n_tones;u++){
 
         tone_bins[u] = parameters->freq[u]>0?
@@ -574,7 +589,7 @@ void RX_buffer_demodulator::upload_multitone_parameters(){
             round((double)parameters->fft_tones*((double)1.-(double)parameters->freq[u]/(double)parameters->rate));
         std::cout<<"parameter f: "<<parameters->freq[u]<<" goes in bin: "<<tone_bins[u]<<std::endl;
     }
-
+    */
      //allocate memory for the tone device pointer array
     cudaMalloc((void **)&h_param.tones, h_param.eff_n_tones*sizeof(int));
 

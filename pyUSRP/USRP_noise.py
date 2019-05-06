@@ -362,7 +362,7 @@ def calculate_noise(filename, welch=None, dbc=False, rotate=True, usrp_number=0,
     if verbose: print_debug("Calculating spectra...")
 
 
-    Results = Parallel(n_jobs=min(N_CORES,2), verbose=1, backend=parallel_backend)(
+    Results = Parallel(n_jobs=min(N_CORES,12), verbose=1, backend=parallel_backend)(
         delayed(spec_from_samples)(
             i, sampling_rate=sampling_rate, welch=welch, dbc=dbc, rotate=rotate, clip_samples = clip_samples,
             verbose=verbose

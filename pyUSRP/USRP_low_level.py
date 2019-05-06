@@ -259,8 +259,13 @@ def average_tones_diff(tones_original,tones_quantized):
     return x/float(len(tones_original))
 
 def quantize_tones(tones, rate, bins):
-    #note the plus one
-    bin_center_axis = np.linspace(-rate/2, rate/2, bins+1)
+    #bin_center_axis = np.linspace(-rate/2, rate/2, bins)
+
+    bin_center_axis = []
+    for i in range(bins):
+        bin_center_axis.append(i*(float(rate)/bins))
+    bin_center_axis = np.asarray(bin_center_axis) - (float(rate)/bins) * (bins/2)
+
     #for d in range(len(bin_center_axis)):
     #    print d,bin_center_axis[d]
     quantized_tones = []
