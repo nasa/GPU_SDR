@@ -284,11 +284,14 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
         #pl.scatter(np.argmax(gradS21),gradS21[np.argmax(gradS21)],color = 'red')
         #pl.show()
         low_index = int(max(maximum-peak_width,0))
+        low_index = max(0,low_index)
+
         high_index = int(min(maximum+peak_width, len(freq_)))
+        high_index = min(len(gradS21)-1,high_index)
 
         #used in peack rejections
         half_low_index = int(max(maximum-peak_width/2,0))
-        half_high_index = int(min(maximum+peak_width/2, len(freq_)))
+        half_high_index = int(min(maximum+peak_width/2, len(freq_)-1))
 
 
         try:
@@ -316,7 +319,7 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
         #####################################
 
         if (Qr>Qr_cutoff) and (Qr<Qr_max) and (f0>freq_[half_low_index]/1e6) and (f0<freq_[half_high_index]/1e6) and (a<a_cutoff) and (depth> Mag_depth_cutoff):
-            print_debug("Resonator found at %.2f MHz"%(freq_[maximum]/1.e6))
+            print_debug("%d) Resonator found at %.2f MHz"%(len(f0s), freq_[maximum]/1.e6))
             max_diag.append(maximum)
             q_diag.append(Qr)
             f0s.append(f0)
@@ -567,6 +570,7 @@ def get_fit_param(filename, verbose = False):
     f.close()
     return ret
 
+
 def get_best_readout(filename, verbose = False):
     '''
     Get the best readout frequency from a fitted resonator keeping in account the nonlinear firt model.
@@ -590,6 +594,18 @@ def get_best_readout(filename, verbose = False):
         ret.append(brf)
 
     return ret
+
+def min_readout_spacing(filename, verbose = False):
+    '''
+    Calculate the minimum spacing between f0s of a fitted VNA file.
+    '''
+
+    f0s = get_best_readout(filename, verbose = verbose)
+    M = [[np.abs(a-b) if a!=b else np.inf for a in f0s] for b in f0s]
+    ret = np.min(M)
+    print_debug("Minium channel spacing required is %.2f Hz"%ret)
+    return ret
+
 
 def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_info = None, verbose = False, output_filename = None, auto_open = True, **kwargs):
     '''

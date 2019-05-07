@@ -60,7 +60,7 @@ def get_color(N):
 
 
 
-def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib', output_filename=None,
+def plot_raw_data(filenames, decimation=None, displayed_samples=None, low_pass=None, backend='matplotlib', output_filename=None,
                   channel_list=None, mode='IQ', start_time=None, end_time=None, auto_open=True, **kwargs):
     '''
     Plot raw data group from given H5 files.
@@ -68,6 +68,7 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
     Arguments:
         - a list of strings containing the files to plot.
         - decimation: eventually deciamte the signal before plotting.
+        - displayed_samples: calculate decimation to display a certain number of samples.
         - low pass: floating point number controlling the cut-off frequency of a low pass filter that is eventually applied to the data.
         - backend: [string] choose the return type of the plot. Allowed backends for now are:
             * matplotlib: creates a matplotlib figure, plots in non-blocking mode and return the matplotlib figure object. kwargs in this case accept:
@@ -95,7 +96,8 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
     Note:
         - Possible errors are signaled on the plot.
     '''
-
+    downsample_warning = True
+    overwriting_decim_waring = True
     try:
         fig_size = kwargs['figsize']
     except KeyError:
@@ -222,6 +224,7 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
             else:
                 ch_list = channel_list
 
+
         # prepare samples TODO
         for i in ch_list:
 
@@ -232,6 +235,14 @@ def plot_raw_data(filenames, decimation=None, low_pass=None, backend='matplotlib
                 Y1 = np.abs(samples[i])
                 Y2 = np.angle(samples[i])
 
+            if displayed_samples is not None:
+                if decimation is not None and overwriting_decim_waring:
+                    print_warning("Overwriting offline decimation arguments with displayed_samples")
+                    overwriting_decim_waring = False
+                decimation = int(len(samples[i])/displayed_samples)
+                if decimation <= 1 and downsample_warning:
+                    print_warning("Channel does not require decimation to reach the number of displayed samples")
+                    downsample_warning = False
             if decimation is not None and decimation > 1:
                 decimation = int(np.abs(decimation))
                 Y1 = signal.decimate(Y1, decimation, ftype='fir')

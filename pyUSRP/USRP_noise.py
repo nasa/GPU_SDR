@@ -65,6 +65,7 @@ def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF =
         - pf_average: pfb averaging factor.
         - kwargs:
             * verbose: additional prints. Default is False.
+            * push_queue: queue for post writing samples.
 
 
     Note:
@@ -81,6 +82,11 @@ def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF =
         verbose = kwargs['verbose']
     except KeyError:
         verbose = False
+
+    try:
+        push_queue = kwargs['push_queue']
+    except KeyError:
+        push_queue = None
 
     if output_filename is None:
         output_filename = "USRP_Noise_"+get_timestamp()
@@ -232,7 +238,9 @@ def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF =
         timeout=None,
         filename=output_filename,
         dpc_expected=expected_samples,
-        meas_type="Noise", **kwargs
+        meas_type="Noise",
+        push_queue = push_queue,
+        **kwargs
     )
 
     print_debug("Noise acquisition terminated.")

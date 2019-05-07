@@ -13,11 +13,10 @@ except ImportError:
 import argparse
 
 def run(backend, files):
-    for f in files:
-        u.calculate_noise(f, verbose = True, welch = 7, dbc = True, clip = 0.1)
 
-    print u.plot_noise_spec(files, channel_list=None, max_frequency=100, title_info=None, backend=backend,
-                    cryostat_attenuation=0, auto_open=True, output_filename=None)
+    u.plot_raw_data(files, decimation=None, low_pass=None, backend=backend, output_filename=None,
+              channel_list=None, mode='PM', auto_open=True, displayed_samples = 10000)
+
 
 if __name__ == "__main__":
 
@@ -25,6 +24,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--folder', '-fn', help='Name of the folder in which the data are stored', type=str, default = "data")
     parser.add_argument('--backend', '-b', help='backend to use for plotting', type=str, default= "matplotlib")
+    parser.add_argument('--mode', '-m', help='Plotting mode to use. Usually PM or IQ', type=str, default = "data")
 
 
     args = parser.parse_args()

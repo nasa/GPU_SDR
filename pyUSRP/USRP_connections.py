@@ -136,6 +136,8 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
             packet = np.reshape(data, (samples_per_channel,metadata['channels'])).T
             dataset[:, data_start:data_end] = packet
             dataset.attrs.__setitem__("samples", data_end)
+            if data_start == 0:
+                dataset.attrs.__setitem__("start_epoch", time.time())
 
             if metadata['errors'] != 0:
                 print_warning("The server encounterd an error")
