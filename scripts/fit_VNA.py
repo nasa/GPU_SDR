@@ -17,8 +17,8 @@ import argparse
 
 def run(file_list, backend, attenuation, N_peaks):
     for i in range(len(file_list)):
-        u.initialize_peaks(file_list[i], N_peaks = N_peaks[i], a_cutoff = 1, smoothing = None, peak_width = 250e3, Qr_cutoff=4e3, verbose = True, exclude_center = True, diagnostic_plots = True)
-        u.vna_fit(file_list[i], p0=None, fit_range = 4e4, verbose = False)
+        u.initialize_peaks(file_list[i], N_peaks = N_peaks[i], a_cutoff = 1, smoothing = None, peak_width = 40e3, Qr_cutoff=4e3, verbose = True, exclude_center = True, diagnostic_plots = True)
+        u.vna_fit(file_list[i], p0=None, fit_range = 40e3, verbose = False)
 
 if __name__ == "__main__":
 

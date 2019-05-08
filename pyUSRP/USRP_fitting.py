@@ -290,8 +290,8 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
         high_index = min(len(gradS21)-1,high_index)
 
         #used in peack rejections
-        half_low_index = int(max(maximum-peak_width/2,0))
-        half_high_index = int(min(maximum+peak_width/2, len(freq_)-1))
+        half_low_index = int(max(maximum-peak_width/1.2,0))
+        half_high_index = int(min(maximum+peak_width/1.2, len(freq_)-1))
 
 
         try:
