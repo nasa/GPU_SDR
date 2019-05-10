@@ -30,4 +30,6 @@ if __name__ == "__main__":
                 verbose = True
             )
 
-    b.build_time_axis(args.file, front_end = 'A_RX2', verbose = True)
+
+    #b.build_map(args.file, 24, 1.5, front_end = 'A_RX2', verbose = True)
+    b.plot_beam_map(args.file)

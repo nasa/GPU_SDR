@@ -239,7 +239,6 @@ def Dual_VNA(start_f_A, last_f_A, start_f_B, last_f_B, measure_t, n_points, tx_g
     vna_command.set(RX_frontend_B,"chirp_t", [measure_t])
     vna_command.set(RX_frontend_B,"rf", RF_B)
     vna_command.set(RX_frontend_B,"decim", decimation) # THIS only activate the decimation.
-
     if vna_command.self_check():
         if(verbose):
             print "VNA command succesfully checked"
