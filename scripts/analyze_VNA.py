@@ -12,10 +12,10 @@ except ImportError:
 
 import argparse
 
-def run(backend, files):
+def run(backend, files, decim):
     for f in files:
         u.VNA_analysis(f)
-    u.plot_VNA(files, backend = backend)
+    u.plot_VNA(files, backend = backend, plot_decim = decim)
 
 
 
@@ -25,6 +25,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--folder', '-fn', help='Name of the folder in which the data are stored', type=str, default = "data")
     parser.add_argument('--backend', '-b', help='backend to use for plotting', type=str, default= "matplotlib")
+    parser.add_argument('--plot_decimate', '-d', help='deciamte data in the plot to get lighter files', type=int, default= None)
 
 
     args = parser.parse_args()
@@ -32,4 +33,4 @@ if __name__ == "__main__":
 
     files = glob.glob("USRP_VNA*.h5")
 
-    run(backend = args.backend, files = files)
+    run(backend = args.backend, files = files, decim = args.plot_decimate)
