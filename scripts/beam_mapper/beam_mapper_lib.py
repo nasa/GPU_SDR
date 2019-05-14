@@ -7,6 +7,8 @@ from joblib import Parallel,delayed
 import matplotlib.pyplot as pl
 from scipy import optimize
 from atpbar import atpbar
+from matplotlib.lines import Line2D
+
 ###############################################################
 # FUNCTIONS PORTED FROM PYUSRP TO MAKE THIS MODULE STANDALONE #
 ###############################################################
@@ -97,13 +99,16 @@ def fitgaussian(data):
     """Returns (height, x, y, width_x, width_y)
     the gaussian parameters of a 2D distribution found by a fit"""
     params = moments(data)
-    #bounds = (
-    #    np.asarray([0.9*params[0], 0.8*params[1], 0.8*params[2], 0.5*params[3], 0.5*params[4], -np.pi]),
-    #    np.asarray([1.1*params[0], 1.2*params[1], 1.2*params[2], 1.5*params[3], 1.5*params[4], +np.pi])
-    #)
+    '''
+    bounds = (
+        np.asarray([0.9*params[0], 0.8*params[1], 0.8*params[2], 0.5*params[3], 0.5*params[4], -np.pi]),
+        np.asarray([1.1*params[0], 1.2*params[1], 1.2*params[2], 1.5*params[3], 1.5*params[4], +np.pi])
+    )
+    '''
     errorfunction = lambda p: np.ravel(gaussian(*p)(*np.indices(data.shape)) - data)
-    p, success = optimize.least_squares(errorfunction, x0 = params,bounds = bounds)
-    return p
+    p = optimize.least_squares(errorfunction, x0 = params)
+
+    return p['x']
 
 
 ###################################################
@@ -411,7 +416,9 @@ def plot_beam_map(filename, cmap = 'Greys', levels = None):
     try:
         os.mkdir("figures")
     except OSError:
-        os.chdir("figures")
+        pass
+
+    os.chdir("figures")
 
 
     #reconstruct axis
@@ -428,27 +435,73 @@ def plot_beam_map(filename, cmap = 'Greys', levels = None):
         levels = [-110,-90,-85,]
 
     linewidths = np.linspace(0.5,1.5,len(levels))
+    centers = []
     for i in atpbar(range(beam_data['n_chan']), name='channels plot'):
         fig, ax = pl.subplots(figsize=(sx,sy))
 
         Z = np.reshape(beam_data['data'][i],(beam_data['nx'],beam_data['ny']))
-
-        #fitting
-        #params = fitgaussian(150+Z)
-        #fit = gaussian(*params)
-        #print params
-        #pl.contour(X, Y, fit(*np.indices(Z.shape)), colors='red')
-
         g = pl.pcolormesh(X,Y,Z, cmap = cmap, alpha = 0.7)
-        contours = pl.contour(X, Y, Z, colors='black', levels = levels, linestyles = 'solid', antialiased = True, linewidths = linewidths)
+        #fitting
+        params = fitgaussian(10**(Z/20))
+        fit = gaussian(*params)
+        fit_data = fit(*np.indices(Z.shape))
+        #rint params
+        fit_level = [np.max(fit_data)*0.64]
+        pl.contour(X, Y, fit_data, colors='red', levels = fit_level)
+        #"gaussian fit:\nCenter: %.2f %.2f"%(params[0],params[1])
+        (y_max,x_max) = np.unravel_index(np.argmax(fit_data, axis=None), fit_data.shape)
+        x_max = xvec[x_max]
+        y_max = yvec[y_max]
+        #x_max = params[1]
+        #y_max = params[2]
+        centers.append((x_max,y_max))
+        '''
+        fit_label = "2D gaussian fit 64%"
+        fit_label+="\nCenter X: %.2f Y: %.2f [inch]"%(x_max,y_max)
+        fit_label+="\nAsymmetry $|1-x/y|$: %.2f"%(np.abs(1-params[3]/params[4]))
+        fit_label+="\nRotation: $%.1f^o$"%params[5]
+        colors = ['black', 'red']
+        lines = [Line2D([0], [0], color=c, linewidth=2, linestyle='-') for c in colors]
+        labels = ['Beam map level', fit_label]
+        pl.legend(lines, labels)
+
+        contours = pl.contour(X, Y, Z, colors='black',
+            levels = levels, linestyles = 'solid', antialiased = True, linewidths = linewidths)
         pl.clabel(contours, inline=False, fontsize=10)
 
         cbar = pl.colorbar(g)
         cbar.set_label( "$%d\pm%.1f Hz$ line magnitude [dBm]"%(beam_data['freq'],beam_data['half_span']), rotation=270, labelpad=30)
 
+
+        pl.scatter(
+            #xvec[int(params[1])] * np.cos(np.radians(params[5])),
+            #yvec[int(params[2])] * np.sin(np.radians(params[5])),
+            [x_max],
+            [y_max],
+            color = 'red'
+        )
+
         pl.xlabel('X position [Inches]')
         pl.ylabel('Y posiiton [Inches]')
         pl.title("Beam map: channel %.2fMHz"%(beam_data['tone_freq'][i]/1e6))
         pl.savefig("channel%d.png"%(i))
+        '''
         pl.close(fig)
+    print_debug("Printing resonators map...")
+    centers = zip(*centers)
+    fig, ax = pl.subplots(figsize=(20,20))
+    #pl.scatter(centers[0], centers[1], marker = '+')
+    pl.title("Resonators position")
+    for i in range(len(centers[0])):
+        ax.text(centers[0][i], centers[1][i], "%d"%i)
+        #ax.annotate("%.2fMHz"%(beam_data['tone_freq'][i]/1e6),(centers[0][i], centers[1][i]))
+        #ax.annotate("%d"%i,(centers[0][i], centers[1][i]))
+        pl.scatter([min(xvec),max(xvec)],[min(yvec),max(yvec)],alpha=0,label =  "%d, %.2fMHz"%(i,beam_data['tone_freq'][i]/1e6))
+    pl.xlabel('X position [Inches]')
+    pl.ylabel('Y posiiton [Inches]')
+    pl.legend(ncol = 4,bbox_to_anchor=(1.04,1), loc="upper left")
+    pl.grid()
+    pl.savefig("channel_map.png",bbox_inches="tight")
+
+    pl.close(fig)
     os.chdir('..')
