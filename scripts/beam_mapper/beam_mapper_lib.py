@@ -466,12 +466,12 @@ def plot_beam_map(filename, cmap = 'Greys', levels = None):
         pl.contour(X, Y, fit_data, colors='red', levels = fit_level)
         #"gaussian fit:\nCenter: %.2f %.2f"%(params[0],params[1])
         (y_max,x_max) = np.unravel_index(np.argmax(fit_data, axis=None), fit_data.shape)
-        x_max = xvec[x_max]
-        y_max = yvec[y_max]
+        x_max = xvec[min(x_max,len(xvec)-1)]
+        y_max = yvec[min(y_max,len(yvec)-1)]
         #x_max = params[1]
         #y_max = params[2]
         centers.append((x_max,y_max))
-        '''
+        
         fit_label = "2D gaussian fit 64%"
         fit_label+="\nCenter X: %.2f Y: %.2f [inch]"%(x_max,y_max)
         fit_label+="\nAsymmetry $|1-x/y|$: %.2f"%(np.abs(1-params[3]/params[4]))
@@ -501,7 +501,7 @@ def plot_beam_map(filename, cmap = 'Greys', levels = None):
         pl.ylabel('Y posiiton [Inches]')
         pl.title("Beam map: channel %.2fMHz"%(beam_data['tone_freq'][i]/1e6))
         pl.savefig("channel%d.png"%(i))
-        '''
+
         pl.close(fig)
     print_debug("Printing resonators map...")
     centers = zip(*centers)
