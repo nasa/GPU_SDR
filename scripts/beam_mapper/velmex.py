@@ -56,7 +56,8 @@ positioning = False
 
 def init():
     global ser
-    ser = serial.Serial("/dev/ttyUSB2", 9600, bytesize=serial.EIGHTBITS , parity= serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, timeout=.1)
+    #catch a SerialException and check for return code
+    ser = serial.Serial("/dev/ttyUSB0", 9600, bytesize=serial.EIGHTBITS , parity= serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, timeout=.1)
     ser.write("F")  # enable online mode
     ser.write("C")  # clear current program
 
@@ -226,7 +227,7 @@ def wait_for_positioning():
     print "waiting for motor position 0,0 ..."
     while(positioning):
         time.sleep(0.1)
-        
+
 def start_scan():
     global positioning, start_scanning
     while positioning:

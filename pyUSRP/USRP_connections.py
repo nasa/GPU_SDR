@@ -226,8 +226,6 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
 
     acquisition_end_flag = False
 
-    spc_acc = 0
-
     # this variable discriminate between a timeout condition generated
     # on purpose to wait the queue and one reached because of an error
     legit_off = False
@@ -238,6 +236,12 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
 
     H5_file_pointer = create_h5_file(str(filename))
     Param_to_H5(H5_file_pointer, parameters, **kwargs)
+
+    allowed_counters = ['A_RX2','B_RX2']
+    spc_acc = {}
+    for fr_counter in allowed_counters:
+        if parameters.parameters[fr_counter] != 'OFF': spc_acc[fr_counter] = 0
+
     CLIENT_STATUS["measure_running_now"] = True
     if dpc_expected is not None:
         widgets = [progressbar.Percentage(), progressbar.Bar()]
@@ -257,7 +261,7 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
                 acquisition_end_flag = True
             else:
                 # write_single_H5_packet(meta_data, data, H5_file_pointer)
-                write_ext_H5_packet(meta_data, data, H5_file_pointer, spc_acc)
+                write_ext_H5_packet(meta_data, data, H5_file_pointer, spc_acc[meta_data['front_end_code']])
                 if push_queue is not None:
                     if not push_queue_warning:
                         try:
@@ -266,10 +270,10 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
                             print_warning("Cannot push packets into external queue: %s"%str(sys.exc_info()[0]))
                             push_queue_warning = True
 
-                spc_acc += meta_data['length'] / meta_data['channels']
+                spc_acc[meta_data['front_end_code']] += meta_data['length'] / meta_data['channels']
                 try:
                     #print "max expected: %d total received %d"%(dpc_expected, spc_acc)
-                    bar.update(spc_acc)
+                    bar.update(spc_acc[meta_data['front_end_code']])
 
                 except:
                     if data_warning:
@@ -293,7 +297,9 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
             CLIENT_STATUS["keyboard_disconnect"] = False
 
         try:
-            bar.update(spc_acc)
+            bar.update(spc_acc[meta_data['front_end_code']])
+        except NameError:
+            pass
         except:
             if (more_sample_than_expected_WARNING): print_debug("Sync RX received more data than expected.")
 

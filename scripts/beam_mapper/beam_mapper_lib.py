@@ -122,6 +122,7 @@ def build_time_axis(filename, front_end = 'A_RX2', verbose = True):
     beam_data = get_beam_data(filename)
     beam_data_start = beam_data['ti'][0]
     beam_data_end = max(beam_data['tf'])
+    print np.argmax(beam_data['tf'])
     f = bound_open(filename)
     data_t_start = f['raw_data0'][front_end]['data'].attrs.get("start_epoch")
     data_rate = f['raw_data0'][front_end].attrs.get("rate")/f['raw_data0'][front_end].attrs.get("fft_tones")
@@ -152,7 +153,7 @@ def build_time_axis(filename, front_end = 'A_RX2', verbose = True):
         if delta_end > 0:
             print_debug("Beam movement ends %.1f seconds before the end of acquisition"%delta_end)
         else:
-            err_msg = "Resonator data acquisition ends before beam movement"
+            err_msg = "Resonator data acquisition ends before beam movement by %.2f seconds"%delta_end
             print_error(err_msg)
             raise ValueError(err_msg)
 
@@ -325,8 +326,23 @@ def build_map(filename, freq, half_span, front_end = 'A_RX2', verbose = True, we
     if fp['raw_data0'][front_end].attrs.get("decim")!=0:
         data_rate /= fp['raw_data0'][front_end].attrs.get("decim")
 
+
+    def aligned(a, alignment=32):
+        if (a.ctypes.data % alignment) == 0:
+            return a
+
+        extra = alignment / a.itemsize
+        buf = np.empty(a.size + extra, dtype=a.dtype)
+        ofs = (-buf.ctypes.data % alignment) / a.itemsize
+        aa = buf[ofs:ofs+a.size].reshape(a.shape)
+        np.copyto(aa, a)
+        assert (aa.ctypes.data % alignment) == 0
+        return aa
+
+    data = np.asarray([aligned(ch) for ch in data])
+
     if verbose: print_debug("Calculating ffts...")
-    beam_map = Parallel(n_jobs=12, verbose=False, require='sharedmem')(
+    beam_map = Parallel(n_jobs=24, verbose=False, require='sharedmem')(
         delayed(extract_frequecy)(
     #beam_map = [extract_frequecy(
             data = data[ch],
@@ -422,7 +438,7 @@ def plot_beam_map(filename, cmap = 'Greys', levels = None):
     sx = 14
     sy = sx*float(step_y)/float(step_x)
     print_debug("aspect ratio: %.2f"%(float(step_y)/float(step_x)))
-    X,Y=np.meshgrid(xvec,yvec)
+    X,Y=np.meshgrid(yvec,xvec)
 
     if levels == None:
         levels = [-110,-90,-85,]

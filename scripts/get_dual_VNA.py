@@ -60,12 +60,12 @@ if __name__ == "__main__":
 
     parser.add_argument('--folder', '-fn', help='Name of the folder in which the data will be stored', type=str, default = "data")
     parser.add_argument('--freq_a', '-fa', help='LO frequency in MHz (frontend A)', type=float, default= 300)
-    parser.add_argument('--freq_b', '-fb', help='LO frequency in MHz (frontend B)', type=float, default= 400)
+    parser.add_argument('--freq_b', '-fb', help='LO frequency in MHz (frontend B)', type=float, default= 390)
     parser.add_argument('--rate', '-r', help='Sampling frequency in Msps', type=float, default = 100)
-    parser.add_argument('--f0a', '-f0a', help='Baseband start frequrency in MHz (frontend A)', type=float, default=-50)
-    parser.add_argument('--f1a', '-f1a', help='Baseband end frequrency in MHz (frontend A)', type=float, default=+50)
-    parser.add_argument('--f0b', '-f0b', help='Baseband start frequrency in MHz (frontend B)', type=float, default=-50)
-    parser.add_argument('--f1b', '-f1b', help='Baseband end frequrency in MHz (frontend B)', type=float, default=+50)
+    parser.add_argument('--f0a', '-f0a', help='Baseband start frequrency in MHz (frontend A)', type=float, default=-45)
+    parser.add_argument('--f1a', '-f1a', help='Baseband end frequrency in MHz (frontend A)', type=float, default=+45)
+    parser.add_argument('--f0b', '-f0b', help='Baseband start frequrency in MHz (frontend B)', type=float, default=-45)
+    parser.add_argument('--f1b', '-f1b', help='Baseband end frequrency in MHz (frontend B)', type=float, default=+45)
     parser.add_argument('--points', '-p', help='Number of points used in the scan', type=float, default=50e3)
     parser.add_argument('--time', '-t', help='Duration of the scan in seconds', type=float, default=10)
 
@@ -83,21 +83,15 @@ if __name__ == "__main__":
         exit()
 
     # Data acquisition
-
-    cmd = ""
-    filenames = []
-    while cmd != "S":
-        f = run(rate = args.rate*1e6,
-            freq_a = args.freq_a*1e6,
-            f0a = args.f0a*1e6,
-            f1a = args.f1a*1e6,
-            freq_b = args.freq_b*1e6,
-            f0b = args.f0b*1e6,
-            f1b = args.f1b*1e6,
-            lapse = args.time,
-            points = args.points
-        )
-        cmd = raw_input("Press enter to measure again or type S to stop.")
-        filenames.append(f)
+    f = run(rate = args.rate*1e6,
+        freq_a = args.freq_a*1e6,
+        f0a = args.f0a*1e6,
+        f1a = args.f1a*1e6,
+        freq_b = args.freq_b*1e6,
+        f0b = args.f0b*1e6,
+        f1b = args.f1b*1e6,
+        lapse = args.time,
+        points = args.points
+    )
 
     # Data analysis and plotting will be in an other python script
