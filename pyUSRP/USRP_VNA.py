@@ -251,9 +251,9 @@ def Dual_VNA(start_f_A, last_f_A, start_f_B, last_f_B, measure_t, n_points, tx_g
         return ""
 
     if decimation:
-        expected_samples = 2* Iterations * n_points
+        expected_samples = Iterations * n_points
     else:
-        expected_samples = 2* number_of_samples
+        expected_samples = number_of_samples
 
     Packets_to_file(
         parameters = vna_command,

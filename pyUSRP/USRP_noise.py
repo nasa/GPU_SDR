@@ -45,6 +45,312 @@ from USRP_low_level import *
 from USRP_files import *
 from USRP_delay import *
 
+def Dual_get_noise(tones, measure_t, rate, decimation = None, amplitudes_A = None, amplitudes_B = None, RF_A = None, RF_B = None, tx_gain_A = 0, tx_gain_B = 0, output_filename = None,
+              Device = None, delay = None, pf_average = 4, **kwargs):
+    '''
+    Perform a noise acquisition using fixed tone technique on both frontend with a symmetrical PFB setup
+
+    Arguments:
+        - tones: list of ABSOLUTE tones frequencies in Hz.
+        - measure_t: duration of the measure in seconds.
+        - decimation: the decimation factor to use for the acquisition. Default is minimum. Note that with the PFB the decimation factor can only be >= N_tones.
+        - amplitudes_A/B: a list of linear power to use with each tone. Must be the same length of tones arg; will be normalized. Default is equally splitted power.
+        - RF_A/B: central up/down mixing frequency. Default is deducted by other arguments.
+        - tx_gain_A/B: gain to use in the transmission side.
+        - output_filename: eventual filename. default is datetime.
+        - Device: the on-server device number to use. default is 0.
+        - delay: delay between TX and RX processes. Default is taken from the INTERNAL_DELAY variable.
+        - pf_average: pfb averaging factor.
+        - kwargs:
+            * verbose: additional prints. Default is False.
+            * push_queue: queue for post writing samples.
+
+    Note:
+        - In the PFB acquisition scheme the decimation factor and bin width are directly correlated. This function execute a check
+          on the input parameters to determine the number of FFT bins to use.
+
+    Returns:
+        - filename of the measure file.
+    '''
+
+    global USRP_data_queue, REMOTE_FILENAME, END_OF_MEASURE, LINE_DELAY, USRP_power
+
+    try:
+        verbose = kwargs['verbose']
+    except KeyError:
+        verbose = False
+
+    try:
+        push_queue = kwargs['push_queue']
+    except KeyError:
+        push_queue = None
+
+    if output_filename is None:
+        output_filename = "USRP_Noise_"+get_timestamp()
+    else:
+        output_filename = str(output_filename)
+
+    print("Begin dual noise acquisition, file %s ..."%output_filename)
+
+    if measure_t <= 0:
+        print_error("Cannot execute a noise measure with "+str(measure_t)+"s duration.")
+        return ""
+
+    tx_gain_A = int(np.abs(tx_gain_A))
+    tx_gain_B = int(np.abs(tx_gain_B))
+    if tx_gain_A > 31:
+        print_warning("Max tx_gain_A is usually 31 dB. %d dB selected"%tx_gain_A)
+    if tx_gain_B > 31:
+        print_warning("Max tx_gain_B is usually 31 dB. %d dB selected"%tx_gain_B)
+
+    if not (int(rate) in USRP_accepted_rates):
+        print_warning("Requested rate will cause additional CIC filtering in USRP firmware. To avoid this use one of these rates (MHz): "+str(USRP_accepted_rates))
+
+    if RF_A is None or RF_B is None:
+        print_warning("Assuming tones are in absolute units (detector bandwith)")
+
+        #calculate the splitting Frequency
+        err_msg = 'Automatic frequency calculation has not been implemented for dual noise acquisition'
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    else:
+        tones = np.asarray(tones)
+        tones_A = tones[np.abs(tones - RF_A) < rate/2]
+        tones_B = tones[np.abs(tones - RF_B) < rate/2]
+
+        common = list(set(tones_A).intersection(tones_B))
+        # todo check for oob tones
+        if len(common) > 0:
+            print_warning("Some tone is compatible with both frontend tunings, see next messages.")
+            for cc in common:
+                if len(tones_A)>=len(tones_B):
+                    print_debug("length of tones A: %d, length of tones B: %d, removing from %s"%(len(tones_A),len(tones_B),'A'))
+                    np.delete(tones_A, np.where(tones_A == cc)[0][0])
+                else:
+                    print_debug("length of tones A: %d, length of tones B: %d, removing from %s"%(len(tones_A),len(tones_B),'B'))
+                    np.delete(tones_B, np.where(tones_B == cc)[0][0])
+
+        print_debug("RF_A\tRF_B\t[MHz]")
+        print_debug("%.2f\t%.2f"%(RF_A/1e6,RF_B/1e6))
+        print_debug("TONES_A\tTONES_B\t[MHz]")
+        tones_strings = []
+        for j in range(len(tones_A)):
+            tones_strings.append("%.2f\t"%(tones_A[j]/1e6))
+        for j in range(len(tones_B)):
+            try:
+                tones_strings[j]+="%.2f"%(tones_B[j]/1e6)
+            except IndexError:
+                tones_strings.append("\t%.2f"%(tones_B[j]/1e6))
+
+    if amplitudes_A is not None:
+        if len(amplitudes_A) != len(tones_A):
+            print_warning("Amplitudes for RF A profile length is %d and it's different from tones array length that is %d. Amplitude profile will be ignored."%(len(amplitudes_A),len(tones_A)))
+            amplitudes_A = [1. / len(tones_A) for x in tones_A]
+        print_debug("Using %.1f percent of A DAC range"%(np.sum(amplitudes_A)*100))
+    else:
+        print_debug("Using 100 percent of RF A DAC ranges.")
+        amplitudes_A = [1. / len(tones_A) for x in tones_A]
+
+    if amplitudes_B is not None:
+        if len(amplitudes_B) != len(tones_B):
+            print_warning("Amplitudes for RF B profile length is %d and it's different from tones array length that is %d. Amplitude profile will be ignored."%(len(amplitudes_B),len(tones_B)))
+            amplitudes_B = [1. / len(tones_B) for x in tones_B]
+        print_debug("Using %.1f percent of /b DAC range"%(np.sum(amplitudes_B)*100))
+    else:
+        print_debug("Using 100 percent of RF B DAC ranges.")
+        amplitudes_B = [1. / len(tones_B) for x in tones_B]
+
+    TX_frontend_A = "A_TXRX"
+    RX_frontend_A = "A_RX2"
+    TX_frontend_B = "B_TXRX"
+    RX_frontend_B = "B_RX2"
+
+    if delay is None:
+        try:
+            delay = LINE_DELAY[str(int(rate/1e6))]
+            delay *= 1e-9
+        except KeyError:
+            print_warning("Cannot find associated line delay for a rate of %d Msps. Setting to 0s."%(int(rate/1e6)))
+            delay = 0
+    else:
+        print_debug("Using a delay of %d ns" % int(delay*1e9))
+
+    # Calculate the number of channel needed per rf frontend A
+    if len(tones_A)>1:
+        min_required_space_A = np.min([ x for x in np.abs([[i-j for j in tones_A] for i in tones_A]).flatten() if x > 0])
+        print_debug("Minimum bin width required for frontend A is %.2f MHz"%(min_required_space_A/1e6))
+        min_required_fft_A = int(np.ceil(float(rate) / float(min_required_space_A)))
+    else:
+        min_required_fft_A = 10
+
+    if decimation is not None:
+        if decimation < min_required_fft_A:
+            print_warning("Cannot use a decimation factor of %d as the minimum required number of bin in the PFB of frontend A is %d" % (decimation, min_required_fft))
+            final_fft_bins_A = min_required_fft_A
+        else:
+            final_fft_bins_A = int(decimation)
+    else:
+        final_fft_bins_A = int(min_required_fft_A)
+
+    if final_fft_bins_A<10:
+        # Less that 10 pfb bins cause a bottleneck in the GPU: too many instruction to fetch.
+        final_fft_bins_A = 10
+
+    print_debug("Using %d PFB channels"%final_fft_bins_A)
+    for i in range(len(tones_A)):
+        if tones_A[i] > rate / 2:
+            print_error("Out of bandwidth tone!")
+            raise ValueError("Out of bandwidth tone requested in frontend A. %.2f MHz / %.2f MHz (Nyq)" %(tones_A[i]/1e6, rate / 2e6) )
+
+    tones_A = tones_A - RF_A
+    tones_A = quantize_tones(tones_A, rate, final_fft_bins_A)
+
+    # Calculate the number of channel needed per rf frontend B
+    if len(tones_B)>1:
+        min_required_space_B = np.min([ x for x in np.abs([[i-j for j in tones_B] for i in tones_B]).flatten() if x > 0])
+        print_debug("Minimum bin width required for frontend A is %.2f MHz"%(min_required_space_B/1e6))
+        min_required_fft_B = int(np.ceil(float(rate) / float(min_required_space_B)))
+    else:
+        min_required_fft_B = 10
+
+    if decimation is not None:
+        if decimation < min_required_fft_B:
+            print_warning("Cannot use a decimation factor of %d as the minimum required number of bin in the PFB of frontend A is %d" % (decimation, min_required_fft))
+            final_fft_bins_B = min_required_fft_B
+        else:
+            final_fft_bins_B = int(decimation)
+    else:
+        final_fft_bins_B = int(min_required_fft_B)
+
+    if final_fft_bins_B<10:
+        # Less that 10 pfb bins cause a bottleneck in the GPU: too many instruction to fetch.
+        final_fft_bins_B = 10
+
+    print_debug("Using %d PFB channels"%final_fft_bins_B)
+    for i in range(len(tones_B)):
+        if tones_B[i] > rate / 2:
+            print_error("Out of bandwidth tone!")
+            raise ValueError("Out of bandwidth tone requested in frontend A. %.2f MHz / %.2f MHz (Nyq)" %(tones_A[i]/1e6, rate / 2e6) )
+
+    tones_B = tones_B - RF_B
+    tones_B = quantize_tones(tones_B, rate, final_fft_bins_B)
+
+
+    number_of_samples = rate * measure_t
+
+    print("RF Frontend A")
+    print("Tone [MHz]\tPower [dBm]\tOffset [MHz]")
+    for i in range(len(tones)):
+        print("%.1f\t%.2f\t%.3f" % ((RF_A + tones_A[i]) / 1e6, USRP_power + 20 * np.log10(amplitudes_A[i]) + tx_gain_A, tones_A[i] / 1e6))
+
+    expected_samples_A = int(number_of_samples/final_fft_bins_A)
+
+    print("RF Frontend B")
+    print("Tone [MHz]\tPower [dBm]\tOffset [MHz]")
+    for i in range(len(tones)):
+        print("%.1f\t%.2f\t%.3f" % ((RF_B + tones_B[i]) / 1e6, USRP_power + 20 * np.log10(amplitudes_B[i]) + tx_gain_B, tones_B[i] / 1e6))
+
+    expected_samples_B = int(number_of_samples/final_fft_bins_B)
+
+
+    noise_command = global_parameter()
+
+    noise_command.set(TX_frontend_A, "mode", "TX")
+    noise_command.set(TX_frontend_A, "buffer_len", 1e6)
+    noise_command.set(TX_frontend_A, "gain", tx_gain_A)
+    noise_command.set(TX_frontend_A, "delay", 1)
+    noise_command.set(TX_frontend_A, "samples", number_of_samples)
+    noise_command.set(TX_frontend_A, "rate", rate)
+    noise_command.set(TX_frontend_A, "bw", 2 * rate)
+    #noise_command.set(TX_frontend, 'tuning_mode', 0)
+    noise_command.set(TX_frontend_A, "wave_type", ["TONES" for x in tones_A])
+    noise_command.set(TX_frontend_A, "ampl", amplitudes_A)
+    noise_command.set(TX_frontend_A, "freq", tones_A)
+    noise_command.set(TX_frontend_A, "rf", RF_A)
+
+    # This parameter does not have an effect (except suppress a warning from the server)
+    noise_command.set(TX_frontend_A, "fft_tones", 100)
+
+    noise_command.set(RX_frontend_A, "mode", "RX")
+    #noise_command.set(RX_frontend, 'tuning_mode', 0)
+    noise_command.set(RX_frontend_A, "buffer_len", 1e6)
+    noise_command.set(RX_frontend_A, "gain", 0)
+    noise_command.set(RX_frontend_A, "delay", 1 + delay)
+    noise_command.set(RX_frontend_A, "samples", number_of_samples)
+    noise_command.set(RX_frontend_A, "rate", rate)
+    noise_command.set(RX_frontend_A, "bw", 2 * rate)
+
+    noise_command.set(RX_frontend_A, "wave_type", ["TONES" for x in tones_A])
+    noise_command.set(RX_frontend_A, "freq", tones_A)
+    noise_command.set(RX_frontend_A, "rf", RF_A)
+    noise_command.set(RX_frontend_A, "fft_tones", final_fft_bins_A)
+    noise_command.set(RX_frontend_A, "pf_average", pf_average)
+
+    # With the polyphase filter the decimation is realized increasing the number of channels.
+    # This parameter will average in the GPU a certain amount of PFB outputs.
+    noise_command.set(RX_frontend_A, "decim", 0)
+
+    noise_command.set(TX_frontend_B, "mode", "TX")
+    noise_command.set(TX_frontend_B, "buffer_len", 1e6)
+    noise_command.set(TX_frontend_B, "gain", tx_gain_B)
+    noise_command.set(TX_frontend_B, "delay", 1)
+    noise_command.set(TX_frontend_B, "samples", number_of_samples)
+    noise_command.set(TX_frontend_B, "rate", rate)
+    noise_command.set(TX_frontend_B, "bw", 2 * rate)
+    #noise_command.set(TX_frontend, 'tuning_mode', 0)
+    noise_command.set(TX_frontend_B, "wave_type", ["TONES" for x in tones_B])
+    noise_command.set(TX_frontend_B, "ampl", amplitudes_B)
+    noise_command.set(TX_frontend_B, "freq", tones_B)
+    noise_command.set(TX_frontend_B, "rf", RF_B)
+
+    # This parameter does not have an effect (except suppress a warning from the server)
+    noise_command.set(TX_frontend_B, "fft_tones", 100)
+
+    noise_command.set(RX_frontend_B, "mode", "RX")
+    #noise_command.set(RX_frontend, 'tuning_mode', 0)
+    noise_command.set(RX_frontend_B, "buffer_len", 1e6)
+    noise_command.set(RX_frontend_B, "gain", 0)
+    noise_command.set(RX_frontend_B, "delay", 1 + delay)
+    noise_command.set(RX_frontend_B, "samples", number_of_samples)
+    noise_command.set(RX_frontend_B, "rate", rate)
+    noise_command.set(RX_frontend_B, "bw", 2 * rate)
+
+    noise_command.set(RX_frontend_B, "wave_type", ["TONES" for x in tones_B])
+    noise_command.set(RX_frontend_B, "freq", tones_B)
+    noise_command.set(RX_frontend_B, "rf", RF_B)
+    noise_command.set(RX_frontend_B, "fft_tones", final_fft_bins_B)
+    noise_command.set(RX_frontend_B, "pf_average", pf_average)
+
+    # With the polyphase filter the decimation is realized increasing the number of channels.
+    # This parameter will average in the GPU a certain amount of PFB outputs.
+    noise_command.set(RX_frontend_B, "decim", 0)
+
+    if noise_command.self_check():
+        if (verbose):
+            print_debug("Noise command successfully checked")
+            noise_command.pprint()
+
+        Async_send(noise_command.to_json())
+
+    else:
+        err_msg = "Something went wrong in the noise acquisition command self_check()"
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    Packets_to_file(
+        parameters=noise_command,
+        timeout=None,
+        filename=output_filename,
+        dpc_expected=max(expected_samples_A,expected_samples_B),
+        meas_type="Noise",
+        push_queue = push_queue,
+        **kwargs
+    )
+
+    print_debug("Noise acquisition terminated.")
+
+    return output_filename
 
 def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF = None, tx_gain = 0, output_filename = None, Front_end = None,
               Device = None, delay = None, pf_average = 4, **kwargs):
