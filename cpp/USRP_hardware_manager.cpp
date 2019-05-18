@@ -25,9 +25,9 @@ hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init,
 
         this_usrp_number = usrp_number;
         hint["type"] = "x300";
-				hint["addr"] = "192.168.40.2";
-				hint["second_addr"] = "192.168.30.2";
-				hint["e_addr"] = "192.168.30.2";
+				//hint["addr"] = "192.168.40.2";
+				//hint["second_addr"] = "192.168.30.2";
+				//hint["e_addr"] = "192.168.30.2";
 
         //recursively look for usrps
         dev_addrs = uhd::device::find(hint);

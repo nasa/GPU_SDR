@@ -171,7 +171,7 @@ def openH5file(filename, ch_list=None, start_sample=None, last_sample=None, usrp
         sub_group = group[sub_group_name]
     except KeyError:
         print_error(
-            "Cannot recognize sub group format. For X300 USRP possible frontends are \"A_TXRX\",\"B_TXRX\",\"A_RX2\",\"B_RX2\"")
+            "Cannot recognize sub group name %s. For X300 USRP possible frontends are \"A_TXRX\",\"B_TXRX\",\"A_RX2\",\"B_RX2\""%sub_group_name)
         return np.asarray([])
 
     n_chan = sub_group.attrs.get("n_chan")
@@ -521,6 +521,10 @@ class global_parameter(object):
 
                     if isinstance(self.parameters[ant_key]['ampl'],np.ndarray):
                         self.parameters[ant_key]['ampl'] = self.parameters[ant_key]['ampl'].tolist()
+                        #receive does not use ampl
+                        if self.parameters[ant_key]['mode'] == 'RX':
+                            for ii in range(len(self.parameters[ant_key]['ampl'])):
+                                self.parameters[ant_key]['ampl'][ii] = 1
                     try:
                         len(self.parameters[ant_key]['chirp_f'])
                     except TypeError:

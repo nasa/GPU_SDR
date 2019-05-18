@@ -45,13 +45,13 @@ from USRP_low_level import *
 from USRP_files import *
 from USRP_delay import *
 
-def Dual_get_noise(tones, measure_t, rate, decimation = None, amplitudes_A = None, amplitudes_B = None, RF_A = None, RF_B = None, tx_gain_A = 0, tx_gain_B = 0, output_filename = None,
+def dual_get_noise(tones_A, tones_B, measure_t, rate, decimation = None, amplitudes_A = None, amplitudes_B = None, RF_A = None, RF_B = None, tx_gain_A = 0, tx_gain_B = 0, output_filename = None,
               Device = None, delay = None, pf_average = 4, **kwargs):
     '''
     Perform a noise acquisition using fixed tone technique on both frontend with a symmetrical PFB setup
 
     Arguments:
-        - tones: list of ABSOLUTE tones frequencies in Hz.
+        - tones_A/B: list of ABSOLUTE tones frequencies in Hz for frontend A/B.
         - measure_t: duration of the measure in seconds.
         - decimation: the decimation factor to use for the acquisition. Default is minimum. Note that with the PFB the decimation factor can only be >= N_tones.
         - amplitudes_A/B: a list of linear power to use with each tone. Must be the same length of tones arg; will be normalized. Default is equally splitted power.
@@ -115,12 +115,14 @@ def Dual_get_noise(tones, measure_t, rate, decimation = None, amplitudes_A = Non
         raise ValueError(err_msg)
 
     else:
-        tones = np.asarray(tones)
-        tones_A = tones[np.abs(tones - RF_A) < rate/2]
-        tones_B = tones[np.abs(tones - RF_B) < rate/2]
+        prev = len(tones_A) + len(tones_B)
+        tones_A = tones_A[np.abs(tones_A) -  rate/2 < 0]
+        tones_B = tones_B[np.abs(tones_B) -  rate/2 < 0]
+        if len(tones_B) + len(tones_A) < prev:
+            print_warning("Some tone has been discrarded because out of bandwidth")
 
+        '''
         common = list(set(tones_A).intersection(tones_B))
-        # todo check for oob tones
         if len(common) > 0:
             print_warning("Some tone is compatible with both frontend tunings, see next messages.")
             for cc in common:
@@ -130,7 +132,7 @@ def Dual_get_noise(tones, measure_t, rate, decimation = None, amplitudes_A = Non
                 else:
                     print_debug("length of tones A: %d, length of tones B: %d, removing from %s"%(len(tones_A),len(tones_B),'B'))
                     np.delete(tones_B, np.where(tones_B == cc)[0][0])
-
+        '''
         print_debug("RF_A\tRF_B\t[MHz]")
         print_debug("%.2f\t%.2f"%(RF_A/1e6,RF_B/1e6))
         print_debug("TONES_A\tTONES_B\t[MHz]")
@@ -178,7 +180,7 @@ def Dual_get_noise(tones, measure_t, rate, decimation = None, amplitudes_A = Non
 
     # Calculate the number of channel needed per rf frontend A
     if len(tones_A)>1:
-        min_required_space_A = np.min([ x for x in np.abs([[i-j for j in tones_A] for i in tones_A]).flatten() if x > 0])
+        min_required_space_A = np.min([ x for x in np.abs([[tones_A[i]-tones_A[j] if i!=j else 1e8 for j in range(len(tones_A))] for i in range(len(tones_A))]).flatten()])
         print_debug("Minimum bin width required for frontend A is %.2f MHz"%(min_required_space_A/1e6))
         min_required_fft_A = int(np.ceil(float(rate) / float(min_required_space_A)))
     else:
@@ -186,7 +188,7 @@ def Dual_get_noise(tones, measure_t, rate, decimation = None, amplitudes_A = Non
 
     if decimation is not None:
         if decimation < min_required_fft_A:
-            print_warning("Cannot use a decimation factor of %d as the minimum required number of bin in the PFB of frontend A is %d" % (decimation, min_required_fft))
+            print_warning("Cannot use a decimation factor of %d as the minimum required number of bin in the PFB of frontend A is %d" % (decimation, min_required_fft_A))
             final_fft_bins_A = min_required_fft_A
         else:
             final_fft_bins_A = int(decimation)
@@ -203,20 +205,20 @@ def Dual_get_noise(tones, measure_t, rate, decimation = None, amplitudes_A = Non
             print_error("Out of bandwidth tone!")
             raise ValueError("Out of bandwidth tone requested in frontend A. %.2f MHz / %.2f MHz (Nyq)" %(tones_A[i]/1e6, rate / 2e6) )
 
-    tones_A = tones_A - RF_A
+    #tones_A = tones_A - RF_A
     tones_A = quantize_tones(tones_A, rate, final_fft_bins_A)
 
     # Calculate the number of channel needed per rf frontend B
     if len(tones_B)>1:
-        min_required_space_B = np.min([ x for x in np.abs([[i-j for j in tones_B] for i in tones_B]).flatten() if x > 0])
-        print_debug("Minimum bin width required for frontend A is %.2f MHz"%(min_required_space_B/1e6))
+        min_required_space_B = np.min([ x for x in np.abs([[tones_B[i]-tones_B[j] if i!=j else 1e8 for j in range(len(tones_B))] for i in range(len(tones_B))]).flatten()])
+        print_debug("Minimum bin width required for frontend B is %.2f MHz"%(min_required_space_B/1e6))
         min_required_fft_B = int(np.ceil(float(rate) / float(min_required_space_B)))
     else:
         min_required_fft_B = 10
 
     if decimation is not None:
         if decimation < min_required_fft_B:
-            print_warning("Cannot use a decimation factor of %d as the minimum required number of bin in the PFB of frontend A is %d" % (decimation, min_required_fft))
+            print_warning("Cannot use a decimation factor of %d as the minimum required number of bin in the PFB of frontend A is %d" % (decimation, min_required_fft_B))
             final_fft_bins_B = min_required_fft_B
         else:
             final_fft_bins_B = int(decimation)
@@ -233,26 +235,30 @@ def Dual_get_noise(tones, measure_t, rate, decimation = None, amplitudes_A = Non
             print_error("Out of bandwidth tone!")
             raise ValueError("Out of bandwidth tone requested in frontend A. %.2f MHz / %.2f MHz (Nyq)" %(tones_A[i]/1e6, rate / 2e6) )
 
-    tones_B = tones_B - RF_B
+    #tones_B = tones_B - RF_B
     tones_B = quantize_tones(tones_B, rate, final_fft_bins_B)
-
 
     number_of_samples = rate * measure_t
 
+
+    print_warning("overriding number of bins: calculation above it's wrong")
+    final_fft_bins_B = int(decimation)
+    final_fft_bins_A = int(decimation)
+    '''
     print("RF Frontend A")
     print("Tone [MHz]\tPower [dBm]\tOffset [MHz]")
-    for i in range(len(tones)):
+    for i in range(len(tones_A)):
         print("%.1f\t%.2f\t%.3f" % ((RF_A + tones_A[i]) / 1e6, USRP_power + 20 * np.log10(amplitudes_A[i]) + tx_gain_A, tones_A[i] / 1e6))
 
-    expected_samples_A = int(number_of_samples/final_fft_bins_A)
+
 
     print("RF Frontend B")
     print("Tone [MHz]\tPower [dBm]\tOffset [MHz]")
-    for i in range(len(tones)):
+    for i in range(len(tones_B)):
         print("%.1f\t%.2f\t%.3f" % ((RF_B + tones_B[i]) / 1e6, USRP_power + 20 * np.log10(amplitudes_B[i]) + tx_gain_B, tones_B[i] / 1e6))
-
+    '''
     expected_samples_B = int(number_of_samples/final_fft_bins_B)
-
+    expected_samples_A = int(number_of_samples/final_fft_bins_A)
 
     noise_command = global_parameter()
 

@@ -260,12 +260,12 @@ void TXRX::start(usrp_param* global_param){
 
             SetThreadName(A_TX_worker, "A_TX_worker");
 
-            Thread_Prioriry(*A_TX_worker, 1, tx_thread_n[tx_threads]*2+1);
+            Thread_Prioriry(*A_TX_worker, 1, 6);//tx_thread_n[tx_threads]+1);
 
             //start the TX loader: this thrad takes samples form the other thread and stream them on the USRP
             hardware->start_tx(
                 tx_conditional_waiting,
-                tx_thread_n[tx_threads]*2+1,
+                6,//tx_thread_n[tx_threads]+1,
                 &(global_param->A_TXRX),
                 'A',
                 A_tx_memory
@@ -295,13 +295,13 @@ void TXRX::start(usrp_param* global_param){
 
             SetThreadName(B_TX_worker, "B_TX_worker");
 
-            Thread_Prioriry(*B_TX_worker, 1, tx_thread_n[tx_threads]*2+1);
+            Thread_Prioriry(*B_TX_worker, 1, 4);//tx_thread_n[tx_threads]+1);
 
 
             //start the TX loader: this thrad takes samples form the other thread and stream them on the USRP
             hardware->start_tx(
                 tx_conditional_waiting,
-                tx_thread_n[tx_threads]*2+1,
+                4,//tx_thread_n[tx_threads]+1,
                 &(global_param->B_TXRX),
                 'B',
                 B_tx_memory
@@ -332,14 +332,14 @@ void TXRX::start(usrp_param* global_param){
 
             SetThreadName(A_RX_worker, "A_RX_worker");
 
-            Thread_Prioriry(*A_RX_worker, 1, rx_thread_n[rx_threads]*2+1);
+            Thread_Prioriry(*A_RX_worker, 1, 0);//rx_thread_n[rx_threads]*2+1);
 
             //start the RX thread: interfaces with the USRP receiving samples and pushing them in a queue read by the thread launched above.
             hardware->start_rx(
                 A_rx_buffer_len,
                 rx_conditional_waiting,
                 A_rx_memory,
-                rx_thread_n[rx_threads]*2+1,
+                0,//rx_thread_n[rx_threads]*2+1,
                 &(global_param->A_RX2),
                 'A'
             );
@@ -370,14 +370,14 @@ void TXRX::start(usrp_param* global_param){
 
             SetThreadName(B_RX_worker, "B_RX_worker");
 
-            Thread_Prioriry(*B_RX_worker, 1, rx_thread_n[rx_threads]*2+1);
+            Thread_Prioriry(*B_RX_worker, 1, 2);//rx_thread_n[rx_threads]*2+1);
 
             //start the RX thread: interfaces with the USRP receiving samples and pushing them in a queue read by the thread launched above.
             hardware->start_rx(
                 B_rx_buffer_len,
                 rx_conditional_waiting,
                 B_rx_memory,
-                rx_thread_n[rx_threads]*2,
+                2,//rx_thread_n[rx_threads]*2,
                 &(global_param->B_RX2),
                 'B'
             );

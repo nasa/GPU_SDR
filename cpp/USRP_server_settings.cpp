@@ -177,7 +177,7 @@ std::string get_front_end_name(char code){
 
 void Thread_Prioriry(boost::thread& Thread, int priority, int affinity){
     #if not defined(__APPLE__)
-    int SYSTEM_CORES = std::thread::hardware_concurrency();
+    int SYSTEM_CORES = 7;//std::thread::hardware_concurrency();
     int retcode;
     int policy;
     struct sched_param scheme;
