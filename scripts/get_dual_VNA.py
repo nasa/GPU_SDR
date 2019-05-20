@@ -12,7 +12,7 @@ except ImportError:
 
 import argparse
 
-def run(rate,freq_a,freq_b, f0a,f1a,f0b,f1b, lapse, points):
+def run(rate,freq_a,freq_b, f0a,f1a,f0b,f1b, lapse, points, gain_a, gain_b):
 
 
     try:
@@ -37,8 +37,8 @@ def run(rate,freq_a,freq_b, f0a,f1a,f0b,f1b, lapse, points):
             last_f_B = f1b,
             measure_t = lapse,
             n_points = points,
-            tx_gain_A = 0,
-            tx_gain_B = 0,
+            tx_gain_A = gain_a,
+            tx_gain_B = gain_b,
             Rate = None,
             decimation = True,
             RF_A = freq_a,
@@ -68,6 +68,10 @@ if __name__ == "__main__":
     parser.add_argument('--f1b', '-f1b', help='Baseband end frequrency in MHz (frontend B)', type=float, default=+45)
     parser.add_argument('--points', '-p', help='Number of points used in the scan', type=float, default=50e3)
     parser.add_argument('--time', '-t', help='Duration of the scan in seconds', type=float, default=10)
+    parser.add_argument('--gain_a', '-ga', help='Gain for frontend A', type=int, default=0)
+    parser.add_argument('--gain_b', '-gb', help='Gain for frontend B', type=int, default=0)
+
+
 
     args = parser.parse_args()
 
@@ -91,7 +95,9 @@ if __name__ == "__main__":
         f0b = args.f0b*1e6,
         f1b = args.f1b*1e6,
         lapse = args.time,
-        points = args.points
+        points = args.points,
+        gain_a = args.gain_a,
+        gain_b = args.gain_b
     )
 
     # Data analysis and plotting will be in an other python script
