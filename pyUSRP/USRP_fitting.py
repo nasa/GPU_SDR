@@ -7,6 +7,7 @@
 
 import numpy as np
 import scipy.signal as signal
+from scipy.signal import butter, lfilter, freqz
 import signal as Signal
 import h5py
 import sys
@@ -42,7 +43,6 @@ import progressbar
 # import submodules
 from USRP_low_level import *
 from USRP_files import *
-from USRP_low_level import *
 from scipy import optimize
 
 
@@ -181,6 +181,171 @@ def do_fit(freq, re, im, p0=None):
 
     return f0, Qi, Qr, zfit, modelwise
 
+import peakutils
+
+def extimate_peak_number(filename, threshold = 0.2, smoothing = None, peak_width = 90e3, verbose = False, exclude_center = True, diagnostic_plots = False):
+    """
+    This function uses peakutils module to initialize the peaks i the file.
+    Stores in the H5 file the result. This does not count as a fit as only the initialization is stored.
+
+    Arguments:
+        - Filename: filename of the h5 vna file.
+        - threshold: a number between 0 an 1 determaning the peak finding. The threshold is applied to the absolute value of the derivative of s21.
+        - smoothing: if the vna is too noise one may consider decimation and fir filtering. dmoothing is the decimation factor.
+        - peak_width: minimum distance between each peak.
+        - verbose: output some diagnostic information.
+        - exclude_center: exclude the center (DC) from the fitting.
+        - diagnostic_plots: creates a folder with diagnostic png plots.
+
+    :return: the number of extimated peaks.
+    """
+
+    filename = format_filename(filename)
+    print("Looking for peaks in file: \'%s\' ..."%filename)
+
+    if verbose:
+        print_debug("Peaks finder algorithm based on peakutil module. Search parameters:")
+        print_debug( "\tResonator minimum width: %.2f kHz"%(peak_width/1e3))
+        print_debug( "\tPeaks threshold: %.2f"%threshold)
+
+    info = get_rx_info(filename, ant="A_RX2")
+    info_B = get_rx_info(filename, ant="B_RX2")
+
+    if info_B['mode'] == 'RX':
+        center = [info['rf'], info_B['rf']]
+        single_frontend = False
+    else:
+        center = info['rf']
+        single_frontend = True
+
+
+    freq, S21 = get_VNA_data(filename, calibrated = True, usrp_number = 0)
+
+    resolution = np.abs(info['freq'][0] - info['chirp_f'][0])/float(len(S21))
+
+
+    phase = np.angle(S21)
+    magnitude = np.abs(S21)
+    magnitudedb = vrms2dbm(magnitude)
+
+
+    # Remove the AA filter for usrp x300 ubx-160 100 Msps
+    arbitrary_cut = int(len(magnitudedb)/95)
+    freq=freq[arbitrary_cut:-arbitrary_cut]
+    phase=phase[arbitrary_cut:-arbitrary_cut]
+    magnitudedb=magnitudedb[arbitrary_cut:-arbitrary_cut]
+    magnitude = magnitude[arbitrary_cut:-arbitrary_cut]
+
+
+    if smoothing is not None:
+        if verbose:
+            print_debug( "Decimating signal before looking for peaks...")
+        smoothing = int(smoothing)
+        freq = signal.decimate(freq,smoothing,ftype="fir")[20:-20]
+        magnitudedb = signal.decimate(magnitudedb,smoothing,ftype="fir")[20:-20]
+        phase = signal.decimate(phase,smoothing,ftype="fir")[20:-20]
+        magnitude = signal.decimate(magnitude,smoothing,ftype="fir")[20:-20]
+        resolution *= smoothing
+
+    S21_val = np.exp(1.j*phase)*magnitude
+
+    if diagnostic_plots:
+        diagnostic_folder = "Init_peaks_diagnostic_"+os.path.splitext(filename)[0]
+        try:
+            os.mkdir(diagnostic_folder)
+        except OSError:
+            print_warning("Overwriting initialization diagnostic plots")
+        print_debug("Generating diagnostic plots in folder \'%s\'..."%diagnostic_folder)
+
+    #supposed width of each peak in index unit
+    peak_width /= resolution
+    peak_width = int(peak_width)
+
+    max_diag = []
+    q_diag = []
+    f0s = []
+
+    # Optimizing on the magnitude of derivative of S21
+    gradS21 = np.abs(np.gradient(S21_val))
+
+    # exclude conjunction point
+    if len(center)>1:
+        f_prof = np.gradient(freq)
+        freq_point = np.argmax(np.abs(f_prof - np.mean(f_prof)))
+        fp_min = max(0,freq_point-10)
+        fp_max = min(freq_point+10,len(gradS21))
+        gradS21 = np.delete(gradS21,range(fp_min,fp_max))
+        freq = np.delete(freq,range(fp_min,fp_max))
+
+    mask = np.zeros(len(freq), dtype=bool)
+
+    # We could use there three to determine if there are effectively resonators
+    # the pekutils also peaks up noise from the flat S21.
+    #print max(gradS21)
+    #print np.std(gradS21)
+    #print np.mean(gradS21)
+
+    indexes = peakutils.indexes(gradS21, thres=threshold, min_dist=peak_width)
+    for ii in range(len(freq)):
+        if ii in indexes:
+            mask[ii] = True
+
+    # exclude center frequency
+    center_excl = [[] for X in range(len(center))]
+    center_min = [[] for X in range(len(center))]
+    center_max = [[] for X in range(len(center))]
+    for j in range(len(center)):
+        if exclude_center:
+            for ii in range(len(mask)):
+                if np.abs(freq[ii] - center[j]) < (50000):
+                    mask[ii] = False
+                    center_excl[j].append(ii)
+        if len(center_excl[j])>1:
+            center_min[j] = min(center_excl[j])
+            center_max[j] = max(center_excl[j])
+        else:
+            center_min[j] = None
+            center_max[j] = None
+
+    if(diagnostic_plots):fig, ax = pl.subplots()
+
+
+    max_diag = freq[mask]
+    if(diagnostic_plots):
+        print_debug("Plotting diagostic...")
+
+        ax.plot(gradS21, label = "grad")
+        ax.scatter(np.arange(len(gradS21))[mask],gradS21[mask], color = 'r', label = "%d peaks"%len(max_diag))
+        for k in range(len(center_min)):
+            if center_min[k] is not None:
+                if k == 0:
+                    ax.axvspan(center_min[k], center_max[k], alpha=0.4, color='red',label = "center excl")
+                else:
+                    ax.axvspan(center_min[k], center_max[k], alpha=0.4, color='red')
+        ax.set_xlabel("Index of saved $S_{21}$")
+        ax.set_ylabel(r"|$ \frac{ \partial S_{21} }{ \partial i }|$ ")
+        pl.legend()
+        pl.grid()
+        pl.savefig("diagnostic_peaks_init_%s.png"%filename.split('.')[0])
+
+
+    # Write stuff on file
+    if len(max_diag)>0:
+        fv = h5py.File(filename,'r+')
+
+        try:
+            reso_grp = fv.create_group("Resonators")
+        except ValueError:
+            print_warning("Overwriting resonator initialization attribute")
+            reso_grp = fv["Resonators"]
+
+        reso_grp.attrs.__setitem__("tones_init", max_diag)
+
+        fv.close()
+
+    print("Initialize_peaks() found " +str(len(max_diag))+ " resonators.")
+
+
 def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3, Qr_cutoff=5e3, a_cutoff = 10, Mag_depth_cutoff = 0.15, verbose = False, exclude_center = True, diagnostic_plots = False):
     """
     This function uses a filter on quality factor estimated using the nonlinear resonator model. This function considers the resonator around the maximum of the unwraped phase trace, tries to fit the resonator and make a decision if it's a resonator or not by parsing the quality factor of the fit with the Qt_vutoff argument. Before iterating excludes a zone of peak_width Hz around the previously considered point.
@@ -273,16 +438,10 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
     Qr_max = 500e3
 
     while(sum(mask)>0):
-        #gradS21 = gradS21[mask]
-        #S21_val = S21_val[mask]
-        #freq_ = freq_[mask]
-        #magnitudedb = magnitudedb[mask]
-        #find maximum and fit
+
         maximum = np.max(gradS21[mask])
         maximum = np.where(gradS21 == maximum)[0]
-        #pl.plot(gradS21)
-        #pl.scatter(np.argmax(gradS21),gradS21[np.argmax(gradS21)],color = 'red')
-        #pl.show()
+
         low_index = int(max(maximum-peak_width,0))
         low_index = max(0,low_index)
 
@@ -370,6 +529,7 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
                 mask[i] = False
 
         iteration_number+=1
+
 
     # Write stuff on file
     if len(max_diag)>0:
@@ -742,13 +902,44 @@ def plot_reso_stat(filenames, reso_freq = None, backend = 'matplotlib', title_in
      '''
     return
 
-def get_tones(filename, verbose = False):
+def get_tones(filename, frontends = None, verbose = False):
     '''
-    Retun the central frequency and the list with relative tones.
-    '''
+    Get the central frequency and the list with relative tones.
 
-    tones = get_best_readout(filename, verbose = verbose)
-    info = get_rx_info(filename, ant=None)
-    tones = tones - info['rf']
-    if len(tones) ==0: print_warning("get_tones() returned an empty array")
-    return info['rf'], tones
+    :param filename: the filename containing the fits (i.e. a VNA file).
+    :param frontends: can be an antenna name ['A_RX2','B_RX2'], 'all' or None.
+    :param verbose: print some debug line.
+    :return if the argument 'all' is False return a tuple containing the central frequency and a list of relative tones; if None return the first frontend found in RX mode; if frontend name return the tones found in that frontend.
+    '''
+    if frontends is None:
+        tones = get_best_readout(filename, verbose = verbose)
+        info = get_rx_info(filename, ant=None)
+        tones = tones - info['rf']
+        if len(tones) ==0: print_warning("get_tones() returned an empty array")
+        return info['rf'], tones
+    elif frontends == 'all':
+        front_end_list = ['A_RX2','B_RX2']
+        ret_list = []
+        for fe in front_end_list:
+            info = get_rx_info(filename, ant=fe)
+            if info['mode'] == 'RX':
+                tones = get_best_readout(filename, verbose = verbose)
+                tones = tones - info['rf']
+                min_range = min(info['freq'][0],info['chirp_f'][0])
+                max_range = max(info['freq'][0],info['chirp_f'][0])
+                tones = tones[tones>min_range and tones<max_range]
+                ret_list.append((
+                    info['rf'],
+                    tones
+                ))
+        return ret_list
+    else:
+        tones = get_best_readout(filename, verbose = verbose)
+        info = get_rx_info(filename, ant=frontends)
+        tones = tones - info['rf']
+        min_range = min(info['freq'][0],info['chirp_f'][0])
+        max_range = max(info['freq'][0],info['chirp_f'][0])
+        tones = tones[tones>min_range]
+        tones = tones[tones<max_range]
+        if len(tones) ==0: print_warning("get_tones() returned an empty array")
+        return info['rf'], tones
