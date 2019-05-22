@@ -57,7 +57,7 @@ before_reboot(){
     apt-get -y install make cmake build-essential
     apt-get -y install net-tools python-pip python-dev build-essential
     sudo -H pip install --upgrade pip
-    sudo -H pip install requests mako
+    sudo -H pip install requests mako numpy
 
     #utilities
     sudo apt-get -y install git vim htop libusb-dev
