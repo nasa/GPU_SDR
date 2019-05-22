@@ -45,7 +45,11 @@ hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init,
             std::cout<<dev_addrs[ii].to_pp_string()<<std::endl;
         }
         //assign desired address
-        main_usrp = uhd::usrp::multi_usrp::make(dev_addrs[usrp_number]);
+        //main_usrp = uhd::usrp::multi_usrp::make(dev_addrs[usrp_number]);
+
+				uhd::device_addr_t args("addr=192.168.30.2,second_addr=192.168.40.2");
+				main_usrp = uhd::usrp::multi_usrp::make(args);
+
         //main_usrp = uhd::usrp::multi_usrp::make(std::string("addr = 192.168.40.2, second_addr = 192.168.30.2"));
         //set the clock reference
         main_usrp->set_clock_source(settings->clock_reference);
@@ -1022,13 +1026,15 @@ void hardware_manager::single_tx_thread(
     uhd::tx_metadata_t metadata_tx;
 
     BOOST_LOG_TRIVIAL(debug) <<"Starting metadata thread";
-    boost::thread* metadata_thread = new boost::thread(boost::bind(&hardware_manager::async_stream,this,tx_stream,front_end));
-
+		boost::thread* metadata_thread = nullptr;
+		if(front_end == 'A'){
+    	metadata_thread = new boost::thread(boost::bind(&hardware_manager::async_stream,this,tx_stream,front_end));
+		}
     metadata_tx.start_of_burst = true;
     metadata_tx.end_of_burst = false;
     metadata_tx.has_time_spec  = true;
     metadata_tx.time_spec = uhd::time_spec_t(1.0+current_settings->delay);
-
+		double timeout = 1.0+current_settings->delay + 0.1;
     //optimizations for tx loop
     size_t max_samples_tx = current_settings->samples;
     //double burst_off = current_settings->burst_off;
@@ -1050,10 +1056,10 @@ void hardware_manager::single_tx_thread(
 
             //handle = std::async(std::launch::async, get_buffer_ready, TX_queue, buffer_len_tx, cache);
 
-            while(not TX_queue->pop(tx_buffer))std::this_thread::sleep_for(std::chrono::nanoseconds(10));
+            while(not TX_queue->pop(tx_buffer))std::this_thread::sleep_for(std::chrono::nanoseconds(500));
 
-            sent_samp += tx_stream->send(tx_buffer, buffer_len_tx, metadata_tx);
-
+            sent_samp += tx_stream->send(tx_buffer, buffer_len_tx, metadata_tx, timeout);
+						timeout = 0.1f;
             metadata_tx.start_of_burst = false;
             metadata_tx.has_time_spec = false;
 
@@ -1078,12 +1084,12 @@ void hardware_manager::single_tx_thread(
         std::cout<< "Missing "<< current_settings->samples - sent_samp<<" samples"<<std::endl;
         BOOST_LOG_TRIVIAL(info) <<"Thread was joined without transmitting "<< current_settings->samples - sent_samp<<" samples";
     }
-
-    metadata_thread->interrupt();
-    metadata_thread->join();
-    delete metadata_thread;
-    metadata_thread = nullptr;
-
+		if(front_end == 'A'){
+	    metadata_thread->interrupt();
+	    metadata_thread->join();
+	    delete metadata_thread;
+	    metadata_thread = nullptr;
+		}
     //set check the condition to false
     if(front_end == 'A'){
         A_tx_thread_operation = false; //class variable to account for thread activity

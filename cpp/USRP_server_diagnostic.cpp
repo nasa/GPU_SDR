@@ -87,7 +87,7 @@ int get_tx_error(uhd::async_metadata_t *async_md, bool verbose){
             error++;
             break;
         case uhd::async_metadata_t::EVENT_CODE_SEQ_ERROR_IN_BURST:
-            if(verbose)print_warning("TX thread encountered an undeflow in packet");
+            if(verbose)print_warning("TX thread encountered a sequence error in burst");
             error++;
             break;
         default:
