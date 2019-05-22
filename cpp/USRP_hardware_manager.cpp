@@ -45,10 +45,10 @@ hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init,
             std::cout<<dev_addrs[ii].to_pp_string()<<std::endl;
         }
         //assign desired address
-        //main_usrp = uhd::usrp::multi_usrp::make(dev_addrs[usrp_number]);
+        main_usrp = uhd::usrp::multi_usrp::make(dev_addrs[usrp_number]);
 
-				uhd::device_addr_t args("addr=192.168.30.2,second_addr=192.168.40.2");
-				main_usrp = uhd::usrp::multi_usrp::make(args);
+	//uhd::device_addr_t args("addr=192.168.30.2,second_addr=192.168.40.2");
+	//main_usrp = uhd::usrp::multi_usrp::make(args);
 
         //main_usrp = uhd::usrp::multi_usrp::make(std::string("addr = 192.168.40.2, second_addr = 192.168.30.2"));
         //set the clock reference

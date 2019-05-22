@@ -124,7 +124,8 @@ struct param{
     ant_mode mode = OFF;
 
     //hardware parameters
-    int rate,tone,gain,bw;
+    int rate,gain,bw;
+    size_t tone;
 
     //runtime hardware parameters
     size_t samples;

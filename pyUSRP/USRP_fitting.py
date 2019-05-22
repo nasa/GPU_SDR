@@ -268,14 +268,17 @@ def extimate_peak_number(filename, threshold = 0.2, smoothing = None, peak_width
     # Optimizing on the magnitude of derivative of S21
     gradS21 = np.abs(np.gradient(S21_val))
 
-    # exclude conjunction point
-    if len(center)>1:
-        f_prof = np.gradient(freq)
-        freq_point = np.argmax(np.abs(f_prof - np.mean(f_prof)))
-        fp_min = max(0,freq_point-10)
-        fp_max = min(freq_point+10,len(gradS21))
-        gradS21 = np.delete(gradS21,range(fp_min,fp_max))
-        freq = np.delete(freq,range(fp_min,fp_max))
+    try:
+        # exclude conjunction point
+        if len(center)>1:
+            f_prof = np.gradient(freq)
+            freq_point = np.argmax(np.abs(f_prof - np.mean(f_prof)))
+            fp_min = max(0,freq_point-10)
+            fp_max = min(freq_point+10,len(gradS21))
+            gradS21 = np.delete(gradS21,range(fp_min,fp_max))
+            freq = np.delete(freq,range(fp_min,fp_max))
+    except:
+        center = [center,]
 
     mask = np.zeros(len(freq), dtype=bool)
 
