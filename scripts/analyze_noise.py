@@ -14,9 +14,9 @@ import argparse
 
 def run(backend, files):
     for f in files:
-        u.calculate_noise(f, verbose = True, welch = 7, dbc = True, clip = 0.1)
+        u.calculate_noise(f, verbose = True, welch = 7, dbc = False, clip = 0.1)
 
-    print u.plot_noise_spec(files, channel_list=None, max_frequency=100, title_info=None, backend=backend,
+    print u.plot_noise_spec(files, channel_list=None, max_frequency=1e3, title_info=None, backend=backend,
                     cryostat_attenuation=0, auto_open=True, output_filename=None)
 
 if __name__ == "__main__":

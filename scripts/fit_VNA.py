@@ -41,7 +41,7 @@ if __name__ == "__main__":
     os.chdir(args.folder)
     peaks = []
     files = glob.glob("USRP_VNA*.h5")
-    if args.threshold is None and args.args.N_peaks is None:
+    if args.threshold is None and args.N_peaks is None:
         u.print_error("Provide number of peaks or threshold.")
     if args.N_peaks is not None:
         if len(files)!=len(args.N_peaks):

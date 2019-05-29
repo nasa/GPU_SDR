@@ -14,7 +14,7 @@ help_message_pci += "lspci\n\t07:00.0 Ethernet controller: Intel Corporation 825
 help_message_pci += "Here 07.00.0 is the pci bus address. Now we can grep for that in /proc/bus/pci/devices to gather even more information:\n\t[test ~]$ grep 0700 /proc/bus/pci/devices\n\t0700\t808610fb\t28\td590000c (...)\nVarious information about the PCI device will display, as you can see above."
 help_message_pci += " But the number we\'re interested in is the second field, 808610fb. This is the Vendor ID and Device ID together. Vendor: 8086 Device: 10fb. You can use these values to tune the PCI bus MMRBC, or Maximum Memory Read Byte Count. This will increase the MMRBC to 4k reads, increasing the transmit burst lengths on the bus.\n\t[test ~] setpci -v -d 8086:10fb e6.b=2e"
 
-search_key = "Mel" #this is a search keyword to find the ethernet adapter
+search_key = "SFP+" #this is a search keyword to find the ethernet adapter
 prefix="192.168."
 final = ".1"
 MTU = 9000
