@@ -2,6 +2,7 @@
 This program install and check python modules needed for pyUSRP to fully work.
 To make this work, run it with sudo.
 '''
+import os
 def run():
     try:
         import os,sys,subprocess,importlib
@@ -25,9 +26,16 @@ def run():
         "matplotlib",
         "progressbar2",
         "PyInquirer",
-        "yattag"
+        "yattag",
+        "peakutils",
     ]
     err = 0
+    try:
+        ret = os.system("pip install -U pip")
+    except SystemExit as e:
+        err+=1
+        print("\033[1;31mERROR\033[0m: Cannot upgrade pip.")
+        return
     for module in modulelist:
         try:
             ret = subprocess.call([sys.executable, "-m", "pip", "install", module])
