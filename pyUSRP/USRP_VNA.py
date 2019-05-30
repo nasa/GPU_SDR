@@ -33,6 +33,8 @@ import plotly
 import colorlover as cl
 
 #matplotlib stuff
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as pl
 import matplotlib.patches as mpatches
 
@@ -464,10 +466,12 @@ def VNA_analysis(filename, usrp_number = 0):
     parameters.retrive_prop_from_file(filename)
 
     front_ends = ["A_RX2", "B_RX2"]
+    active_front_ends = []
     info = []
     for ant in front_ends:
-        if parameters.parameters[ant]['mode'] == "RX" and parameters.parameters[ant]['wave_type'][0] == "CHIRP":
+        if (parameters.parameters[ant]['mode'] == "RX") and (parameters.parameters[ant]['wave_type'][0] == "CHIRP"):
             info.append(parameters.parameters[ant])
+            active_front_ends.append(ant)
 
     # Nedded for the calibration calculations
     front_ends_tx= ["A_TXRX", "B_TXRX"]
@@ -498,9 +502,9 @@ def VNA_analysis(filename, usrp_number = 0):
             freq_axis_tmp = np.linspace(single_frontend['freq'][0],single_frontend['chirp_f'][0], single_frontend['swipe_s'][0],
                         dtype = np.float64) + single_frontend['rf']
             if iterations>1:
-                S21_axis_tmp = np.mean(np.split(openH5file(filename, front_end = front_ends[fr])[0], iterations),axis = 0)
+                S21_axis_tmp = np.mean(np.split(openH5file(filename, front_end = active_front_ends[fr])[0], iterations),axis = 0)
             else:
-                S21_axis_tmp  = openH5file(filename, front_end = front_ends[fr])[0]
+                S21_axis_tmp  = openH5file(filename, front_end = active_front_ends[fr])[0]
 
             length.append(single_frontend['swipe_s'])
 
@@ -509,9 +513,9 @@ def VNA_analysis(filename, usrp_number = 0):
             freq_axis_tmp  = np.linspace(single_frontend['freq'][0], single_frontend['chirp_f'][0], single_frontend['swipe_s'][0]/single_frontend['decim'],
                                     dtype=np.float64) + single_frontend['rf']
             if iterations > 1:
-                S21_axis_tmp = np.mean(np.split(openH5file(filename, front_end=front_ends[fr])[0], iterations), axis=0)
+                S21_axis_tmp = np.mean(np.split(openH5file(filename, front_end=active_front_ends[fr])[0], iterations), axis=0)
             else:
-                S21_axis_tmp = openH5file(filename, front_end=front_ends[fr])[0]
+                S21_axis_tmp = openH5file(filename, front_end=active_front_ends[fr])[0]
             length.append(single_frontend['swipe_s'][0]/single_frontend['decim'])
 
         else:
@@ -519,9 +523,9 @@ def VNA_analysis(filename, usrp_number = 0):
             freq_axis_tmp  = np.linspace(single_frontend['freq'][0], single_frontend['chirp_f'][0], single_frontend['swipe_s'][0],
                                     dtype=np.float64) + single_frontend['rf']
             if iterations>1:
-                S21_axis_tmp = np.mean(np.split(openH5file(filename, front_end = front_ends[fr])[0], iterations), axis = 0)
+                S21_axis_tmp = np.mean(np.split(openH5file(filename, front_end = active_front_ends[fr])[0], iterations), axis = 0)
             else:
-                S21_axis_tmp  = openH5file(filename, front_end = front_ends[fr])[0]
+                S21_axis_tmp  = openH5file(filename, front_end = active_front_ends[fr])[0]
 
             S21_axis_tmp  = np.mean(np.split(S21_axis_tmp, single_frontend['swipe_s'][0]), axis = 1)
             length.append(single_frontend['swipe_s'][0])
@@ -729,7 +733,7 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
         fig['layout'].update(autosize=True)
         fig['layout']['xaxis1'].update(title='Frequency [Hz]')
         fig['layout']['xaxis1'].update(exponentformat='SI')
-        fig['layout']['xaxis1'].update(ticksuffix='Hz')
+        #fig['layout']['xaxis1'].update(ticksuffix='Hz') # does not work well with logscale
 
         fig['layout']['yaxis1'].update(title='Magnitude [dB]')
         fig['layout']['yaxis2'].update(title='Phase [Rad]')

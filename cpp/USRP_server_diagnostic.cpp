@@ -6,6 +6,8 @@ void set_this_thread_name(std::string thread_name){
     boost::log::core::get()->add_thread_attribute("ThreadName",
             boost::log::attributes::constant< std::string >(thread_name));
 
+    pthread_setname_np(pthread_self(), thread_name.c_str());
+
 }
 
 //print on screen error description
@@ -412,9 +414,13 @@ inline std::basic_ostream< CharT, TraitsT >& operator<< (
     return strm;
 }
 
+
+boost::shared_ptr< file_sink > pLogSink;
+
+
 void init_logger(){
     boost::log::register_simple_formatter_factory< boost::log::trivial::severity_level, char >("Severity");
-    logging::add_file_log
+    pLogSink = logging::add_file_log
     (
         keywords::file_name = "logs/%Y%m%d_%H%M%S_%5N.log",
         keywords::rotation_size = 10 * 1024 * 1024,

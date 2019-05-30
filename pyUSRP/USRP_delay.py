@@ -34,6 +34,8 @@ import plotly
 import colorlover as cl
 
 #matplotlib stuff
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as pl
 import matplotlib.patches as mpatches
 
@@ -280,7 +282,7 @@ def analyze_line_delay(filename, diagnostic_plots = False):
         pl.grid()
         pl.savefig("Delay_diagnostic_FFT.png")
         pl.close(diag_fig)
-    
+
 
     coeff = float(info['chirp_t'][0]) / float(np.abs(info['freq'][0] - info['chirp_f'][0]))
 

@@ -97,7 +97,8 @@ class hardware_manager{
         //! @brief Release the memory associated with pointers holded by a rx queue using the respective memory allocator.
         int clean_rx_queue(rx_queue* RX_queue, preallocator<float2>* memory);
 
-
+        std::atomic<bool> B_rx_thread_operation;
+        std::atomic<bool> A_rx_thread_operation;
     private:
 
         //! @brief Describe the state of the TX settling time for the A front_end.
@@ -128,10 +129,9 @@ class hardware_manager{
 
         void flush_rx_streamer(uhd::rx_streamer::sptr &rx_streamer);
 
-        //pointer to rx thread and boolean chk variable
-        std::atomic<bool> A_rx_thread_operation;
+
         boost::thread* A_rx_thread;
-        std::atomic<bool> B_rx_thread_operation;
+
         boost::thread* B_rx_thread;
 
         //pointer to tx thread and boolean chk variable
@@ -227,11 +227,6 @@ class hardware_manager{
             char front_end
 
         );
-
-        //used to sync TX and rRX streaming time
-        void sync_time();
-
-        size_t nanosec_next_pps();
 };
 
 #endif

@@ -33,6 +33,8 @@ import plotly
 import colorlover as cl
 
 # matplotlib stuff
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as pl
 import matplotlib.patches as mpatches
 
@@ -156,22 +158,23 @@ def openH5file(filename, ch_list=None, start_sample=None, last_sample=None, usrp
             "No USRP data found in the hdf5 file for the selected usrp number. Maybe RX mode attribute is missing or the H5 file is only descriptive of TX commands")
         return np.asarray([])
 
-    if (not front_end) and len(recv) != 1:
+    if (front_end is None) and (len(recv) != 1):
         this_warning = "Multiple acquisition frontend subgroups found but no preference given to open file function. Assuming " + \
                        recv[0]
         sub_group_name = recv[0]
 
-    if (not front_end) and len(recv) == 1:
+    if (front_end is None) and (len(recv) == 1):
         sub_group_name = recv[0]
 
-    if front_end:
+
+    if front_end is not None:
         sub_group_name = str(front_end)
 
     try:
         sub_group = group[sub_group_name]
     except KeyError:
         print_error(
-            "Cannot recognize sub group name %s. For X300 USRP possible frontends are \"A_TXRX\",\"B_TXRX\",\"A_RX2\",\"B_RX2\""%sub_group_name)
+            "Cannot find sub group name %s. For X300 USRP possible frontends are \"A_TXRX\",\"B_TXRX\",\"A_RX2\",\"B_RX2\""%sub_group_name)
         return np.asarray([])
 
     n_chan = sub_group.attrs.get("n_chan")

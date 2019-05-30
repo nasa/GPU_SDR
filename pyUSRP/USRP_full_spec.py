@@ -33,6 +33,8 @@ import plotly
 import colorlover as cl
 
 # matplotlib stuff
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as pl
 import matplotlib.patches as mpatches
 from matplotlib.ticker import EngFormatter

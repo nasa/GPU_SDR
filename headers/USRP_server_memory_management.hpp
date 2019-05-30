@@ -109,7 +109,7 @@ class preallocator{
         int vector_size, pipe_size, wait_on_full;
 
         boost::lockfree::queue< intptr_t, boost::lockfree::fixed_sized<(bool)true>>* allocated;
-        boost::lockfree::queue< intptr_t, boost::lockfree::fixed_sized<(bool)false>>* deallocated;
+        boost::lockfree::queue< intptr_t, boost::lockfree::fixed_sized<(bool)true>>* deallocated;
 
         bool prefil;//if fals the queue will not adjust automatically
 
@@ -120,7 +120,7 @@ class preallocator{
             wait_on_full = 5;
             pipe_size = init_pipe_size;
             allocated = new  boost::lockfree::queue< intptr_t ,boost::lockfree::fixed_sized<(bool)true>> (init_pipe_size);
-            deallocated = new  boost::lockfree::queue< intptr_t ,boost::lockfree::fixed_sized<(bool)false>>(0);
+            deallocated = new  boost::lockfree::queue< intptr_t ,boost::lockfree::fixed_sized<(bool)true>>(init_pipe_size);
             filler = new boost::thread(boost::bind(&preallocator::queue_filler,this));
             if(core>-1)Thread_Prioriry(*filler, 40, core);
             deallocator = new boost::thread(boost::bind(&preallocator::queue_deallocator,this));
@@ -143,13 +143,12 @@ class preallocator{
 
         void trash(vector_type* trash_vector){
 
-            while(not deallocated->push(reinterpret_cast<intptr_t>(trash_vector)))boost::this_thread::sleep_for(boost::chrono::nanoseconds{1});
+            while(not deallocated->push(reinterpret_cast<intptr_t>(trash_vector)))boost::this_thread::sleep_for(boost::chrono::microseconds{1});
             counter++;
 
         }
 
         void close(){
-
             deallocator->interrupt();
             deallocator->join();
             delete deallocator;
@@ -174,11 +173,12 @@ class preallocator{
         std::atomic<int> counter;
 
         void queue_deallocator(){
+            set_this_thread_name("queue_deallocator");
             bool active = (bool)true;
             while(active){
                 try{
                     boost::this_thread::interruption_point();
-                    intptr_t trash_vector;
+                    intptr_t trash_vector = 0;
                     if(deallocated->pop(trash_vector)){
                         int err_counter = 0;
                         //try to recicle or cancel
@@ -208,6 +208,7 @@ class preallocator{
         }
 
         void queue_filler(){
+            set_this_thread_name("queue_filler");
             bool active = (bool)true;
             vector_type* h_aPinned=NULL;
             intptr_t thatvalue = 1;

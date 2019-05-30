@@ -33,6 +33,8 @@ import plotly
 import colorlover as cl
 
 #matplotlib stuff
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as pl
 import matplotlib.patches as mpatches
 
@@ -56,4 +58,3 @@ def linear_phase(phase):
     phase -= linear_phase
 
     return phase
-

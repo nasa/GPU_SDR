@@ -318,7 +318,6 @@ void hardware_manager::close_tx(){
 }
 //! @brief Force close the rx downloading threads if active (thread safe)
 void hardware_manager::close_rx(){
-
     if(A_rx_thread_operation){
 
         A_rx_thread->interrupt();
@@ -330,13 +329,11 @@ void hardware_manager::close_rx(){
     }
 
     if(B_rx_thread_operation){
-
         B_rx_thread->interrupt();
         B_rx_thread->join();
         delete B_rx_thread;
         B_rx_thread = nullptr;
         B_rx_thread_operation = false;
-
     }
 
 }
@@ -484,7 +481,7 @@ bool hardware_manager::check_tuning(){
         try{
             //check only if there is a channel associated with RX.
             if(check_global_mode_presence(RX,chan)){
-                std::cout<<"Checking RX frontend tuning... "<<std::flush;
+                std::cout<<"Checking RX frontend tuning... "<<std::endl;
                 if (std::find(rx_sensor_names.begin(), rx_sensor_names.end(), "lo_locked") != rx_sensor_names.end()) {
                     uhd::sensor_value_t lo_locked = main_usrp->get_rx_sensor("lo_locked",chan);
 
@@ -504,7 +501,6 @@ bool hardware_manager::check_tuning(){
                     lo_locked = main_usrp->get_rx_sensor("lo_locked",chan);
                 }
                 rx = rx and main_usrp->get_rx_sensor("lo_locked",chan).to_bool();
-                std::cout<<"Done!"<<std::endl;
             }
         }catch (uhd::lookup_error e){
             std::cout<<"None"<<std::endl;
@@ -516,7 +512,7 @@ bool hardware_manager::check_tuning(){
         try{
             //check only if there is a channel associated with TX.
             if(check_global_mode_presence(TX,chan)){
-                std::cout<<"Checking TX frontend tuning... "<<std::flush;
+                std::cout<<"Checking TX frontend tuning... "<<std::endl;
                 if (std::find(tx_sensor_names.begin(), tx_sensor_names.end(), "lo_locked") != tx_sensor_names.end()) {
                     uhd::sensor_value_t lo_locked = main_usrp->get_tx_sensor("lo_locked",chan);
 
@@ -536,7 +532,6 @@ bool hardware_manager::check_tuning(){
                     lo_locked = main_usrp->get_tx_sensor("lo_locked",chan);
                 }
                 tx = tx and main_usrp->get_tx_sensor("lo_locked",chan).to_bool();
-                std::cout<<"Done!"<<std::endl;
             }
         }catch (uhd::lookup_error e){
             std::cout<<"None"<<std::endl;
@@ -734,7 +729,6 @@ std::string hardware_manager::apply_antenna_config(param *parameters, param *old
                             tune_request.args = uhd::device_addr_t("mode_n=integer");
                             main_usrp->set_tx_freq(tune_request,chan);
                         }else{
-							std::cout<<"EFFECTIVE FREQUENCY REQUESTED: "<< parameters->tone <<std::endl;
                             uhd::tune_request_t tune_request(parameters->tone);
                             main_usrp->set_tx_freq(tune_request,chan);
                         }
@@ -1285,9 +1279,6 @@ void hardware_manager::single_rx_thread(
     //needed to download the error from tx queue
     bool tmp;
 
-    //main_usrp->set_time_now(0.);
-    //sync_time();
-
     //issue the stream command (ignoring the code above @todo)
     stream_cmd.stream_now = false;
     stream_cmd.num_samps = current_settings->buffer_len;
@@ -1296,6 +1287,9 @@ void hardware_manager::single_rx_thread(
     stream_cmd.stream_mode = uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS ;
     rx_stream->issue_stream_cmd(stream_cmd);
 
+		// Just setting the stop command for later
+		uhd::stream_cmd_t stop_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
+    stop_cmd.stream_now = false;
 
     uhd::set_thread_priority_safe(+1);
     while(active and acc_samp < current_settings->samples){
@@ -1400,33 +1394,25 @@ void hardware_manager::single_rx_thread(
         }catch (boost::thread_interrupted &){ active = false; }
     }
 
-    //issue a stop command if there was a continuous streaming
-    //if(stream_cmd.stream_mode == uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS){
-        uhd::stream_cmd_t stop_cmd(uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
-        stop_cmd.stream_now = false;
-        rx_stream->issue_stream_cmd(stop_cmd);
+    rx_stream->issue_stream_cmd(stop_cmd);
 
-        flush_rx_streamer(rx_stream); // flush the cache
-        rx_stream.reset();
-
-
-    //}
+    flush_rx_streamer(rx_stream); // flush the cache
+    rx_stream.reset();
 
     //something went wrong and the thread has interrupred
     if(not active){
         print_warning("RX thread was taken down without receiving the specified samples");
     }
 
-    //set the check condition to false
+		// Class atomic variable to account for thread activity:
+    // Result in the check function to return to false.
     if(front_end == 'A'){
-        A_rx_thread_operation = false; //class variable to account for thread activity
+        A_rx_thread_operation = false;
     }else if(front_end == 'B'){
         B_rx_thread_operation = false;
     }
 
-    rx_stream.reset();
     BOOST_LOG_TRIVIAL(debug) << "Thread joined";
-    //wait_condition->wait();
 }
 
 void hardware_manager::flush_rx_streamer(uhd::rx_streamer::sptr &rx_streamer) {
@@ -1435,20 +1421,4 @@ void hardware_manager::flush_rx_streamer(uhd::rx_streamer::sptr &rx_streamer) {
    static float2 dummy_buffer[size];
    static uhd::rx_metadata_t dummy_meta { };
    while (rx_streamer->recv(dummy_buffer, size, dummy_meta, timeout)) {}
-}
-
-
-
-//DEPRECATED WILL BE REMOVED
-size_t hardware_manager::nanosec_next_pps(){
-    //std::this_thread::sleep_for(std::chrono::nanoseconds(
-    return size_t(1.e9*   (double(1) -  (main_usrp->get_time_now().get_real_secs() - main_usrp->get_time_last_pps().get_real_secs()))  );
-}
-
-//DEPRECATED WILL BE REMOVED
-void hardware_manager::sync_time(){
-
-    main_usrp->set_time_next_pps(uhd::time_spec_t(0.));
-    double sec_to_next_pps = 1. - (main_usrp->get_time_now().get_real_secs() - main_usrp->get_time_last_pps().get_real_secs());
-    std::this_thread::sleep_for(std::chrono::nanoseconds(size_t(1.e9*sec_to_next_pps)));
 }

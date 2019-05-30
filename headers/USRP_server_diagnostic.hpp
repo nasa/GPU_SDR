@@ -24,48 +24,49 @@ class stop_watch{
 
     typedef std::chrono::high_resolution_clock Time;
     typedef std::chrono::duration<double> dsec;
-    
+
     public:
-        
+
         stop_watch();
-        
+
         void start();
-        
+
         void stop();
-        
+
         void reset();
-        
+
         double get();
-        
+
         void store();
-        
+
         double get_average();
-        
+
         void cycle();
-        
+
     private:
-        
+
         double get_time();
-        
+
         boost::chrono::high_resolution_clock::time_point start_t;
-        
+
         double elapsed_time = 0;
-        
+
         double total_time = 0;
-        
+
         std::vector<double> acc;
-        
-        bool state = false;   
-        
+
+        bool state = false;
+
 };
 
 //! @brief initialize the logger for the server.
 //! Creates or access the folder logs. each time the server starts, creates an enumerated log file.
 void init_logger();
 
+//! @brief Define the pointer to the logging file backend.
+typedef boost::log::sinks::synchronous_sink< boost::log::sinks::text_file_backend > file_sink;
+
+//! @brief Shared pointer to the logfile writer object.
+extern boost::shared_ptr< file_sink > pLogSink;
+
 #endif
-
-
-
-
-

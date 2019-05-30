@@ -30,7 +30,7 @@ def run(gain,iter,rate,freq,front_end, f0,f1, lapse, points, ntones):
         if ntones ==1:
             ntones = None
 
-    vna_filename = u.Single_VNA(start_f = f0, last_f = f1, measure_t = lapse, n_points = points, tx_gain = gain, Rate=None, decimation=True, RF=freq, Front_end=None,
+    vna_filename = u.Single_VNA(start_f = f0, last_f = f1, measure_t = lapse, n_points = points, tx_gain = gain, Rate=None, decimation=True, RF=freq, Front_end=front_end,
                Device=None, output_filename=None, Multitone_compensation=ntones, Iterations=iter, verbose=False)
 
     return vna_filename

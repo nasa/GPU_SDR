@@ -68,6 +68,7 @@ void Sync_server::reconnect(int init_tcp_port){
 }
 
 bool Sync_server::start(param* current_settings){
+    force_close = false;
     if (NEED_RECONNECT){
         print_warning("Before start streaming, data soket has to be reconnected.");
         BOOST_LOG_TRIVIAL(error) << "Sync protocol started with NEED_RECONNECT: "<< NEED_RECONNECT;
@@ -95,7 +96,6 @@ bool Sync_server::stop(bool force){
         TCP_worker = nullptr;
         return NET_IS_STREAMING;
     }else if(NET_IS_CONNECTED){
-        //print_debug("stopping TCP");
         force_close = false;
         TCP_worker->interrupt();
         if(not NET_IS_STREAMING){
@@ -146,14 +146,9 @@ void Sync_server::virtual_pinger(){
                 reconnect_data = false; //twice to avoid data race with async
                 NEED_RECONNECT = true;
                 NET_IS_CONNECTED = false;
-                //BOOST_LOG_TRIVIAL(info) << "waiting some time before launching reconnect";
-                //std::this_thread::sleep_for(std::chrono::milliseconds(3000));
                 BOOST_LOG_TRIVIAL(info) << "launching reconnect now";
                 virtual_pinger_online = false;
-                //reconnect_thread = new boost::thread(boost::bind(&Sync_server::reconnect,this,TCP_SYNC_PORT));
                 reconnect(TCP_SYNC_PORT);
-                //BOOST_LOG_TRIVIAL(info) << "waiting some time ater reconnect";
-                //std::this_thread::sleep_for(std::chrono::milliseconds(3000));
                 reconnect_data = false;
                 active = false;
             }
@@ -214,10 +209,21 @@ void Sync_server::tcp_streamer(param* current_settings){
 
     //maximum transmission buffer size is only reached when no decimation is applied.
     //To avoid error the support memory to the transmission buffer will be oversized.
-    int max_size = current_settings->buffer_len * 2 * sizeof(float) + header_size;
+    size_t max_size = current_settings->buffer_len * 2 * sizeof(float) + header_size;
 
     //buffer for serializing the network packet
-    char *fullData  = ( char *)std::malloc(max_size);
+    char *fullData  = ( char *)std::malloc(max_size+1);
+
+    //additional check for debugging
+    if(current_settings->buffer_len <= 0){
+      std::stringstream ss;
+      ss<<std::string("Sync data thread: ")<<std::string("Maximum buffer length is <= 0 in the TCP streamer. This is not allowed");
+      print_error(ss.str());
+      NEED_RECONNECT = true;
+      NET_IS_CONNECTED = false;
+      BOOST_LOG_TRIVIAL(error) << "Maximum buffer length is <= 0 in the TCP streamer. This is not allowed";
+      return;
+    }
 
     //some error handling
     boost::system::error_code ignored_error;
@@ -239,18 +245,14 @@ void Sync_server::tcp_streamer(param* current_settings){
                 //calculate total size to be transmitted
                 int total_size = header_size + incoming_packet.length * 2 * sizeof(float);
 
-
-
                 //setrialize data structure in a char buffer
+                boost::this_thread::interruption_point();
                 format_net_buffer(incoming_packet, fullData);
 
                 if(not NEED_RECONNECT){
                     try{
                         //send data structure
-                        //timer.start();
                         boost::asio::write(*socket, boost::asio::buffer(fullData,total_size),boost::asio::transfer_all(), ignored_error);
-                        //timer.cycle();
-
 
                     }catch(std::exception &e){
                         std::stringstream ss;
@@ -268,11 +270,9 @@ void Sync_server::tcp_streamer(param* current_settings){
                         NEED_RECONNECT = true;
                         NET_IS_CONNECTED = false;
                         BOOST_LOG_TRIVIAL(warning) << "Something's wrong with the packet terminating transmission";
-                        //reconnect_data = true;
                         active = false;
                     }
                 }
-                //print_debug("Packet length is:",incoming_packet.length);
                 if(passthrough){
                     while(not out_queue->push(incoming_packet))std::this_thread::sleep_for(std::chrono::milliseconds(5));
                 }else{
@@ -283,36 +283,27 @@ void Sync_server::tcp_streamer(param* current_settings){
             }else{
                 //else wait for packets
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                //print_warning("TCP streamer in hold");
             }
 
             if(not active)finishing = not stream_queue->empty();
-            /*
-            //recheck: the empty method can lead to false positives.
-            if(not finishing){
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                std::cout<<"DEBUG re-checking"<<std::endl;
-                finishing = true; //not stream_queue->empty();
-            }
-            std::cout<<"DEBUG queue finished: "<<finishing<<std::endl;
-            */
+
         }catch(boost::thread_interrupted &){
             BOOST_LOG_TRIVIAL(info) << "Interrupt called to stop thread";
             active = false;
             if (not force_close){
                 //finishing = not stream_queue->empty();
-
+                ;
             }else{
                 finishing = false;
                 BOOST_LOG_TRIVIAL(info) << "finishing transmission";
-                //was outside the if else statement
             }
         }
     }
+
     free(fullData);
     NET_IS_STREAMING = false;
-    //std::cout<<"time elapsed in boost::asio::write: "<<timer.get_average()<<std::endl;
     BOOST_LOG_TRIVIAL(info) << "Thread joining";
+    pLogSink->flush(); //If the sink is not flushed something bad happens when the thread joins
 }
 
 char* format_error(){

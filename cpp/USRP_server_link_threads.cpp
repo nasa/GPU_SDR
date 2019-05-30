@@ -141,7 +141,7 @@ void TXRX::set(usrp_param* global_param){
                 rx_thread_n.push_back(this_thread_n);
                 thread_counter +=1;
 
-                if ((output_memory_size!=modes[i]->buffer_len or not rx_output_memory) or modes[i]->buffer_len>output_memory_size){
+                if (output_memory_size>modes[i]->buffer_len or not rx_output_memory){
                     std::cout<<"Allocating RX output memory buffer: "<< (modes[i]->buffer_len * sizeof(float2))/(1024.*1024.)<< " MB per buffer..."<<std::endl;
                     if(modes[i]->buffer_len>output_memory_size and output_memory_size>0)std::cout<<" (updating buffer size)"<<std::endl;
                     if(rx_output_memory) rx_output_memory->close();
@@ -165,7 +165,7 @@ void TXRX::set(usrp_param* global_param){
             case TX:
 
                 //adjust the memory buffer in case of custom buffer length or pint the memori to nullptr
-                std::cout<<"Allocating RF frontend "<<(char)(i<2?'A':'B')<<" TX memory buffer: "<< (modes[i]->buffer_len * sizeof(float2))/(1024.*1024.)<< " MB per buffer..."<<std::flush;
+                std::cout<<"Allocating RF frontend "<<(char)(i<2?'A':'B')<<" TX memory buffer: "<< (modes[i]->buffer_len * sizeof(float2))/(1024.*1024.)<< " MB per buffer..."<<std::endl;
                 //NOTE: this queue doesn't autorefill
 
                 if(i<2){
@@ -217,7 +217,6 @@ void TXRX::set(usrp_param* global_param){
 
                 }
                 tx_thread_n.push_back(this_thread_n);
-                std::cout<<"\tdone."<<std::endl;
 
                 thread_counter+=1;
 
@@ -395,7 +394,7 @@ void TXRX::start(usrp_param* global_param){
         }
     }else B_RX_worker = nullptr;
 
-    if (global_param->B_RX2.mode!=OFF and global_param->B_RX2.mode!=OFF){
+    if ((global_param->A_RX2.mode!=OFF) and (global_param->B_RX2.mode!=OFF)){
         if(file_writing){
             H5_writer->start(global_param);
         }
@@ -458,8 +457,9 @@ bool TXRX::stop(bool force){
             if(file_writing)print_debug("sw_wrt is_active: ",wrt_status);
             if(tcp_streaming)print_debug("sw_stream is_active: ",tcp_status);
         }
-        if(((not RX_status) and (not hardware->check_rx_status()) and (not data_output_status)) or force){
 
+       hardware->check_rx_status();
+        if(((not RX_status) and (not hardware->check_rx_status()) and (not data_output_status)) or force){
             hardware->close_rx();
 
             if (A_RX_worker){
@@ -484,12 +484,9 @@ bool TXRX::stop(bool force){
             //force close data output threads
             if(file_writing)H5_writer->stop(true);
             //if(tcp_streaming)TCP_streamer->stop(true);
-
         //if the threads are still running
         }else{status = status and false;}
-
     }
-
 
     if(A_current_tx_param or B_current_tx_param){
     	if(diagnostic){
@@ -497,13 +494,12 @@ bool TXRX::stop(bool force){
 			print_debug("hardware->check_tx_status() ",hardware->check_tx_status());
 		}
         if((not TX_status and not hardware->check_tx_status()) or force){
-
             //close the rx interface thread
             hardware->close_tx();
 
             //close the rx worker
             if (A_TX_worker){
-
+                print_debug("closing stuff..",0);
                 A_TX_worker->interrupt();
                 A_TX_worker->join();
                 delete A_TX_worker;
@@ -690,9 +686,10 @@ void TXRX::rx_single_link(
         }catch (boost::thread_interrupted &){ active = false; }
     }
     //exit operation is clean the rx queue to avoid memory leak is a interrupted measure situation
+    RX_wrapper rx_buffer_dummy;
     while(not RX_queue->empty()){
-        RX_queue->pop(rx_buffer);
-        input_memory->trash(rx_buffer.buffer);
+        RX_queue->pop(rx_buffer_dummy);
+        input_memory->trash(rx_buffer_dummy.buffer);
     }
 
     //notify that the rx worker is off
