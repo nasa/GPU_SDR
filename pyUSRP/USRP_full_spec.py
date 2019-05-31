@@ -47,6 +47,168 @@ from USRP_low_level import *
 from USRP_files import *
 from USRP_delay import *
 
+def get_NODSP_tones(tones, measure_t, rate, amplitudes = None, RF = None, tx_gain = 0, output_filename = None, Front_end = None,
+              Device = None, delay = None, **kwargs):
+    '''
+    Perform a noise acquisition using fixed tone technique without demodulating the output result.
+    It does not perform any dignal processing operation on the data.
+
+    Arguments:
+        - tones: list of tones frequencies in Hz (absolute if RF is not given, relative to RF otherwise).
+        - measure_t: duration of the measure in seconds.
+        - amplitudes: a list of linear power to use with each tone. Must be the same length of tones arg; will be normalized. Default is equally splitted power.
+        - RF: central up/down mixing frequency. Default is deducted by other arguments.
+        - tx_gain: gain to use in the transmission side.
+        - output_filename: eventual filename. default is datetime.
+        - Front_end: the front end to be used on the USRP. default is A.
+        - Device: the on-server device number to use. default is 0.
+        - delay: delay between TX and RX processes. Default is taken from the INTERNAL_DELAY variable.
+        - kwargs:
+            * verbose: additional prints. Default is False.
+            * push_queue: queue for post writing samples.
+
+    Returns:
+        - filename of the measure file.
+    '''
+
+    global USRP_data_queue, REMOTE_FILENAME, END_OF_MEASURE, LINE_DELAY, USRP_power
+
+    try:
+        verbose = kwargs['verbose']
+    except KeyError:
+        verbose = False
+
+    try:
+        push_queue = kwargs['push_queue']
+    except KeyError:
+        push_queue = None
+
+    if output_filename is None:
+        output_filename = "USRP_Noise_"+get_timestamp()
+    else:
+        output_filename = str(output_filename)
+
+    print("Begin noise acquisition, file %s ..."%output_filename)
+
+    if measure_t <= 0:
+        print_error("Cannot execute a noise measure with "+str(measure_t)+"s duration.")
+        return ""
+
+    tx_gain = int(np.abs(tx_gain))
+    if tx_gain > 31:
+        print_warning("Max gain is usually 31 dB. %d dB selected"%tx_gain)
+
+    if not (int(rate) in USRP_accepted_rates):
+        print_warning("Requested rate will cause additional CIC filtering in USRP firmware. To avoid this use one of these rates (MHz): "+str(USRP_accepted_rates))
+
+    if RF is None:
+        print_warning("Assuming tones are in absolute units (detector bandwith)")
+
+        # Calculate the optimal RF central frequency
+        RF = np.mean(tones)
+        tones = np.asarray(tones) - RF
+        print_debug("RF central frequency will be %.2f MHz"%(RF/1e6))
+
+    if amplitudes is not None:
+        if len(amplitudes) != len(tones):
+            print_warning("Amplitudes profile length is %d and it's different from tones array length that is %d. Amplitude profile will be ignored."%(len(amplitudes),len(tones)))
+            amplitudes = [1./len(tones) for x in tones]
+
+        used_DAC_range = np.sum(amplitudes)
+
+        print_debug("Using %.1f percent of DAC range"%(used_DAC_range*100))
+
+    else:
+        print_debug("Using 100 percent of the DAC range.")
+
+        amplitudes = [1. / len(tones) for x in tones]
+
+    if Front_end is None:
+        Front_end = 'A'
+
+    if not Front_end_chk(Front_end):
+        err_msg = "Cannot detect front_end: "+str(Front_end)
+        print_error(err_msg)
+        raise ValueError(err_msg)
+    else:
+        TX_frontend = Front_end+"_TXRX"
+        RX_frontend = Front_end+"_RX2"
+
+    if delay is None:
+        try:
+            delay = LINE_DELAY[str(int(rate/1e6))]
+            delay *= 1e-9
+        except KeyError:
+            print_warning("Cannot find associated line delay for a rate of %d Msps. Setting to 0s."%(int(rate/1e6)))
+            delay = 0
+    else:
+        print_debug("Using a delay of %d ns" % int(delay*1e9))
+
+    number_of_samples = rate * measure_t
+
+    expected_samples = number_of_samples
+    noise_command = global_parameter()
+
+    noise_command.set(TX_frontend, "mode", "TX")
+    noise_command.set(TX_frontend, "buffer_len", 1e6)
+    noise_command.set(TX_frontend, "gain", tx_gain)
+    noise_command.set(TX_frontend, "delay", 1)
+    noise_command.set(TX_frontend, "samples", number_of_samples)
+    noise_command.set(TX_frontend, "rate", rate)
+    noise_command.set(TX_frontend, "bw", 2 * rate)
+    #noise_command.set(TX_frontend, 'tuning_mode', 0)
+    noise_command.set(TX_frontend, "wave_type", ["TONES" for x in tones])
+    noise_command.set(TX_frontend, "ampl", amplitudes)
+    noise_command.set(TX_frontend, "freq", tones)
+    noise_command.set(TX_frontend, "rf", RF)
+
+    # This parameter does not have an effect (except suppress a warning from the server)
+    noise_command.set(TX_frontend, "fft_tones", 1e8)
+
+    noise_command.set(RX_frontend, "mode", "RX")
+    #noise_command.set(RX_frontend, 'tuning_mode', 0)
+    noise_command.set(RX_frontend, "buffer_len", 1e6)
+    noise_command.set(RX_frontend, "gain", 0)
+    noise_command.set(RX_frontend, "delay", 1 + delay)
+    noise_command.set(RX_frontend, "samples", number_of_samples)
+    noise_command.set(RX_frontend, "rate", rate)
+    noise_command.set(RX_frontend, "bw", 2 * rate)
+
+    noise_command.set(RX_frontend, "wave_type", ["NODSP",])
+    noise_command.set(RX_frontend, "freq", tones)
+    noise_command.set(RX_frontend, "rf", RF)
+
+
+    # With the polyphase filter the decimation is realized increasing the number of channels.
+    # This parameter will average in the GPU a certain amount of PFB outputs.
+    noise_command.set(RX_frontend, "decim", 0)
+
+    if noise_command.self_check():
+        if (verbose):
+            print_debug("Noise command successfully checked")
+            noise_command.pprint()
+
+        Async_send(noise_command.to_json())
+
+    else:
+        err_msg = "Something went wrong in the noise acquisition command self_check()"
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    Packets_to_file(
+        parameters=noise_command,
+        timeout=None,
+        filename=output_filename,
+        dpc_expected=expected_samples,
+        meas_type="Raw_data",
+        push_queue = push_queue,
+        **kwargs
+    )
+
+    print_debug("Noise acquisition terminated.")
+
+    return output_filename
+
 def Get_full_spec(tones, channels, measure_t, rate, RF = None, Front_end = None, amplitudes = None, tx_gain=0, decimation = None, pf_average = 4, output_filename = None, delay = None, **kwargs):
     '''
     Full spectrum version of the Get_noise() function.

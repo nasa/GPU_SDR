@@ -94,6 +94,24 @@ def get_rx_info(filename, ant=None):
 
     return parameters.parameters[ant]
 
+def get_tx_info(filename, ant=None):
+    '''
+    Retrive TX information from file.
+
+    :param ant (optional) string to specify transmitter. Default is the first found.
+    :return Parameter dictionary
+
+    '''
+    filename = format_filename(filename)
+    parameters = global_parameter()
+    parameters.retrive_prop_from_file(filename)
+    if ant is None:
+        ant = parameters.get_active_tx_param()[0]
+    else:
+        ant = str(ant)
+
+    return parameters.parameters[ant]
+
 
 def openH5file(filename, ch_list=None, start_sample=None, last_sample=None, usrp_number=None, front_end=None,
                verbose=False, error_coord=False, big_file = False):
