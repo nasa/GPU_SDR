@@ -579,7 +579,6 @@ void RX_buffer_demodulator::upload_multitone_parameters(){
           }
         }
     }
-print_debug("testpoint",1);
     //convert the frequency parameter to fft bin
     /*
     for(int u = 0; u<h_param.eff_n_tones;u++){

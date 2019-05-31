@@ -23,7 +23,7 @@ from subprocess import call
 import time
 import gc
 import datetime
-
+import warnings
 # plotly stuff
 from plotly.graph_objs import Scatter, Layout
 from plotly import tools
@@ -294,22 +294,25 @@ def plot_pfb(filename, decimation=None, low_pass=None, backend='matplotlib', out
     x_label = (rf + (np.arange(fft_tones) - fft_tones / 2) * (rate / fft_tones)) / 1e6
     title = "PFB acquisition form file %s" % filename
     subtitle = "Channel width %.2f kHz; Frame integration time: %.2e s" % (channel_width / 1.e3, integ_time)
-    z = 20 * np.log10(np.abs(samples[0]))
+    with warnings.catch_warnings():
+        # it's very likely to do some division by 0 in the log10
+        warnings.simplefilter("ignore")
+        z = 20 * np.log10(np.abs(samples[0]))
     try:
-        z_shaped = np.roll(np.reshape(z, (len(z) / fft_tones, fft_tones)), fft_tones / 2, axis=1)
+        z_shaped = np.roll(np.reshape(z, (len(z) / fft_tones, fft_tones)), -fft_tones / 2, axis=1)
     except ValueError as msg:
         print_warning("Error while plotting pfb spectra: " + str(msg))
         cut = len(z) - len(z) / fft_tones * fft_tones
         z = z[:-cut]
         print_debug("Cutting last data (%d samples) to fit" % cut)
         # z_shaped = np.roll(np.reshape(z,(len(z)/fft_tones,fft_tones)),fft_tones/2,axis = 1)
-        z_shaped = np.roll(np.reshape(z, (len(z) / fft_tones, fft_tones)), fft_tones / 2, axis=1)
+        z_shaped = np.roll(np.reshape(z, (len(z) / fft_tones, fft_tones)), -fft_tones / 2, axis=1)
 
     # pl.plot(z_shaped.T, alpha = 0.1, color = "k")
     # pl.show()
 
     if backend == 'matplotlib':
-        fig, ax = pl.subplots(nrows=2, ncols=1, sharex=True)
+        fig, ax = pl.subplots(nrows=2, ncols=1,)# sharex=True)
         try:
             fig.set_size_inches(kwargs['size'][0], kwargs['size'][1])
         except KeyError:
@@ -317,6 +320,7 @@ def plot_pfb(filename, decimation=None, low_pass=None, backend='matplotlib', out
         ax[0].set_xlabel("Channel [MHz]")
         ax[0].set_ylabel("Time [s]")
         ax[0].set_title(title + "\n" + subtitle)
+        ax[0].set_xlim((min(x_label), max(x_label)))
         imag = ax[0].imshow(z_shaped, aspect='auto', interpolation='nearest',
                             extent=[min(x_label), max(x_label), min(y_label), max(y_label)])
         # fig.colorbar(imag)#,ax=ax[0]
@@ -324,6 +328,7 @@ def plot_pfb(filename, decimation=None, low_pass=None, backend='matplotlib', out
             ax[1].plot(x_label, zz, color='k', alpha=0.1)
         ax[1].set_xlabel("Channel [MHz]")
         ax[1].set_ylabel("Power [dBm]")
+        ax[1].set_xlim((min(x_label), max(x_label)))
         # ax[1].set_title("Trace stack")
 
         final_filename = output_filename + '.png'

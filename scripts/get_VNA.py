@@ -1,6 +1,6 @@
 
 import sys,os
-
+import numpy as np
 try:
     import pyUSRP as u
 except ImportError:
@@ -12,14 +12,14 @@ except ImportError:
 
 import argparse
 
-def run(gain,iter,rate,freq,front_end, f0,f1, lapse, points, ntones):
+def run(gain,iter,rate,freq,front_end, f0,f1, lapse, points, ntones, delay_duration):
 
     try:
         if u.LINE_DELAY[str(int(rate/1e6))]: pass
     except KeyError:
         print "Cannot find line delay. Measuring line delay before VNA:"
 
-        filename = u.measure_line_delay(rate, freq, front_end, USRP_num=0, tx_gain=0, rx_gain=0, output_filename=None, compensate = True)
+        filename = u.measure_line_delay(rate, freq, front_end, USRP_num=0, tx_gain=0, rx_gain=0, output_filename=None, compensate = True, duration = delay_duration)
 
         delay = u.analyze_line_delay(filename, True)
 
@@ -30,7 +30,7 @@ def run(gain,iter,rate,freq,front_end, f0,f1, lapse, points, ntones):
         if ntones ==1:
             ntones = None
 
-    vna_filename = u.Single_VNA(start_f = f0, last_f = f1, measure_t = lapse, n_points = points, tx_gain = gain, Rate=None, decimation=True, RF=freq, Front_end=front_end,
+    vna_filename = u.Single_VNA(start_f = f0, last_f = f1, measure_t = lapse, n_points = points, tx_gain = gain, Rate=rate, decimation=True, RF=freq, Front_end=front_end,
                Device=None, output_filename=None, Multitone_compensation=ntones, Iterations=iter, verbose=False)
 
     return vna_filename
@@ -51,6 +51,7 @@ if __name__ == "__main__":
     parser.add_argument('--iter', '-i', help='How many iterations to perform', type=float, default=1)
     parser.add_argument('--gain', '-g', help='set the transmission gain. Multiple gains will result in multiple scans (per frequency). Default 0 dB',  nargs='+')
     parser.add_argument('--tones', '-tones', help='expected number of resonators',  type=int)
+    parser.add_argument('--delay_duration', '-dd', help='Duration of the delay measurement',  type=float, default=0.01)
 
     args = parser.parse_args()
 
@@ -80,6 +81,20 @@ if __name__ == "__main__":
         u.print_error("Cannot find the GPU server!")
         exit()
 
+    if np.abs(args.f0)>args.rate/2:
+        u.print_warning("Cannot use initial baseband frequency of %.2f MHz with a data rate of %.2f MHz" % (args.f0,args.rate))
+        f0 = args.rate/2 * (np.abs(args.f0)/args.f0)
+        u.print_debug("Setting maximum initial baseband scan frequency to %.2f MHz"%(f0))
+    else:
+        f0 = args.f0
+
+
+    if np.abs(args.f1)>args.rate/2:
+        u.print_warning("Cannot use initial baseband frequency of %.2f MHz with a data rate of %.2f MHz" % (args.f1,args.rate))
+        f1 = args.rate/2 * (np.abs(args.f1)/args.f1)
+        u.print_debug("Setting maximum initial baseband scan frequency to %.2f MHz"%(f1))
+    else:
+        f1 = args.f1
     # Data acquisition
     for g in gains:
         for f in frequencies:
@@ -89,11 +104,12 @@ if __name__ == "__main__":
                     rate = args.rate*1e6,
                     freq = f*1e6,
                     front_end = args.frontend,
-                    f0 = args.f0*1e6,
-                    f1 = args.f1*1e6,
+                    f0 = f0*1e6,
+                    f1 = f1*1e6,
                     lapse = args.time,
                     points = args.points,
-                    ntones = ntones
+                    ntones = ntones,
+                    delay_duration = args.delay_duration
                 )
 
     u.Disconnect()

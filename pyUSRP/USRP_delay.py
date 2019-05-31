@@ -53,7 +53,7 @@ from USRP_data_analysis import *
 #: This variable contains total line delay at given frequencies.
 LINE_DELAY = {}
 
-def measure_line_delay(rate, LO_freq, RF_frontend, USRP_num = 0, tx_gain = 0, rx_gain = 0, output_filename = None, compensate = False, **kwargs):
+def measure_line_delay(rate, LO_freq, RF_frontend, USRP_num = 0, tx_gain = 0, rx_gain = 0, output_filename = None, compensate = False, duration = 0.01, **kwargs):
     '''
     Measure the line delay around a given frequency. Save the data to file.
     :param rate: USRP sampling rate in Sps: changing the sampling rate affect how the stock firmware process data.
@@ -65,7 +65,9 @@ def measure_line_delay(rate, LO_freq, RF_frontend, USRP_num = 0, tx_gain = 0, rx
     :param output_filename: optional parameter to set the output filename.
     :param kwargs: keyword arguments will be used to store additional attributes in the HDF5 file in the raw data group.
     :param compensate: if True the initial delay is sourced from the internal variable LINE_DELAY.
+    :parm duration: duration of the measurement.
     :return A string containing the filename where the data have been saved.
+
     '''
 
     global USRP_data_queue, REMOTE_FILENAME, END_OF_MEASURE, LINE_DELAY
@@ -114,7 +116,7 @@ def measure_line_delay(rate, LO_freq, RF_frontend, USRP_num = 0, tx_gain = 0, rx
 
     # This measure take the undecimated data rate that will most probably exceed the LAN/Disk rate.
     # Using more than few seconds could cause errors.
-    measure_t = 0.01
+    measure_t = duration
     n_points = (rate * measure_t)
     number_of_samples = (rate * measure_t)
 
@@ -242,7 +244,7 @@ def analyze_line_delay(filename, diagnostic_plots = False):
     print_debug("Analyzing line delay info form file: \'%s\' ..."%(filename))
 
 
-    decimation = 10
+    decimation = 2
     zz = signal.decimate(openH5file(filename)[0], decimation, ftype="fir")
     info = get_rx_info(filename, ant=None)
     decimation *= info['decim']

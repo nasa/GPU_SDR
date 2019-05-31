@@ -932,7 +932,8 @@ def get_tones(filename, frontends = None, verbose = False):
                 tones = tones - info['rf']
                 min_range = min(info['freq'][0],info['chirp_f'][0])
                 max_range = max(info['freq'][0],info['chirp_f'][0])
-                tones = tones[tones>min_range and tones<max_range]
+                mask_ = tones>min_range and tones<max_range
+                tones = tones[mask_]
                 ret_list.append((
                     info['rf'],
                     tones

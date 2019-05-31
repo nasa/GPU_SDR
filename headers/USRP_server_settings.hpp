@@ -101,6 +101,8 @@ extern int TCP_SYNC_PORT;
 //! @brief Port used for data streaming.
 extern int TCP_ASYNC_PORT;
 
+extern std::string device_arguments;
+
 //valid for TX and RX operations, describe the signal generation/demodulation.
 enum w_type { TONES, CHIRP, NOISE , RAMP, NODSP, SWONLY};
 

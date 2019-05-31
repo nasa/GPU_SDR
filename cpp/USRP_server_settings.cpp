@@ -3,6 +3,8 @@
 int TCP_SYNC_PORT = 61360;
 int TCP_ASYNC_PORT = 22001;
 
+std::string device_arguments = "noarg";
+
 std::string w_type_to_str(w_type enumerator){
     std::string comp_string;
     comp_string = "UNINIT";

@@ -24,10 +24,7 @@ hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init,
     if(not sw_loop){
 
         this_usrp_number = usrp_number;
-        hint["type"] = "x300";
-				//hint["addr"] = "192.168.40.2";
-				//hint["second_addr"] = "192.168.30.2";
-				//hint["e_addr"] = "192.168.30.2";
+;
 
         //recursively look for usrps
         dev_addrs = uhd::device::find(hint);
@@ -41,16 +38,17 @@ hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init,
 
 
         std::cout<<"Device found and assigned to GPU "<< props.name <<" ("<< settings->GPU_device_index <<")"<<std::endl;
-        for(size_t ii = 0; ii<dev_addrs.size(); ii++){
-            std::cout<<dev_addrs[ii].to_pp_string()<<std::endl;
-        }
+        //for(size_t ii = 0; ii<dev_addrs.size(); ii++){
+        //    std::cout<<dev_addrs[ii].to_pp_string()<<std::endl;
+        //}
         //assign desired address
         main_usrp = uhd::usrp::multi_usrp::make(dev_addrs[usrp_number]);
 
-	//uhd::device_addr_t args("addr=192.168.30.2,second_addr=192.168.40.2");
-	//main_usrp = uhd::usrp::multi_usrp::make(args);
-
-        //main_usrp = uhd::usrp::multi_usrp::make(std::string("addr = 192.168.40.2, second_addr = 192.168.30.2"));
+				//uhd::device_addr_t args("addr=192.168.30.2,second_addr=192.168.40.2");
+				if(device_arguments.compare("noarg")!=0){
+					uhd::device_addr_t args(device_arguments);
+					main_usrp = uhd::usrp::multi_usrp::make(args);
+				}
         //set the clock reference
         main_usrp->set_clock_source(settings->clock_reference);
 
@@ -473,7 +471,10 @@ bool hardware_manager::check_tuning(){
     bool rx = true;
     bool tx = true;
 
-    for(size_t chan = 0; chan<2; chan++){
+		size_t num_rx_channels = main_usrp->get_rx_num_channels();
+		size_t num_tx_channels = main_usrp->get_tx_num_channels();
+
+    for(size_t chan = 0; chan<num_rx_channels; chan++){
         //check for RX locking
         std::vector<std::string>  rx_sensor_names;
         rx_sensor_names = main_usrp->get_rx_sensor_names(chan);
@@ -481,7 +482,7 @@ bool hardware_manager::check_tuning(){
         try{
             //check only if there is a channel associated with RX.
             if(check_global_mode_presence(RX,chan)){
-                std::cout<<"Checking RX frontend tuning... "<<std::endl;
+                std::cout<<"Checking RX frontend tuning for channel "<< chan <<" ... "<<std::endl;
                 if (std::find(rx_sensor_names.begin(), rx_sensor_names.end(), "lo_locked") != rx_sensor_names.end()) {
                     uhd::sensor_value_t lo_locked = main_usrp->get_rx_sensor("lo_locked",chan);
 
@@ -506,13 +507,15 @@ bool hardware_manager::check_tuning(){
             std::cout<<"None"<<std::endl;
             rx = true;
         }
+			}
+			for(size_t chan = 0; chan<num_tx_channels; chan++){
         //check for TX locking
         std::vector<std::string>  tx_sensor_names;
-        tx_sensor_names = main_usrp->get_tx_sensor_names(0);
+        tx_sensor_names = main_usrp->get_tx_sensor_names(chan);
         try{
             //check only if there is a channel associated with TX.
             if(check_global_mode_presence(TX,chan)){
-                std::cout<<"Checking TX frontend tuning... "<<std::endl;
+                std::cout<<"Checking TX frontend tuning for channel "<< chan <<" ... "<<std::endl;
                 if (std::find(tx_sensor_names.begin(), tx_sensor_names.end(), "lo_locked") != tx_sensor_names.end()) {
                     uhd::sensor_value_t lo_locked = main_usrp->get_tx_sensor("lo_locked",chan);
 

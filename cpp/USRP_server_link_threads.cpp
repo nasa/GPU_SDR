@@ -499,7 +499,6 @@ bool TXRX::stop(bool force){
 
             //close the rx worker
             if (A_TX_worker){
-                print_debug("closing stuff..",0);
                 A_TX_worker->interrupt();
                 A_TX_worker->join();
                 delete A_TX_worker;

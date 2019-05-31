@@ -837,10 +837,12 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
             channel_list=channel_list
         )
         if max_frequency is not None:
-            index_cut = find_nearest(freq, max_frequency)
-            freq = freq[:index_cut]
-            imag = imag[:index_cut]
-            real = real[:index_cut]
+            for ii in range(len(imag)):
+                index_cut = find_nearest(freq, max_frequency)
+                index_cut = np.min([len(freq),len(real[ii]),index_cut])
+                freq = freq[:index_cut]
+                imag[ii] = imag[ii][:index_cut]
+                real[ii] = real[ii][:index_cut]
 
         if y_name_set:
             y_name_set = False

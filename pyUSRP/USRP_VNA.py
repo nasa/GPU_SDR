@@ -366,7 +366,7 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
         delay = LINE_DELAY[str(int(Rate/1e6))]
         delay *= 1e-9
     except KeyError:
-        print_warning("Cannot find associated line delay for a rate of %d Msps. Performance may be negatively affected"%(int(rate/1e6)))
+        print_warning("Cannot find associated line delay for a rate of %d Msps. Performance may be negatively affected"%(int(Rate/1e6)))
         delay = 0
 
 

@@ -12,7 +12,7 @@ except ImportError:
 
 import argparse
 
-def run(rate,freq,front_end):
+def run(rate,freq,front_end,duration):
     '''
     Basic test of the line delay functionality.
     :param rate: USRP sampling rate.
@@ -21,7 +21,7 @@ def run(rate,freq,front_end):
     :return: None
     '''
 
-    filename = u.measure_line_delay(rate, freq, front_end, USRP_num=0, tx_gain=0, rx_gain=0, output_filename=None, compensate = True)
+    filename = u.measure_line_delay(rate, freq, front_end, USRP_num=0, tx_gain=0, rx_gain=0, output_filename=None, compensate = True, duration = duration)
 
     delay = u.analyze_line_delay(filename, True)
 
@@ -42,6 +42,7 @@ if __name__ == "__main__":
     parser.add_argument('--folder', '-fn', help='Name of the folder in which the data will be stored', type=str, default = "data")
     parser.add_argument('--freq', '-f', help='LO frequency in MHz', type=float, default= 300)
     parser.add_argument('--rate', '-r', help='Sampling frequency in Msps', type=float, default = 100)
+    parser.add_argument('--time', '-t', help='Duration of the deley measurement in seconds', type=float, default = 0.01)
     parser.add_argument('--frontend', '-rf', help='front-end character: A or B', type=str, default="A")
 
     args = parser.parse_args()
@@ -58,5 +59,5 @@ if __name__ == "__main__":
         exit()
 
     while True:
-        run(rate = args.rate*1e6, freq = args.freq*1e6, front_end = args.frontend)
+        run(rate = args.rate*1e6, freq = args.freq*1e6, front_end = args.frontend, duration = args.time)
         raw_input("Press to measure again...")

@@ -43,6 +43,7 @@ int main(int argc, char **argv){
     ("async", po::value<int>(&port_async)->default_value(22001), "Define ascynchronous TCP communication port")
     ("data", po::value<int>(&port_sync)->default_value(61360), "Define scynchronous TCP data streaming port")
     ("uhd_dbg", po::value<bool>(&uhd_dbg)->default_value(false), "Enable UHD degug logging on console.")
+    ("args", po::value<std::string>(&device_arguments)->default_value("noarg"), "Device argument to pass (experimental use)")
     ;
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
