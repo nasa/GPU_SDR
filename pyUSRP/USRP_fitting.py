@@ -46,7 +46,7 @@ import progressbar
 from USRP_low_level import *
 from USRP_files import *
 from scipy import optimize
-
+from USRP_plotting import *
 
 
 def real_of_complex(z):
@@ -185,7 +185,7 @@ def do_fit(freq, re, im, p0=None):
 
 import peakutils
 
-def extimate_peak_number(filename, threshold = 0.2, smoothing = None, peak_width = 90e3, verbose = False, exclude_center = True, diagnostic_plots = False):
+def extimate_peak_number(filename, threshold = 0.2, smoothing = None, peak_width = 200e3, verbose = False, exclude_center = True, diagnostic_plots = False):
     """
     This function uses peakutils module to initialize the peaks i the file.
     Stores in the H5 file the result. This does not count as a fit as only the initialization is stored.
@@ -213,18 +213,26 @@ def extimate_peak_number(filename, threshold = 0.2, smoothing = None, peak_width
     info = get_rx_info(filename, ant="A_RX2")
     info_B = get_rx_info(filename, ant="B_RX2")
 
-    if info_B['mode'] == 'RX':
+    if (info_B['mode'] == 'RX') and (info['mode'] == 'RX'):
         center = [info['rf'], info_B['rf']]
         single_frontend = False
-    else:
+        resolution_A = np.abs(info['freq'][0] - info['chirp_f'][0])/float(info['swipe_s'][0])
+        resolution_B = np.abs(info_B['freq'][0] - info_B['chirp_f'][0])/float(info_B['swipe_s'][0])
+        if resolution_A!=resolution_B:
+            print_warning("Resolution between frontends is different. The shallower resolution will be displayed.")
+            resolution = max(resolution_A,resolution_B)
+        else:
+            resolution = resolution_A
+    elif (info_B['mode'] == 'RX') and not (info['mode'] == 'RX'):
+        center = info_B['rf']
+        resolution = np.abs(info_B['freq'][0] - info_B['chirp_f'][0])/float(info_B['swipe_s'][0])
+        single_frontend = True
+    elif not (info_B['mode'] == 'RX') and  (info['mode'] == 'RX'):
         center = info['rf']
+        resolution = np.abs(info['freq'][0] - info['chirp_f'][0])/float(info['swipe_s'][0])
         single_frontend = True
 
-
     freq, S21 = get_VNA_data(filename, calibrated = True, usrp_number = 0)
-
-    resolution = np.abs(info['freq'][0] - info['chirp_f'][0])/float(len(S21))
-
 
     phase = np.angle(S21)
     magnitude = np.abs(S21)
@@ -262,13 +270,15 @@ def extimate_peak_number(filename, threshold = 0.2, smoothing = None, peak_width
     #supposed width of each peak in index unit
     peak_width /= resolution
     peak_width = int(peak_width)
-
     max_diag = []
     q_diag = []
     f0s = []
 
     # Optimizing on the magnitude of derivative of S21
-    gradS21 = np.abs(np.gradient(S21_val))
+    gradS21 = np.gradient(S21_val)
+
+    #zero the negative part
+    gradS21 = np.asarray([np.abs(vv) if np.abs(vv) > 0 else 0 for vv in gradS21])
 
     try:
         # exclude conjunction point
@@ -342,7 +352,8 @@ def extimate_peak_number(filename, threshold = 0.2, smoothing = None, peak_width
             reso_grp = fv.create_group("Resonators")
         except ValueError:
             print_warning("Overwriting resonator initialization attribute")
-            reso_grp = fv["Resonators"]
+            del fv["Resonators"]
+            reso_grp = fv.create_group("Resonators")
 
         reso_grp.attrs.__setitem__("tones_init", max_diag)
 
@@ -544,7 +555,8 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
             reso_grp = fv.create_group("Resonators")
         except ValueError:
             print_warning("Overwriting resonator initialization attribute")
-            reso_grp = fv["Resonators"]
+            del fv["Resonators"]
+            reso_grp = fv.create_group("Resonators")
 
         results = [freq[j] for j in max_diag]
         reso_grp.attrs.__setitem__("tones_init", results)
@@ -687,9 +699,9 @@ def get_fit_data(filename, verbose = False):
     ret = []
     for resonator in reso_grp:
         ret.append({
-            "frequency":np.asarray(resonator['frequency']),
-            "fitted":np.asarray(resonator["fitted_S21"]),
-            "original":np.asarray(resonator["base_S21"])
+            "frequency":np.asarray(reso_grp[resonator]['freq']),
+            "fitted":np.asarray(reso_grp[resonator]["fitted_S21"]),
+            "original":np.asarray(reso_grp[resonator]["base_S21"])
             })
 
     if verbose: print_debug("Resonator data collected")
@@ -772,7 +784,7 @@ def min_readout_spacing(filename, verbose = False):
     return ret
 
 
-def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_info = None, verbose = False, output_filename = None, auto_open = True, **kwargs):
+def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_info = None, verbose = False, output_filename = None, auto_open = True, attenuation = None, **kwargs):
     '''
     Plot the resonators and the resonator fits.
 
@@ -783,10 +795,12 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
         - verbose: print some debug line.
         - output_filename: set hte name of the output file without the extension (that depends on the backend).
         - auto_open: in case of plotly backend this enable or disable the opening of the plot in the browser.
+        - attenuation: readout powe will be displayed in the legend, this value helps matching the SDR output power with the on-chip power. The value is in dB.
         - keyword args:
             - figsize: figure size for matplotlib backend.
             - add_info: listo of strings. Must be the same lresonreso_grp[resonator]atorength of the file list. Add information to the legend ion the plot.
             - title: Change the title of the plot.
+            - single_plots: if this option is True a folder named resonators_<vna_filename> will be created/accessed and one plot per each resonator created. This option only works with the matplotlib backend.
 
     Return:
         - The filename of the saved plot.
@@ -805,6 +819,11 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
         fig_size = kwargs['figsize']
     except KeyError:
         fig_size = None
+
+    try:
+        single_plots = kwargs['single_plots']
+    except KeyError:
+        single_plots = False
 
     try:
         add_info_labels = kwargs['add_info']
@@ -833,50 +852,212 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
             output_filename+="_compare"
         output_filename+="_"+get_timestamp()
 
+    if attenuation is None:
+        attenuation = 0
+
     resonators = []
     fit_info = []
     brf = [] #best readout frequency
-    r_powers = []
     if verbose: print_debug("Collecting data...")
 
     for filename in filenames:
-        resonators += get_fit_data(filename, verbose)
-        fit_info += get_fit_param(filename, verbose)
+        resonators.append( get_fit_data(filename, verbose) )
+        fit_info.append(get_fit_param(filename, verbose) )
         brf.append( get_best_readout(filename, verbose) )
-        r_powers.append( get_readout_power(filename) )
 
     if backend == "matplotlib":
 
         if verbose: print_debug("Using matplotlib backend...")
 
-        gridsize = (3,3)
-        fig = pl.figure()
-        ax_IQ = pl.subplot2grid(gridsize, (0, 0), colspan=2, rowspan=2)
-        ax_mag = pl.subplot2grid(gridsize, (3, 0), colspan=2, rowspan=1)
-        ax_pha = pl.subplot2grid(gridsize, (0, 2), colspan=1, rowspan=2)
+        if not single_plots:
+            gridsize = (3,3)
+            fig = pl.figure()
+            ax_IQ = pl.subplot2grid(gridsize, (0, 0), colspan=2, rowspan=2)
+            ax_mag = pl.subplot2grid(gridsize, (2, 0), colspan=3, rowspan=1)
+            ax_pha = pl.subplot2grid(gridsize, (0, 2), colspan=1, rowspan=2)
 
-        if fig_size is None:
-            fig_size = (16, 10)
+            if fig_size is None:
+                fig_size = (16, 10)
 
-        fig.set_size_inches(fig_size[0], fig_size[1])
+            fig.set_size_inches(fig_size[0], fig_size[1])
+            formatter0 = EngFormatter(unit='Hz')
+            fig.suptitle(title)
+            line_labels = []
+            legend_handler_list = []
+            for i in range(len(filenames)):
+                for j in range(len(resonators[i])):
 
-        fig.suptitle(title)
+                    # label informations
+                    if len(filenames) == 1:
+                        label = ""
+                    else:
+                        label += "file: %s\n"%filenames[i]
 
-        for i in range(len(filenames)):
+                    label += "$f_0$: %.2f MHz\n"%(fit_info[i][j]['f0'])
+                    Qi = 1./(1./fit_info[i][j]['Qr'] - 1./np.abs(fit_info[i][j]['Qe']))
+                    label+= "$Q_i$: %.2fk, $Q_r$: %.2fk\n"%(Qi/1e3,fit_info[i][j]['Qr']/1e3)
 
-            mag_fit = vrms2dbm( np.abs(resonators['fitted']) )
-            phase_fit = np.angle(resonators['fitted'])
-            mag_orig = vrms2dbm( np.abs(resonators['original']) )
-            phase_orig = np.angle(resonators['original'])
+                    r_power = get_readout_power(filenames[i],0)# note that VNA has only one channel
+                    if attenuation == 0 or attenuation is None:
+                        label+='Output per-tone readout power: %.2f dB'%(r_power)
+                    else:
+                        label+= 'On-chip per-tone readout power: %.2f dB'%(r_power-attenuation)
 
-            ax_IQ.plot(resonators['fitted'].real, resonators['fitted'].imag,)
-            ax_IQ.plot(resonators['original'].real, resonators['original'].imag,)
 
-            ax_mag.plot(resonators['frequency'],mag_fit,)
-            ax_mag.plot(resonators['frequency'],mag_orig,)
+                    color = get_color(i+j)
+                    mag_fit = vrms2dbm( np.abs(resonators[i][j]['fitted']) )
+                    phase_fit = np.angle(resonators[i][j]['fitted'])
+                    mag_orig = vrms2dbm( np.abs(resonators[i][j]['original']) )
+                    phase_orig = np.angle(resonators[i][j]['original'])
+                    freq_axis = resonators[i][j]['frequency'] - fit_info[i][j]['f0']*1e6
 
-            phase_orig.plot(phase_fit,resonators['frequency'],)
-            phase_orig.plot(phase_orig,resonators['frequency'],)
+                    if verbose:
+                        print_debug("Adding plot of %.2f MHz resonator"%(fit_info[i][j]['f0']))
+
+                    #IQ plot is untouched
+                    ax_IQ.plot(resonators[i][j]['fitted'].real, resonators[i][j]['fitted'].imag,color = color, linestyle = 'dotted')
+                    fitl, = ax_IQ.plot(resonators[i][j]['original'].real, resonators[i][j]['original'].imag,color = color)
+                    ax_IQ.set_ylabel("I [ADC]")
+                    ax_IQ.set_xlabel("Q [ADC]")
+
+
+                    # magnitude and phase will be relative to F0
+                    ax_mag.plot(freq_axis,mag_fit,color = color, linestyle = 'dotted')
+                    ax_mag.plot(freq_axis,mag_orig,color = color)
+                    ax_mag.grid()
+                    ax_mag.set_ylabel("Magnitude [dB]")
+                    ax_mag.set_xlabel("$\Delta f$ [Hz]")
+                    ax_mag.xaxis.set_major_formatter(formatter0)
+
+                    ax_pha.plot(phase_fit,freq_axis,color = color, linestyle = 'dotted')
+                    ax_pha.plot(phase_orig,freq_axis,color = color)
+                    #ax_pha.yaxis.tick_right()
+                    ax_pha.grid()
+                    ax_pha.set_ylabel("$\Delta f$ [Hz]")
+                    ax_pha.set_xlabel("Phase [Rad]")
+                    ax_pha.yaxis.set_major_formatter(formatter0)
+
+                    line_labels += [label,]
+                    legend_handler_list += [fitl,]
+
+            ax_IQ.set_aspect('equal','datalim')
+            ax_IQ.grid()
+            ncol = 4
+            fig.legend(handles = legend_handler_list,     # The line objects
+                       labels=line_labels,   # The labels for each line
+                       borderaxespad=0.3,    # Small spacing around legend box
+                       ncol = ncol,
+                       bbox_to_anchor=(0.95,-0.1),
+                       loc="lower right",
+                       bbox_transform=fig.transFigure,
+                       title = "Solid lines are original data"
+                       )
+            final_output_name = output_filename+".png"
+            fig.savefig(final_output_name, bbox_inches = 'tight')
+
+        else:
+            ret_names = []
+
+            #create output folder
+            for i in range(len(filenames)):
+                folder_name = "Resoplot_"+filenames[i].split('.')[0]
+                try:
+                    os.mkdir(folder_name)
+                except OSError:
+                    pass
+
+                os.chdir(folder_name)
+                filenames[i] = '../'+filenames[i]
+
+            #creare and save each plot
+                for j in range(len(resonators[i])):
+
+                    output_filename = "Channel_%d"%j
+                    gridsize = (3,3)
+                    fig = pl.figure()
+                    ax_IQ = pl.subplot2grid(gridsize, (0, 0), colspan=2, rowspan=2)
+                    ax_mag = pl.subplot2grid(gridsize, (2, 0), colspan=2, rowspan=1)
+                    ax_pha = pl.subplot2grid(gridsize, (0, 2), colspan=1, rowspan=2)
+
+                    if fig_size is None:
+                        fig_size = (16, 10)
+
+                    fig.set_size_inches(fig_size[0], fig_size[1])
+                    formatter0 = EngFormatter(unit='Hz')
+                    fig.suptitle(title)
+                    line_labels = []
+                    legend_handler_list = []
+
+                    # label informations
+                    if len(filenames) == 1:
+                        label = ""
+                    else:
+                        label += "file: %s\n"%filenames[i]
+
+                    label += "$f_0$: %.2f MHz\n"%(fit_info[i][j]['f0'])
+                    Qi = 1./(1./fit_info[i][j]['Qr'] - 1./np.abs(fit_info[i][j]['Qe']))
+                    label+= "$Q_i$: %.2fk, $Q_r$: %.2fk\n"%(Qi/1e3,fit_info[i][j]['Qr']/1e3)
+
+                    r_power = get_readout_power(filenames[i],0)# note that VNA has only one channel
+                    if attenuation == 0 or attenuation is None:
+                        label+='Output per-tone readout power: %.2f dB'%(r_power)
+                    else:
+                        label+= 'On-chip per-tone readout power: %.2f dB'%(r_power-attenuation)
+
+
+                    color = 'black'
+                    mag_fit = vrms2dbm( np.abs(resonators[i][j]['fitted']) )
+                    phase_fit = np.angle(resonators[i][j]['fitted'])
+                    mag_orig = vrms2dbm( np.abs(resonators[i][j]['original']) )
+                    phase_orig = np.angle(resonators[i][j]['original'])
+                    freq_axis = resonators[i][j]['frequency'] - fit_info[i][j]['f0']*1e6
+
+                    if verbose:
+                        print_debug("Plotting %.2f MHz resonator"%(fit_info[i][j]['f0']))
+
+                    #IQ plot is untouched
+                    ax_IQ.plot(resonators[i][j]['fitted'].real, resonators[i][j]['fitted'].imag,color = color, linestyle = 'dotted')
+                    fitl, = ax_IQ.plot(resonators[i][j]['original'].real, resonators[i][j]['original'].imag,color = color)
+                    ax_IQ.set_ylabel("I [ADC]")
+                    ax_IQ.set_xlabel("Q [ADC]")
+
+                    ax_IQ.set_aspect('equal','datalim')
+
+                    ax_IQ.grid()
+                    # magnitude and phase will be relative to F0
+                    ax_mag.plot(freq_axis,mag_fit,color = color, linestyle = 'dotted')
+                    ax_mag.plot(freq_axis,mag_orig,color = color)
+                    ax_mag.grid()
+                    ax_mag.set_ylabel("Magnitude [dB]")
+                    ax_mag.set_xlabel("$\Delta f$ [Hz]")
+                    ax_mag.xaxis.set_major_formatter(formatter0)
+
+                    ax_pha.plot(phase_fit,freq_axis,color = color, linestyle = 'dotted')
+                    ax_pha.plot(phase_orig,freq_axis,color = color)
+                    ax_pha.yaxis.tick_right()
+                    ax_pha.yaxis.set_label_position("right")
+                    ax_pha.grid()
+                    ax_pha.set_ylabel("$\Delta f$ [Hz]")
+                    ax_pha.set_xlabel("Phase [Rad]")
+                    ax_pha.yaxis.set_major_formatter(formatter0)
+
+                    line_labels += [label,]
+                    legend_handler_list += [fitl,]
+
+                    ax_mag.legend(handles = legend_handler_list,     # The line objects
+                               labels=line_labels,   # The labels for each line
+                               borderaxespad=0.3,    # Small spacing around legend box
+                               bbox_to_anchor=(1.04,1),
+                               title = "Solid lines are original data"
+                               )
+                    final_output_name = output_filename+".png"
+                    fig.savefig(final_output_name, bbox_inches = 'tight')
+                    pl.close(fig)
+                    ret_names.append(folder_name+'/'+final_output_name)
+                os.chdir('..')
+            #return a list of filenames
+
+
 
     elif backend == "plotly":
         pass

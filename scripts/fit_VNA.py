@@ -15,13 +15,20 @@ except ImportError:
 
 import argparse
 
-def run(file_list, backend, attenuation, N_peaks, smoothing, a_cutoff, threshold, peak_width, fit_range):
+def run(file_list, backend, attenuation, N_peaks, smoothing, a_cutoff, threshold, peak_width):
     for i in range(len(file_list)):
         if threshold is not None:
             u.extimate_peak_number(file_list[i], threshold = threshold, smoothing = smoothing, peak_width = peak_width, verbose = False, exclude_center = True, diagnostic_plots = True)
         else:
             u.initialize_peaks(file_list[i], N_peaks = N_peaks[i], a_cutoff = a_cutoff, smoothing = smoothing, peak_width = peak_width, Qr_cutoff=4e3, verbose = True, exclude_center = True, diagnostic_plots = True)
-        u.vna_fit(file_list[i], p0=None, fit_range = fit_range, verbose = False)
+        u.vna_fit(file_list[i], p0=None, fit_range = peak_width, verbose = False)
+
+        # all resonator plotted on a single static png can be overwelming
+        if backend == 'matplotlib':
+            single_plots = True
+        else:
+            single_plots = False
+        u.plot_resonators(file_list[i], reso_freq = None, backend = backend, title_info = None, verbose = False, output_filename = None, auto_open = True, attenuation = None,single_plots = single_plots)
 
 if __name__ == "__main__":
 
@@ -35,7 +42,6 @@ if __name__ == "__main__":
     parser.add_argument('--N_peaks', '-p', help='List of numbers containing the number of peaks expected in each VNA in the form -p 1 2 3', nargs='+')
     parser.add_argument('--threshold', '-t', help='threshold for peakfinder algotyrhm. If this argument is given there are no contraint on the number of peaks and the N_peaks argument will be ignored', type=float, default= None)
     parser.add_argument('--peak_width', '-w', help='minimum peak distance and fit init range in Hz. Default behaviour is different if the number of peaks is contrained of if a threshold is provided', type=float, default= 20e3)
-    parser.add_argument('--fit_range', '-f', help='Effective fit range in Hz', type=float, default= 100e3)
 
     args = parser.parse_args()
     os.chdir(args.folder)
@@ -55,4 +61,4 @@ if __name__ == "__main__":
             peaks.append(p)
             print "\'%s\' expected peaks: %d" % (files[i], p)
 
-    run(files, args.backend, args.att, peaks,smoothing = args.smoothing, a_cutoff = args.ac, threshold = args.threshold, peak_width = args.peak_width, fit_range = args.fit_range)
+    run(files, args.backend, args.att, peaks,smoothing = args.smoothing, a_cutoff = args.ac, threshold = args.threshold, peak_width = args.peak_width)

@@ -842,7 +842,7 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
                 fig.append_trace(traceP_fit, 2, 1)
 
         final_filename = output_filename + ".html"
-        plotly.offline.plot(fig, filename=final_filename + ".html", auto_open=auto_open)
+        plotly.offline.plot(fig, filename=final_filename, auto_open=auto_open)
 
     else:
         err_msg = "Backend \'%s\' is not implemented. Cannot plot VNA"%backend
