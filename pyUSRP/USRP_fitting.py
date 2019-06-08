@@ -894,7 +894,7 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
                         label += "file: %s\n"%filenames[i]
 
                     label += "$f_0$: %.2f MHz\n"%(fit_info[i][j]['f0'])
-                    Qi = 1./(1./fit_info[i][j]['Qr'] - 1./np.abs(fit_info[i][j]['Qe']))
+                    Qi = 1./(1./fit_info[i][j]['Qr'] - 1./np.real(fit_info[i][j]['Qe']))
                     label+= "$Q_i$: %.2fk, $Q_r$: %.2fk\n"%(Qi/1e3,fit_info[i][j]['Qr']/1e3)
 
                     r_power = get_readout_power(filenames[i],0)# note that VNA has only one channel
@@ -910,6 +910,9 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
                     mag_orig = vrms2dbm( np.abs(resonators[i][j]['original']) )
                     phase_orig = np.angle(resonators[i][j]['original'])
                     freq_axis = resonators[i][j]['frequency'] - fit_info[i][j]['f0']*1e6
+                    readout_point = find_nearest(freq_axis,brf[i][j]- fit_info[i][j]['f0']*1e6)
+                    readout_point_IQ = resonators[i][j]['original'][readout_point]
+
 
                     if verbose:
                         print_debug("Adding plot of %.2f MHz resonator"%(fit_info[i][j]['f0']))
@@ -917,6 +920,7 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
                     #IQ plot is untouched
                     ax_IQ.plot(resonators[i][j]['fitted'].real, resonators[i][j]['fitted'].imag,color = color, linestyle = 'dotted')
                     fitl, = ax_IQ.plot(resonators[i][j]['original'].real, resonators[i][j]['original'].imag,color = color)
+                    ax_IQ.scatter(readout_point_IQ.real, readout_point_IQ.imag, color=color)
                     ax_IQ.set_ylabel("I [ADC]")
                     ax_IQ.set_xlabel("Q [ADC]")
 
@@ -925,12 +929,14 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
                     ax_mag.plot(freq_axis,mag_fit,color = color, linestyle = 'dotted')
                     ax_mag.plot(freq_axis,mag_orig,color = color)
                     ax_mag.grid()
+                    ax_mag.scatter([freq_axis[readout_point],],[mag_orig[readout_point],], color = color)
                     ax_mag.set_ylabel("Magnitude [dB]")
                     ax_mag.set_xlabel("$\Delta f$ [Hz]")
                     ax_mag.xaxis.set_major_formatter(formatter0)
 
                     ax_pha.plot(phase_fit,freq_axis,color = color, linestyle = 'dotted')
                     ax_pha.plot(phase_orig,freq_axis,color = color)
+                    ax_pha.scatter([phase_orig[readout_point],],[freq_axis[readout_point],], color = color)
                     #ax_pha.yaxis.tick_right()
                     ax_pha.grid()
                     ax_pha.set_ylabel("$\Delta f$ [Hz]")
@@ -950,7 +956,7 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
                        bbox_to_anchor=(0.95,-0.1),
                        loc="lower right",
                        bbox_transform=fig.transFigure,
-                       title = "Solid lines are original data"
+                       title = "Solid lines are original data, marker is readout point."
                        )
             final_output_name = output_filename+".png"
             fig.savefig(final_output_name, bbox_inches = 'tight')
@@ -995,7 +1001,7 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
                         label += "file: %s\n"%filenames[i]
 
                     label += "$f_0$: %.2f MHz\n"%(fit_info[i][j]['f0'])
-                    Qi = 1./(1./fit_info[i][j]['Qr'] - 1./np.abs(fit_info[i][j]['Qe']))
+                    Qi = 1./(1./fit_info[i][j]['Qr'] - 1./np.real(fit_info[i][j]['Qe']))
                     label+= "$Q_i$: %.2fk, $Q_r$: %.2fk\n"%(Qi/1e3,fit_info[i][j]['Qr']/1e3)
 
                     r_power = get_readout_power(filenames[i],0)# note that VNA has only one channel
@@ -1011,7 +1017,7 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
                     mag_orig = vrms2dbm( np.abs(resonators[i][j]['original']) )
                     phase_orig = np.angle(resonators[i][j]['original'])
                     freq_axis = resonators[i][j]['frequency'] - fit_info[i][j]['f0']*1e6
-
+                    readout_point = find_nearest(freq_axis,brf[i][j]- fit_info[i][j]['f0']*1e6)
                     if verbose:
                         print_debug("Plotting %.2f MHz resonator"%(fit_info[i][j]['f0']))
 
@@ -1020,13 +1026,15 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
                     fitl, = ax_IQ.plot(resonators[i][j]['original'].real, resonators[i][j]['original'].imag,color = color)
                     ax_IQ.set_ylabel("I [ADC]")
                     ax_IQ.set_xlabel("Q [ADC]")
-
+                    readout_point_IQ = resonators[i][j]['original'][readout_point]
+                    ax_IQ.scatter(readout_point_IQ.real, readout_point_IQ.imag, color=color)
                     ax_IQ.set_aspect('equal','datalim')
 
                     ax_IQ.grid()
                     # magnitude and phase will be relative to F0
                     ax_mag.plot(freq_axis,mag_fit,color = color, linestyle = 'dotted')
                     ax_mag.plot(freq_axis,mag_orig,color = color)
+                    ax_mag.scatter([freq_axis[readout_point],],[mag_orig[readout_point],], color = color)
                     ax_mag.grid()
                     ax_mag.set_ylabel("Magnitude [dB]")
                     ax_mag.set_xlabel("$\Delta f$ [Hz]")
@@ -1036,6 +1044,7 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
                     ax_pha.plot(phase_orig,freq_axis,color = color)
                     ax_pha.yaxis.tick_right()
                     ax_pha.yaxis.set_label_position("right")
+                    ax_pha.scatter([phase_orig[readout_point],],[freq_axis[readout_point],], color = color)
                     ax_pha.grid()
                     ax_pha.set_ylabel("$\Delta f$ [Hz]")
                     ax_pha.set_xlabel("Phase [Rad]")
@@ -1055,12 +1064,85 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
                     pl.close(fig)
                     ret_names.append(folder_name+'/'+final_output_name)
                 os.chdir('..')
+
             #return a list of filenames
-
-
+            final_output_name = ret_names
 
     elif backend == "plotly":
-        pass
+    	fig = tools.make_subplots(
+            rows=3, cols=3,
+            specs=[
+                [
+                    {'rowspan': 2, 'colspan': 2 },
+                    None,
+                    {'rowspan': 3}
+                ],
+                [None, None,None],
+                [{'colspan': 2}, None,None],
+            ],
+            print_grid=True,subplot_titles=('IQ circle', 'Phase','Magnitude')
+        )
+        title_fig = r'Fit (dashed) vs data (solid). Zero is set to f0 of each resonator, marker is the readout frequency.<br>'
+        if len(filenames) == 1:
+            title_fig+="From file %s"%filenames[0]
+        else:
+            title_fig+="From multiple (%d) files"%(len(filenames))
+        for i in range(len(filenames)):
+            for j in range(len(resonators[i])):
+
+                if len(filenames) == 1:
+                    label = ""
+                else:
+                    label += "file: %s<br>"%filenames[i]
+
+                label += r'f_0: %.2f MHz<br>'%(fit_info[i][j]['f0'])
+                Qi = 1./(1./fit_info[i][j]['Qr'] - 1./np.real(fit_info[i][j]['Qe']))
+                label+= r'Qi: %.2fk, Qr: %.2fk<br>'%(Qi/1e3,fit_info[i][j]['Qr']/1e3)
+
+                r_power = get_readout_power(filenames[i],0)# note that VNA has only one channel
+                if attenuation == 0 or attenuation is None:
+                    label+='Output per-tone readout power: %.2f dB'%(r_power)
+                else:
+                    label+= 'On-chip per-tone readout power: %.2f dB'%(r_power-attenuation)
+                #sorry for monoblock programming, python sometimes goes crazy with indent
+                x = i*len(resonators[i])+j
+                c = get_color(i+j)
+                mag_fit = vrms2dbm( np.abs(resonators[i][j]['fitted']) )
+                phase_fit = np.angle(resonators[i][j]['fitted'])
+                mag_orig = vrms2dbm( np.abs(resonators[i][j]['original']) )
+                phase_orig = np.angle(resonators[i][j]['original'])
+                freq_axis = resonators[i][j]['frequency'] - fit_info[i][j]['f0']*1e6
+                readout_point = find_nearest(freq_axis,brf[i][j]- fit_info[i][j]['f0']*1e6)
+                readout_point_IQ = resonators[i][j]['original'][readout_point]
+                trace_magnitude = go.Scatter(x=freq_axis, y=mag_orig,name = label,legendgroup = str(x),line = dict(color = c))
+                trace_phase = go.Scatter(y=freq_axis, x=phase_orig, showlegend = False,legendgroup = str(x),line = dict(color = c))
+                trace_cirlce = go.Scatter(x=resonators[i][j]['original'].real, y=resonators[i][j]['original'].imag, showlegend = False,legendgroup = str(x),line = dict(color = c))
+                trace_fit_magnitude = go.Scatter(x=freq_axis, y=mag_fit,showlegend = False,legendgroup = str(x),line = dict(dash = 'dash',color = c))
+                trace_fit_phase = go.Scatter(y=freq_axis, x=phase_fit,legendgroup = str(x),showlegend = False,line = dict(dash = 'dash',color = c))
+                trace_fit_circle = go.Scatter(x=resonators[i][j]['fitted'].real, y=resonators[i][j]['fitted'].imag,legendgroup = str(x),showlegend = False,line = dict(dash = 'dash',color = c))
+                trace_f0_circle = go.Scatter(x = [readout_point_IQ.real,], y = [readout_point_IQ.imag,], name = "Best responsivity point",mode = 'markers',marker=dict(size=10,opacity = 1,symbol='circle',color = c,line = dict(width = 1,color = "black")),legendgroup = str(x))
+                trace_f0_mag = go.Scatter(x=[freq_axis[readout_point],],y=[mag_orig[readout_point],],showlegend = False,mode = 'markers',marker=dict(size=10,opacity = 1,symbol='circle',color = c,line = dict(width = 1,color = "black")),legendgroup = str(x))
+                trace_f0_phase = go.Scatter(x=[phase_orig[readout_point],],y=[freq_axis[readout_point],],showlegend = False,mode = 'markers',marker=dict(size=10,opacity = 1,symbol='circle',color = c,line = dict(width = 1,color = "black")),legendgroup = str(x))
+                fig.append_trace(trace_cirlce,1,1)
+                fig.append_trace(trace_f0_circle,1,1)
+                fig.append_trace(trace_phase,1,3)
+                fig.append_trace(trace_f0_phase,1,3)
+                fig.append_trace(trace_magnitude,3,1)
+                fig.append_trace(trace_f0_mag,3,1)
+                fig.append_trace(trace_fit_circle,1,1)
+                fig.append_trace(trace_fit_phase,1,3)
+                fig.append_trace(trace_fit_magnitude,3,1)
+                fig['layout'].update(title=title_fig)
+                fig['layout']['xaxis3'].update(title='Relative Frequency [Hz]')
+                fig['layout']['yaxis2'].update(title='Relarive Frequency [Hz]')
+                fig['layout']['xaxis1'].update(title='Q [ADC]')
+                fig['layout']['yaxis3'].update(title='Magnitude [dB]')
+                fig['layout']['xaxis2'].update(title='Phase [Rad]')
+                fig['layout']['yaxis1'].update(title='I [ADC]',scaleanchor = "x",)
+
+        final_output_name = output_filename+".html"
+        plotly.offline.plot(fig, filename=final_output_name,auto_open=auto_open)
+
     else:
         print_error("Resonator plot ha no %s backend implemented"%backend)
 

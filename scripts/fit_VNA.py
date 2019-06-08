@@ -28,7 +28,7 @@ def run(file_list, backend, attenuation, N_peaks, smoothing, a_cutoff, threshold
             single_plots = True
         else:
             single_plots = False
-        u.plot_resonators(file_list[i], reso_freq = None, backend = backend, title_info = None, verbose = False, output_filename = None, auto_open = True, attenuation = None,single_plots = single_plots)
+        u.plot_resonators(file_list[i], reso_freq = None, backend = 'plotly', title_info = None, verbose = False, output_filename = None, auto_open = True, attenuation = None,single_plots = single_plots)
 
 if __name__ == "__main__":
 
