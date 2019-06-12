@@ -442,6 +442,281 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
 
     return output_filename
 
+
+def VNA_timestream_analysis(filename, usrp_number = 0):
+    '''
+    Open a H5 file containing data collected with the function single_VNA() and analyze them as multiple VNA scans, one per iteration.
+
+    :param filename: string containing the name of the H5 file.
+    :param usrp_number: usrp server number.
+    '''
+
+    usrp_number = int(usrp_number)
+
+    try:
+        filename = format_filename(filename)
+    except:
+        print_error("Cannot interpret filename while opening a H5 file in Single_VNA_analysis function")
+        raise ValueError("Cannot interpret filename while opening a H5 file in Single_VNA_analysis function")
+
+    print("Analyzing VNA file \'%s\'..."%filename)
+
+    parameters = global_parameter()
+    parameters.retrive_prop_from_file(filename)
+
+    front_ends = ["A_RX2", "B_RX2"]
+    active_front_ends = []
+    info = []
+    for ant in front_ends:
+        if (parameters.parameters[ant]['mode'] == "RX") and (parameters.parameters[ant]['wave_type'][0] == "CHIRP"):
+            info.append(parameters.parameters[ant])
+            active_front_ends.append(ant)
+
+    # Nedded for the calibration calculations
+    front_ends_tx= ["A_TXRX", "B_TXRX"]
+    gains = []
+    ampls = []
+    for ant in front_ends_tx:
+        if parameters.parameters[ant]['mode'] == "TX" and parameters.parameters[ant]['wave_type'][0] == "CHIRP":
+            gains.append(parameters.parameters[ant]['gain'])
+            ampls.append(parameters.parameters[ant]['ampl'][0])
+
+    print_debug("Found %d active frontends"%len(info))
+
+    freq_axis = np.asarray([])
+    S21_axis = np.asarray([])
+    length = []
+    calibration = []
+    fr = 0
+
+    for single_frontend in info:
+        iterations = int((single_frontend['samples']/single_frontend['rate'])/single_frontend['chirp_t'][0])
+        print_debug("Frontend \'%s\' has %d VNA iterations" % (front_ends[fr], iterations))
+
+        #effective calibration
+        calibration.append( (1./ampls[fr])*USRP_calibration/(10**((USRP_power + gains[fr])/20.)) )
+        print_debug("Calculating calibration with %d dB gain and %.3f amplitude correction"%(gains[fr],ampls[fr]))
+
+        if single_frontend['decim'] == 1:
+            # Lock-in decimated case -> direct map.
+            freq_axis_tmp = np.linspace(single_frontend['freq'][0],single_frontend['chirp_f'][0], single_frontend['swipe_s'][0],
+                        dtype = np.float64) + single_frontend['rf']
+
+            S21_axis_tmp = np.split(openH5file(filename, front_end = active_front_ends[fr])[0], iterations)
+
+            length.append(single_frontend['swipe_s'])
+
+        elif single_frontend['decim'] > 1:
+            # Over decimated case.
+            freq_axis_tmp  = np.linspace(single_frontend['freq'][0], single_frontend['chirp_f'][0], single_frontend['swipe_s'][0]/single_frontend['decim'],
+                                    dtype=np.float64) + single_frontend['rf']
+
+            S21_axis_tmp = np.split(openH5file(filename, front_end=active_front_ends[fr])[0], iterations)
+
+            length.append(single_frontend['swipe_s'][0]/single_frontend['decim'])
+
+        else:
+            # Undecimated case. Decimation has to happen here.
+            freq_axis_tmp  = np.linspace(single_frontend['freq'][0], single_frontend['chirp_f'][0], single_frontend['swipe_s'][0],
+                                    dtype=np.float64) + single_frontend['rf']
+            S21_axis_tmp = np.mean(np.split(openH5file(filename, front_end = active_front_ends[fr])[0], single_frontend['swipe_s'][0]), axis = 1)
+
+            length.append(single_frontend['swipe_s'][0])
+
+        if fr == 0:
+            freq_axis = freq_axis_tmp
+            S21_axis = S21_axis_tmp
+        else:
+            freq_axis = np.concatenate((freq_axis, freq_axis_tmp),axis = 1)
+            S21_axis = np.concatenate((S21_axis, S21_axis_tmp), axis = 1)
+        fr+=1
+
+
+
+    try:
+        f = h5py.File(filename, 'r+')
+    except IOError as msg:
+        print_error("Cannot open "+str(filename)+" file in VNA_timestream_analysis function"+ str(msg))
+        raise ValueError("Cannot open "+str(filename)+" file in VNA_timestream_analysis function: "+ str(msg))
+
+    try:
+        vna_grp = f.create_group("VNA_dynamic_%d"%(usrp_number))
+    except ValueError:
+        print_warning("Overwriting VNA group")
+        del f["VNA_dynamic_%d"%(usrp_number)]
+        vna_grp = f.create_group("VNA_dynamic_%d"%(usrp_number))
+
+    vna_grp.attrs.create("scan_lengths", length)
+    vna_grp.attrs.create("calibration", calibration)
+
+    vna_grp.create_dataset("frequency", data = freq_axis, dtype=np.float64)
+    vna_grp.create_dataset("S21", data = S21_axis, dtype=np.complex128)
+
+    f.close()
+
+    print_debug("Analysis of file \'%s\' concluded."%filename)
+
+# def get_dynamic_VNA_data(filename):
+
+def VNA_timestream_plot(filename, backend = 'matplotlib', mode = 'magnitude'):
+    '''
+    Plot the VNA timestream analysis result.
+
+    :param filename: string containing the name of the H5 file.
+    :param backend: the backend used to plot the data.
+    :param mode: the mode used to plot the data:
+        * magnitude: magnitude of the data.
+        * phase: S21 phase.
+        * df: magnitude of the derivarive of S21 in the frequency direction.
+        * dt : magnitude of the derivarive of S21 in the time direction.
+    '''
+    print("Plotting VNA(s)...")
+
+    return
+    try:
+        html_output = kwargs['html']
+    except KeyError:
+        html_output = False
+
+    try:
+        att = kwargs['att']
+    except KeyError:
+        att = None
+
+    try:
+        auto_open = kwargs['auto_open']
+    except KeyError:
+        auto_open = True
+
+    try:
+        fig_size = kwargs['figsize']
+    except KeyError:
+        fig_size = None
+
+    # filename, = to_list_of_str(filename)
+
+    try:
+        add_info_labels = kwargs['add_info']
+        if len(add_info_labels) != len(filename):
+            print_warning("Cannot add info labels. add_info has to be the same length of filenames")
+            add_info_labels = None
+    except KeyError:
+        add_info_labels = None
+
+    try:
+        title = kwargs['title']
+    except KeyError:
+        if len(filename) == 1:
+            title = "VNA plot from file %s"%filenames[0]
+        else:
+            title = "VNA comparison plot"
+
+    if len(filename) == 0:
+        err_msg = "File list empty, cannot plot VNA"
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    freq_axes = []
+    S21_axes = []
+    final_filename = ""
+    reso_axes = []
+
+    if verbose: print_debug("Plotting VNA from file \'%s\'"%filename)
+    freq_tmp, S21_tmp = get_dynamic_VNA_data(filename)
+
+    freq_axes.append(freq_tmp)
+    S21_axes.append(S21_tmp)
+    # reso_axes.append( get_init_peaks(filename, verbose = verbose))
+
+    del S21_tmp
+    del freq_tmp
+
+    if output_filename is None:
+        output_filename = "VNA"
+        # if len(filenames)>1:
+        #     output_filename+="_compare"
+        output_filename+="_"+get_timestamp()
+
+    fit_label = ""
+
+    if backend == "matplotlib":
+        if verbose: print_debug("Using matplotlib backend...")
+
+        fig, ax = pl.subplots(nrows=2, ncols=1, sharex=True)
+
+        if fig_size is None:
+            fig_size = (16, 10)
+
+        fig.set_size_inches(fig_size[0], fig_size[1])
+
+        fig.suptitle(title)
+
+        for i in range(len(filenames)):
+
+            mag = vrms2dbm(np.abs(S21_axes[i]))
+
+            if unwrap_phase:
+                phase = linear_phase(np.angle(S21_axes[i]))
+            else:
+                phase = np.angle(S21_axes[i])
+
+            label = filenames[i]
+            resolution = freq_axes[i][1] - freq_axes[i][0]
+
+            if resolution < 1e3:
+                label += "\nResolution %d Hz" % int(resolution)
+            else:
+                label += "\nResolution %.1f kHz" % (resolution/1e3)
+
+            readout_power = get_readout_power(filenames[i], 0)
+
+            if att is None:
+                label+="\nReadout power: %.2f dBm"%readout_power
+            else:
+                label += "\nOn-chip power: %.2f dBm"%(readout_power-att)
+
+            if add_info_labels is not None:
+                label += "\n"+str(add_info_labels[i])
+
+            color = get_color(i)
+            if color == 'black':
+                other_color = 'red'
+            else:
+                other_color = 'black'
+
+            ax[0].plot(freq_axes[i], mag, color = color, label = label)
+            ax[1].plot(freq_axes[i], phase, color = color)
+
+            # if there are initialized resoantor in the file...
+            if len(reso_axes[i]) > 0:
+                x_points = []
+                mag_y_points = []
+                pha_y_points = []
+                for point in reso_axes[i]:
+                    index = find_nearest(freq_axes[i], point)
+                    x_points.append(freq_axes[i][index])
+                    mag_y_points.append(mag[index])
+                    pha_y_points.append(phase[index])
+                if fit_label is not None:
+                    fit_label = "Fit initialization"
+                ax[0].scatter(x_points, mag_y_points, s=80, facecolors='none', edgecolors=other_color, label = fit_label)
+                ax[1].scatter(x_points, pha_y_points, s=80, facecolors='none', edgecolors=other_color)
+                fit_label = None
+
+        ax[0].set_ylabel("Magnitude [dB]")
+        ax[1].set_ylabel("Phase [Rad]")
+        ax[1].set_xlabel("Frequency [Hz]")
+
+        formatter0 = EngFormatter(unit='Hz')
+        ax[1].xaxis.set_major_formatter(formatter0)
+
+        ax[0].legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+        ax[0].grid()
+        ax[1].grid()
+        final_filename = output_filename+".png"
+        pl.savefig(final_filename, bbox_inches="tight")
+
+
 def VNA_analysis(filename, usrp_number = 0):
     '''
     Open a H5 file containing data collected with the function single_VNA() and analyze them as a VNA scan.
