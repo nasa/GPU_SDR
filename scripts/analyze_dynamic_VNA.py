@@ -32,5 +32,8 @@ if __name__ == "__main__":
     os.chdir(args.folder)
 
     list_of_files = glob.glob("USRP_VNA*.h5")
-    latest_file = [x.split(".")[0] for x in (sorted(list_of_files, key=os.path.getctime))][0]
+    file_headers = [x.split(".")[0] for x in list_of_files]
+    sorted_files = list(sorted(file_headers, key=lambda x: int(x.split("_")[-1])))
+    print sorted_files
+    latest_file = sorted_files[2]
     run(backend = args.backend, f = latest_file, decim = args.plot_decimate)
