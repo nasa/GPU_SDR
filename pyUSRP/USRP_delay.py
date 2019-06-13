@@ -294,7 +294,7 @@ def analyze_line_delay(filename, diagnostic_plots = False):
 
     delay = freq[Pxx.argmax()] * coeff
 
-    delay = int(delay * 1e8) / 1.e8
+    delay = int(delay * 2e8) / 2.e8
 
     print_debug("Delay found %d ns"%int(delay*1e9))
 

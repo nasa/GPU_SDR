@@ -321,13 +321,13 @@ def Single_VNA(start_f, last_f, measure_t, n_points, tx_gain, Rate = None, decim
         delta_f = max(start_f,last_f) - min(start_f,last_f)
 
     if delta_f > 1.6e8:
-        err_msg = "Frequency range for the VNA scan is too large compared to maximum system bandwidth"
-        print_error(err_msg)
-        raise ValueError(err_msg)
+        err_msg = "Frequency range for the VNA scan may be too large compared to maximum system bandwidth"
+        print_warning(err_msg)
+        #raise ValueError(err_msg)
     elif delta_f > 1e8:
-        err_msg = "Frequency range for the VNA scan is too large compared to actual system bandwidth"
-        print_error(err_msg)
-        raise ValueError(err_msg)
+        err_msg = "Frequency range for the VNA scan may be too large compared to actual system bandwidth"
+        print_warning(err_msg)
+        #raise ValueError(err_msg)
 
     if not Device_chk(Device):
         err_msg = "Something is wrong with the device check in the VNA function."

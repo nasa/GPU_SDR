@@ -48,6 +48,7 @@ hardware_manager::hardware_manager(server_settings* settings, bool sw_loop_init,
 				if(device_arguments.compare("noarg")!=0){
 					uhd::device_addr_t args(device_arguments);
 					main_usrp = uhd::usrp::multi_usrp::make(args);
+					std::cout<< "Creating device with arguments: "<<device_arguments <<std::endl;
 				}else{
 					main_usrp = uhd::usrp::multi_usrp::make(dev_addrs[usrp_number]);
 				}
