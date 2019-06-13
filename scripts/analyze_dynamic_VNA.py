@@ -35,5 +35,5 @@ if __name__ == "__main__":
     file_headers = [x.split(".")[0] for x in list_of_files]
     sorted_files = list(sorted(file_headers, key=lambda x: int(x.split("_")[-1])))
     print sorted_files
-    latest_file = sorted_files[2]
+    latest_file = sorted_files[0]
     run(backend = args.backend, f = latest_file, decim = args.plot_decimate)

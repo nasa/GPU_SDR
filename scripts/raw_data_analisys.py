@@ -58,7 +58,10 @@ if __name__ == "__main__":
         #psd_img.set_size_inches(18.5, 10.5)
         #ax.psd(demodulation_signal, Fs = info['rate'], NFFT = int(1e6), detrend = 'linear', scale_by_freq = True)
         #psd_img.savefig("signal_dem_psd.png")
-        res = demodulation_signal*Z
+
+        #this is to patch a wierd error
+        l = min(len(demodulation_signal),len(Z)) -1
+        res = demodulation_signal[:l]*Z[:l]
         if decimation is not None:
             res = signal.decimate(res, decimation, ftype='fir')[100:-100]
             snap_len -= 200

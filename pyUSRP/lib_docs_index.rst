@@ -84,8 +84,5 @@ The "VNA" module
 
 *Has the functions needed to acquire, analyze and plot VNAs acquisitions*
 
-.. automodule:: USRP_vna
+.. automodule:: USRP_VNA
     :members:
-
-
-
