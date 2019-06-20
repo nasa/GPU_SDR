@@ -939,6 +939,7 @@ def calculate_frequency_timestream(noise_frequency, noise_data, fit_param):
     The original function has been stripped of the matplotlib capabilities and adapted to the scope of this library.
 
     Arguments:
+<<<<<<< HEAD
         - noise_frequency: float, Noise acquisition tone in Hz.
         - noise_data: list of complex, Noise data already scaled as S21 (see diagnosic() function).
         - fit_param: if fit parameters are given in the form (f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a, _, _, pcov), the fit won't be executed again.
@@ -951,6 +952,19 @@ def calculate_frequency_timestream(noise_frequency, noise_data, fit_param):
 
     try:
         f0, A, phi, D, Qi, Qr, Qe_re, Qe_im, a = fit_param
+=======
+    	- noise_frequency: float, Noise acquisition tone in Hz.
+    	- noise_data: list of complex, Noise data already scaled as S21 (see diagnosic() function).
+    	- fit_param: if fit parameters are given in the form (f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a, _, _, pcov), the fit won't be executed again.
+
+    Returns:
+    	- X noise
+    	- Qr noise
+
+	"""
+    try:
+        f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a = fit_param
+>>>>>>> cb69964b7fcddbf195c80befc13d0141df2370ae
     except:
         err_msg = "Fit parameter given to calculate_frequency_timestream() are not good."
         print_error(err_msg)
