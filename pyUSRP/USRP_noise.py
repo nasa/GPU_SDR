@@ -950,10 +950,10 @@ def calculate_frequency_timestream(noise_frequency, noise_data, fit_param):
 
 	try:
 		f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a = fit_param
-
 	except:
-		print "ERROR: Fit parameter given to get_frequency_timestream() are not good."
-		return
+        err_msg = "Fit parameter given to calculate_frequency_timestream() are not good."
+		print_error(err_msg)
+		raise ValueError(err_msg)
 
 	Qe = Qe_re + 1.j*Qe_im
 
@@ -995,7 +995,7 @@ def copy_resonator_group(VNA_filename, NOISE_filename):
 
     return
 
-def get_frequency_timestreams(NOISE_filename, start = None, end = None, channel_freq = None):
+def get_frequency_timestreams(NOISE_filename, start = None, end = None, channel_freq = None, frontend = None):
     '''
     Returns the frequency and quality factor timestreams from a noise file in which a resonator group has been already copied.
     To copy the resonator group refer to copy_resonator_group() function.
@@ -1005,6 +1005,7 @@ def get_frequency_timestreams(NOISE_filename, start = None, end = None, channel_
         - start: start time in seconds. Default is from the beginning of the file.
         - end: end of the data in seconds. Default is up to file's end.
         - channel_freq: list of frequency of the channels to return. Default is all of them.
+        - frontend: from which frontend to take the noise data. Default is A.
 
     Returns:
         - tuple containing frequency timestreams and quality factor timestreams. Each element of the tuple is a list of timestreams.
@@ -1014,7 +1015,55 @@ def get_frequency_timestreams(NOISE_filename, start = None, end = None, channel_
         >>> # This will retrive frequency and quality factor timestreams of the 325.5 MHz channel (or closest) from the file "noisefile.h5" between 1 and 1.5 seconds of acquisition.
     '''
 
-    return
+    NOISE_filename = format_filename(NOISE_filename)
+    print_debug("Opening file \'%s\'..."%NOISE_filename)
+    if frontend is not None:
+        if frontend == 'A':
+            ant = "A_RX2"
+        elif frontend == 'B':
+            ant = "B_RX2"
+        else:
+            err_msg = "cannot recognize frontend code \'%s\' in get_frequency_timestreams()"%frontend
+            print_error(err_msg)
+            raise ValueError(err_msg)
+    else:
+        ant = frontend
+
+    info = get_rx_info(NOISE_filename, ant=ant)
+    if start is not None:
+        time_conv = float(info['rate'])/info['fft_tones']
+        start_sample = time_conv*start
+        end_sample = time_conv*end
+    else:
+        start_sample = start
+
+    tones = np.asarray(info['tones'])+info['rf']
+
+    if channel_freq is not None:
+        print_debug("Channel selected: ")
+        numeric_channel_list = []
+        for x in channel_freq:
+            j = find_nearest(tones,x)
+            numeric_channel_list.append(j)
+            print_debug("%d) %.2f MHz"%(len(numeric_channel_list),tones[j]/1e6))
+
+    else:
+        numeric_channel_list = channel_freq
+
+    params = get_fit_param(NOISE_filename, verbose = False)
+
+    data = openH5file(NOISE_filename, ch_list=numeric_channel_list, start_sample=start_sample, last_sample=last_sample, usrp_number=None, front_end=frontend,
+                   verbose=False, error_coord=False, big_file = False)
+    result_f = []
+    result_q = []
+    for i in range(len(data)):
+        f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a
+        fit_param = (params[i]['f0'], params[i]['A'], params[i]['phi'], params[i]['D'], params[i]['Qi'], params[i]['Qr'], np.real(params[i]['Qe']),np.imag(params[i]['Qe']),params[i]['a'])
+        f_ts, q_ts = calculate_frequency_timestream(tones[i], data[i], fit_param)
+        result_f.append(f_ts)
+        result_q.append(q_ts)
+
+    return result_f, result_q
 
 def plot_frequency_timestreams():
     # copied from plot_raw
