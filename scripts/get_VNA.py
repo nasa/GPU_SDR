@@ -12,20 +12,26 @@ except ImportError:
 
 import argparse
 
-def run(gain,iter,rate,freq,front_end, f0,f1, lapse, points, ntones, delay_duration):
+def run(gain,iter,rate,freq,front_end, f0,f1, lapse, points, ntones, delay_duration, delay_over):
 
     try:
         if u.LINE_DELAY[str(int(rate/1e6))]: pass
     except KeyError:
-        print "Cannot find line delay. Measuring line delay before VNA:"
 
-        filename = u.measure_line_delay(rate, freq, front_end, USRP_num=0, tx_gain=0, rx_gain=0, output_filename=None, compensate = True, duration = delay_duration)
+        if delay_over is None:
+            print "Cannot find line delay. Measuring line delay before VNA:"
 
-        delay = u.analyze_line_delay(filename, True)
+            filename = u.measure_line_delay(rate, freq, front_end, USRP_num=0, tx_gain=0, rx_gain=0, output_filename=None, compensate = True, duration = delay_duration)
 
-        u.write_delay_to_file(filename, delay)
+            delay = u.analyze_line_delay(filename, True)
 
-        u.load_delay_from_file(filename)
+            u.write_delay_to_file(filename, delay)
+
+            u.load_delay_from_file(filename)
+
+        else:
+
+            u.set_line_delay(rate, delay_over)
 
         if ntones ==1:
             ntones = None
@@ -52,6 +58,7 @@ if __name__ == "__main__":
     parser.add_argument('--gain', '-g', help='set the transmission gain. Multiple gains will result in multiple scans (per frequency). Default 0 dB',  nargs='+')
     parser.add_argument('--tones', '-tones', help='expected number of resonators',  type=int)
     parser.add_argument('--delay_duration', '-dd', help='Duration of the delay measurement',  type=float, default=0.01)
+    parser.add_argument('--delay_over', '-dd', help='Manually set line delay in nanoseconds. Skip the line delay measure.',  type=float)
 
     args = parser.parse_args()
 
@@ -109,7 +116,8 @@ if __name__ == "__main__":
                     lapse = args.time,
                     points = args.points,
                     ntones = ntones,
-                    delay_duration = args.delay_duration
+                    delay_duration = args.delay_duration,
+                    delay_over = args.delay_over
                 )
 
     u.Disconnect()
