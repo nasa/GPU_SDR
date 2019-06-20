@@ -984,7 +984,11 @@ def copy_resonator_group(VNA_filename, NOISE_filename):
         - None
     '''
     VNA_filename = format_filename(VNA_filename)
+    #check if the orinal ha the resonator group
+
     NOISE_filename = format_filename(NOISE_filename)
+
+    #if the group is already present overwrite
 
     print_debug("Copying resonator group from \'%s\' to \'%s\' ..."%(VNA_filename,NOISE_filename))
 
