@@ -46,6 +46,7 @@ import progressbar
 from USRP_low_level import *
 from USRP_files import *
 from USRP_delay import *
+from USRP_fitting import get_fit_param
 
 def dual_get_noise(tones_A, tones_B, measure_t, rate, decimation = None, amplitudes_A = None, amplitudes_B = None, RF_A = None, RF_B = None, tx_gain_A = 0, tx_gain_B = 0, output_filename = None,
               Device = None, delay = None, pf_average = 4, **kwargs):
@@ -938,6 +939,20 @@ def calculate_frequency_timestream(noise_frequency, noise_data, fit_param):
     The original function has been stripped of the matplotlib capabilities and adapted to the scope of this library.
 
     Arguments:
+<<<<<<< HEAD
+        - noise_frequency: float, Noise acquisition tone in Hz.
+        - noise_data: list of complex, Noise data already scaled as S21 (see diagnosic() function).
+        - fit_param: if fit parameters are given in the form (f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a, _, _, pcov), the fit won't be executed again.
+
+    Returns:
+        - X noise
+        - Qr noise
+
+    """
+
+    try:
+        f0, A, phi, D, Qi, Qr, Qe_re, Qe_im, a = fit_param
+=======
     	- noise_frequency: float, Noise acquisition tone in Hz.
     	- noise_data: list of complex, Noise data already scaled as S21 (see diagnosic() function).
     	- fit_param: if fit parameters are given in the form (f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a, _, _, pcov), the fit won't be executed again.
@@ -949,26 +964,27 @@ def calculate_frequency_timestream(noise_frequency, noise_data, fit_param):
 	"""
     try:
         f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a = fit_param
+>>>>>>> cb69964b7fcddbf195c80befc13d0141df2370ae
     except:
         err_msg = "Fit parameter given to calculate_frequency_timestream() are not good."
         print_error(err_msg)
         raise ValueError(err_msg)
 
-	Qe = Qe_re + 1.j*Qe_im
+    Qe = Qe_re + 1.j*Qe_im
 
-	dQe = 1./Qe
+    dQe = 1./Qe
 
-	f0 *= 1e6
+    f0 *= 1e6
 
-	#1. Remove the cable phase and the amplitude scaling from the time streams
-	n_amplitude =   A * np.exp(2.j*pi*(1e-6*D*(noise_frequency  -f0) + phi))
+    #1. Remove the cable phase and the amplitude scaling from the time streams
+    n_amplitude =   A * np.exp(2.j*np.pi*(1e-6*D*(noise_frequency  -f0) + phi))
 
-	#print "noise offet: %.2f: "%np.abs(n_amplitude)
-	noise_data /= n_amplitude
+    #print "noise offet: %.2f: "%np.abs(n_amplitude)
+    noise_data /= n_amplitude
 
-	qrx_noise = dQe/(1.-noise_data)
+    qrx_noise = dQe/(1.-noise_data)
 
-	return 1./qrx_noise.real, f0*qrx_noise.imag/2.
+    return 1./qrx_noise.real, f0*qrx_noise.imag/2.
 
 
 def copy_resonator_group(VNA_filename, NOISE_filename):
@@ -1046,14 +1062,16 @@ def get_frequency_timestreams(NOISE_filename, start = None, end = None, channel_
         ant = frontend
 
     info = get_rx_info(NOISE_filename, ant=ant)
+    last_sample = None
     if start is not None:
         time_conv = float(info['rate'])/info['fft_tones']
         start_sample = time_conv*start
-        end_sample = time_conv*end
+        if end is not None:
+            last_sample = time_conv*end
     else:
-        start_sample = start
+        start_sample = 0
 
-    tones = np.asarray(info['tones'])+info['rf']
+    tones = np.asarray(info['freq'])+info['rf']
 
     if channel_freq is not None:
         print_debug("Channel selected: ")
@@ -1073,7 +1091,7 @@ def get_frequency_timestreams(NOISE_filename, start = None, end = None, channel_
     result_f = []
     result_q = []
     for i in range(len(data)):
-        f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a
+        # f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a
         fit_param = (params[i]['f0'], params[i]['A'], params[i]['phi'], params[i]['D'], params[i]['Qi'], params[i]['Qr'], np.real(params[i]['Qe']),np.imag(params[i]['Qe']),params[i]['a'])
         f_ts, q_ts = calculate_frequency_timestream(tones[i], data[i], fit_param)
         result_f.append(f_ts)
@@ -1082,7 +1100,7 @@ def get_frequency_timestreams(NOISE_filename, start = None, end = None, channel_
     return result_f, result_q
 
 def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=None, low_pass=None, backend='matplotlib', output_filename=None,
-                  channel_list=None, mode='IQ', start_time=None, end_time=None, auto_open=True, **kwargs):
+                  channel_list=None, start_time=None, end_time=None, auto_open=True, **kwargs):
         '''
         Plot frequency timestreams from given H5 noise files.
 
@@ -1100,9 +1118,6 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
 
             - output_filename: string: name of the file saved. Default is a timestamp.
             - channel_list: select only al list of channels to plot.
-            - mode: [string] how to print the IQ signals. Allowed modes are:
-                * IQ: default. Just plot the IQ signal with no processing.
-                * PM: phase and magnitude. The fase will be unwrapped and the offset will be removed.
             - start_time: time where to start plotting. Default is 0.
             - end_time: time where to stop plotting. Default is end of the measure.
             - auto_open: open the plot in default system browser if plotly backend is selected (non-blocking). Default is True.
@@ -1117,6 +1132,8 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
         Note:
             - Possible errors are signaled on the plot.
         '''
+        import pdb
+        pdb.set_trace()
         downsample_warning = True
         overwriting_decim_waring = True
         try:
@@ -1139,32 +1156,19 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
             ax[1].set_xlabel("Time [s]")
             formatter0 = EngFormatter(unit='s')
             ax[1].xaxis.set_major_formatter(formatter0)
-            if mode == 'IQ':
-                formatter1 = EngFormatter(unit='')
-                ax[0].set_ylabel("I [fp ADC]")
-                ax[1].set_ylabel("Q [fp ADC]")
-                ax[0].yaxis.set_major_formatter(formatter1)
-                ax[1].yaxis.set_major_formatter(formatter1)
-            elif mode == 'PM':
-                #formatter1 = EngFormatter(unit='')
-                ax[0].set_ylabel("Magnitude [abs(ADC)]")
-                ax[1].set_ylabel("Phase [Rad]")
-                #ax[0].yaxis.set_major_formatter(formatter1)
-                #ax[1].yaxis.set_major_formatter(formatter1)
+            formatter1 = EngFormatter(unit='')
+            ax[0].set_ylabel("Frequency Shift [Hz]")
+            ax[1].set_ylabel("Qr")
+            ax[0].yaxis.set_major_formatter(formatter1)
+            ax[1].yaxis.set_major_formatter(formatter1)
+
 
         elif backend == 'plotly':
-            if mode == 'IQ':
-                fig = tools.make_subplots(rows=2, cols=1, subplot_titles=('I timestream', 'Q timestream'),
-                                          shared_xaxes=True)
-                fig['layout']['yaxis1'].update(title='I [fp ADC]')
-                fig['layout']['yaxis2'].update(title='Q [fp ADC]')
-                fig['layout']['xaxis'].update(exponentformat='SI')
-                #fig['layout']['xaxis2'].update(exponentformat='SI')
-            elif mode == 'PM':
-                fig = tools.make_subplots(rows=2, cols=1, subplot_titles=('Magnitude', 'Phase'), shared_xaxes=True)
-                fig['layout']['yaxis1'].update(title='Magnitude [abs(ADC)]')
-                fig['layout']['yaxis2'].update(title='Phase [Rad]')
-
+            fig = tools.make_subplots(rows=2, cols=1, subplot_titles=('I timestream', 'Q timestream'),
+                                      shared_xaxes=True)
+            fig['layout']['yaxis1'].update(title='Frequency Shift [Hz]')
+            fig['layout']['yaxis2'].update(title='Qr')
+            fig['layout']['xaxis'].update(exponentformat='SI')
             fig['layout']['xaxis1'].update(title='Time [s]')
 
         filenames = to_list_of_str(filenames)
@@ -1223,25 +1227,31 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
             else:
                 file_end_time = None
 
-            samples, errors = openH5file(
-                filename,
-                ch_list=channel_list,
-                start_sample=file_start_time,
-                last_sample=file_end_time,
-                usrp_number=usrp_number,
-                front_end=front_end,
-                verbose=False,
-                error_coord=True
+            freq_ts, qr_ts = get_frequency_timestreams(filename,
+                start = file_start_time,
+                end = file_end_time,
+                channel_freq = None,
+                frontend = None
             )
+            # samples, errors = openH5file(
+            #     filename,
+            #     ch_list=channel_list,
+            #     start_sample=file_start_time,
+            #     last_sample=file_end_time,
+            #     usrp_number=usrp_number,
+            #     front_end=front_end,
+            #     verbose=False,
+            #     error_coord=True
+            # )
 
             #print_debug("plot_raw_data() found %d channels each long %d samples" % (len(samples), len(samples[0])))
             if channel_list == None:
-                ch_list = range(len(samples))
+                ch_list = range(len(freq_ts))
             else:
-                if max(channel_list) > len(samples):
+                if max(channel_list) > len(freq_ts):
                     print_warning(
                         "Channel list selected in plot_raw_data() is bigger than avaliable channels. plotting all available channels")
-                    ch_list = range(len(samples))
+                    ch_list = range(len(freq_ts))
                 else:
                     ch_list = channel_list
 
@@ -1249,18 +1259,15 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
             # prepare samples TODO
             for i in ch_list:
 
-                if mode == 'IQ':
-                    Y1 = samples[i].real
-                    Y2 = samples[i].imag
-                elif mode == 'PM':
-                    Y1 = np.abs(samples[i])
-                    Y2 = np.angle(samples[i])
+
+                Y1 = freq_ts[i]
+                Y2 = qr_ts[i]
 
                 if displayed_samples is not None:
                     if decimation is not None and overwriting_decim_waring:
                         print_warning("Overwriting offline decimation arguments with displayed_samples")
                         overwriting_decim_waring = False
-                    decimation = int(len(samples[i])/displayed_samples)
+                    decimation = int(len(freq_ts[i])/displayed_samples)
                     if decimation <= 1 and downsample_warning:
                         print_warning("Channel does not require decimation to reach the number of displayed samples")
                         downsample_warning = False
@@ -1274,9 +1281,9 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
                 X = np.arange(len(Y1)) / float(effective_rate / decimation) + file_start_time / float(effective_rate)
 
                 if effective_rate / 1e6 > 1:
-                    rate_tag = 'DAQ rate: %.2f Msps' % (effective_rate / 1e6)
+                    rate_tag = 'rate: %.2f Msps' % (effective_rate / 1e6)
                 else:
-                    rate_tag = 'DAQ rate: %.2f ksps' % (effective_rate / 1e3)
+                    rate_tag = 'rate: %.2f ksps' % (effective_rate / 1e3)
 
                 if freq is None:
                     label = "Channel %d" % i
@@ -1313,11 +1320,6 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
             file_count += 1
         final_filename = ""
         if backend == 'matplotlib':
-            for error in errors:
-                err_start_coord = (error[0] - decimation / 2) / float(effective_rate) + file_start_time
-                err_end_coord = (error[1] + decimation / 2) / float(effective_rate) + file_start_time
-                ax[0].axvspan(err_start_coord, err_end_coord, facecolor='yellow', alpha=0.4)
-                ax[1].axvspan(err_start_coord, err_end_coord, facecolor='yellow', alpha=0.4)
             fig.suptitle(plot_title + "\n" + rate_tag)
             handles, labels = ax[0].get_legend_handles_labels()
             if len(errors) > 0:
