@@ -888,8 +888,9 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
                 for j in range(len(resonators[i])):
 
                     # label informations
+                    label = ""
                     if len(filenames) == 1:
-                        label = ""
+                        pass
                     else:
                         label += "file: %s\n"%filenames[i]
 
@@ -995,8 +996,9 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
                     legend_handler_list = []
 
                     # label informations
+                    label = ""
                     if len(filenames) == 1:
-                        label = ""
+                        pass
                     else:
                         label += "file: %s\n"%filenames[i]
 

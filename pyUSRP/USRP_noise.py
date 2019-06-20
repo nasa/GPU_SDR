@@ -929,3 +929,100 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
 
     print_debug("Noise plotting done")
     return output_filename
+
+
+def calculate_frequency_timestream(noise_frequency, noise_data, fit_param):
+	"""
+    Convert IQ timestreams into frequency and quality factor timestreams.
+	Derived from Albert's function to convert noise data in f0 stream data.
+    The original function has been stripped of the matplotlib capabilities and adapted to the scope of this library.
+
+	Arguments:
+		- noise_frequency: float, Noise acquisition tone in Hz.
+		- noise_data: list of complex, Noise data already scaled as S21 (see diagnosic() function).
+		- fit_param: if fit parameters are given in the form (f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a, _, _, pcov), the fit won't be executed again.
+
+	Returns:
+		- X noise
+		- Qr noise
+
+	"""
+
+	try:
+		f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a = fit_param
+
+	except:
+		print "ERROR: Fit parameter given to get_frequency_timestream() are not good."
+		return
+
+	Qe = Qe_re + 1.j*Qe_im
+
+	dQe = 1./Qe
+
+	f0 *= 1e6
+
+	#1. Remove the cable phase and the amplitude scaling from the time streams
+	n_amplitude =   A * np.exp(2.j*pi*(1e-6*D*(noise_frequency  -f0) + phi))
+
+	#print "noise offet: %.2f: "%np.abs(n_amplitude)
+	noise_data /= n_amplitude
+
+	qrx_noise = dQe/(1.-noise_data)
+
+	return 1./qrx_noise.real, f0*qrx_noise.imag/2.
+
+
+def copy_resonator_group(VNA_filename, NOISE_filename):
+    '''
+    Copy the resonator groups from a VNA file to a mnoise file.
+
+    Arguments:
+        - VNA_filename: name of the file containing the resonator group (can also be an other noise file).
+        - NOISE_filename: name of the file in which to copy the resonator group. If an other resonator group is in place, it will be rewrited.
+
+    Returns:
+        - None
+    '''
+    VNA_filename = format_filename(VNA_filename)
+    NOISE_filename = format_filename(NOISE_filename)
+
+    print_debug("Copying resonator group from \'%s\' to \'%s\' ..."%(VNA_filename,NOISE_filename))
+
+
+    return
+
+def get_frequency_timestreams(NOISE_filename, start = None, end = None, channel_freq = None):
+    '''
+    Returns the frequency and quality factor timestreams from a noise file in which a resonator group has been already copied.
+    To copy the resonator group refer to copy_resonator_group() function.
+
+    Arguments:
+        - NOISE_filename: Name of the noise file.
+        - start: start time in seconds. Default is from the beginning of the file.
+        - end: end of the data in seconds. Default is up to file's end.
+        - channel_freq: list of frequency of the channels to return. Default is all of them.
+
+    Returns:
+        - tuple containing frequency timestreams and quality factor timestreams. Each element of the tuple is a list of timestreams.
+
+    Example:
+        >>> frequencies, Q_factors = get_frequency_timestreams("noisefile.h5", start = 1, end = 1.5, channel_freq = 325.5):
+        >>> # This will retrive frequency and quality factor timestreams of the 325.5 MHz channel (or closest) from the file "noisefile.h5" between 1 and 1.5 seconds of acquisition.
+    '''
+
+    return
+
+def plot_frequency_timestreams():
+    # copied from plot_raw
+    return
+
+def calculate_NEF_spectra():
+    #copied from calculate_spec
+    return
+
+def get_NEF_spec():
+    return
+
+def plot_NEF_spectra():
+    #plot_spec
+    return
