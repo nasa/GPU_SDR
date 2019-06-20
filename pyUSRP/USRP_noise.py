@@ -984,14 +984,31 @@ def copy_resonator_group(VNA_filename, NOISE_filename):
         - None
     '''
     VNA_filename = format_filename(VNA_filename)
-    #check if the orinal ha the resonator group
+    VNA_fv = h5py.File(VNA_filename, 'r')
+
+    if VNA_fv[resonator_grp_name] not in VNA_fv.keys():
+        err_msg = 'VNA file:%s does not contain the Resonators group'%VNA_filename
+        print_error(err_msg)
+        raise ValueError(err_msg)
 
     NOISE_filename = format_filename(NOISE_filename)
-
-    #if the group is already present overwrite
+    NOISE_fv = h5py.File(NOISE_filename, 'r+')
 
     print_debug("Copying resonator group from \'%s\' to \'%s\' ..."%(VNA_filename,NOISE_filename))
 
+    resonator_grp_name = "Resonators"
+    resonator_grp = VNA_fv[resonator_grp_name]
+
+    try:
+        NOISE_fv = fv.create_group(resonator_grp_name)
+    except ValueError:
+        print_warning("Overwriting Noise subgroup %s in h5 file" % resonator_grp_name)
+        del NOISE_fv[resonator_grp_name]
+    # noise_resonator_group = noise_group.create_group(resonator_group_name)
+    NOISE_fv.copy(resonator_grp, NOISE_fv)
+
+    VNA_fv.close()
+    NOISE_fv.close()
 
     return
 
