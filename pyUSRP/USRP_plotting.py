@@ -71,13 +71,12 @@ def plot_raw_data(filenames, decimation=None, displayed_samples=None, low_pass=N
         - a list of strings containing the files to plot.
         - decimation: eventually deciamte the signal before plotting.
         - displayed_samples: calculate decimation to display a certain number of samples.
-        - low pass: floating point number controlling the cut-off frequency of a low pass filter that is eventually applied to the data.
+        - low pass: floating point number controlling the order of a low pass filter (cut-off frequency 0.2F_Ny) that is eventually applied to the data.
         - backend: [string] choose the return type of the plot. Allowed backends for now are:
             * matplotlib: creates a matplotlib figure, plots in non-blocking mode and return the matplotlib figure object. kwargs in this case accept:
                 - size: size of the plot in the form of a tuple (inches,inches). Default is matplotlib default.
             * plotly: plot using plotly and webgl interface, returns the html code descibing the plot. kwargs in this case accept:
                 - size: size of the plot. Default is plotly default.
-            * bokeh: use bokeh to generate an interactive html file containing the IQ plane and the magnitude/phase timestream.
 
         - output_filename: string: name of the file saved. Default is a timestamp.
         - channel_list: select only al list of channels to plot.
@@ -206,7 +205,7 @@ def plot_raw_data(filenames, decimation=None, displayed_samples=None, low_pass=N
 
         samples, errors = openH5file(
             filename,
-            ch_list=channel_list,
+            ch_list=None,
             start_sample=file_start_time,
             last_sample=file_end_time,
             usrp_number=usrp_number,
@@ -229,7 +228,9 @@ def plot_raw_data(filenames, decimation=None, displayed_samples=None, low_pass=N
 
         # prepare samples TODO
         for i in ch_list:
-
+            if low_pass is not None:
+                b, a = signal.butter(low_pass, 0.1, 'low')
+                samples[i] = signal.filtfilt(b, a, samples[i])
             if mode == 'IQ':
                 Y1 = samples[i].real
                 Y2 = samples[i].imag

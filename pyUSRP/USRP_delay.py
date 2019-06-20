@@ -356,7 +356,7 @@ def set_line_delay(rate, delay_ns):
     global LINE_DELAY
 
     try:
-        if LINE_DELAY[str(rate)]: pass
+        if LINE_DELAY[str(rate/1e6)]: pass
         print_warning("Overwriting line delay for rate %d Msps"%rate)
     except KeyError:
         pass

@@ -12,14 +12,14 @@ except ImportError:
 
 import argparse
 
-def run(rate,freq,front_end, tones, lapse, decimation, gain):
+def run(rate,freq,front_end, tones, lapse, decimation, gain, vna):
 
 
     noise_filename = u.Get_noise(tones, measure_t = lapse, rate = rate, decimation = decimation, amplitudes = None,
                               RF = freq, output_filename = None, Front_end = front_end,Device = None, delay = 0, pf_average = 4, tx_gain = gain)
     if vna is not None:
-        copy_resonator_group(vna, noise_filename)
-    
+        u.copy_resonator_group(vna, noise_filename)
+
     return noise_filename
 
 
