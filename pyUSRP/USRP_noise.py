@@ -932,28 +932,27 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
 
 
 def calculate_frequency_timestream(noise_frequency, noise_data, fit_param):
-	"""
+    """
     Convert IQ timestreams into frequency and quality factor timestreams.
-	Derived from Albert's function to convert noise data in f0 stream data.
+    Derived from Albert's function to convert noise data in f0 stream data.
     The original function has been stripped of the matplotlib capabilities and adapted to the scope of this library.
 
-	Arguments:
-		- noise_frequency: float, Noise acquisition tone in Hz.
-		- noise_data: list of complex, Noise data already scaled as S21 (see diagnosic() function).
-		- fit_param: if fit parameters are given in the form (f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a, _, _, pcov), the fit won't be executed again.
+    Arguments:
+    	- noise_frequency: float, Noise acquisition tone in Hz.
+    	- noise_data: list of complex, Noise data already scaled as S21 (see diagnosic() function).
+    	- fit_param: if fit parameters are given in the form (f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a, _, _, pcov), the fit won't be executed again.
 
-	Returns:
-		- X noise
-		- Qr noise
+    Returns:
+    	- X noise
+    	- Qr noise
 
 	"""
-
-	try:
-		f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a = fit_param
-	except:
+    try:
+        f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a = fit_param
+    except:
         err_msg = "Fit parameter given to calculate_frequency_timestream() are not good."
-		print_error(err_msg)
-		raise ValueError(err_msg)
+        print_error(err_msg)
+        raise ValueError(err_msg)
 
 	Qe = Qe_re + 1.j*Qe_im
 

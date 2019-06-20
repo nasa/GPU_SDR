@@ -58,7 +58,7 @@ if __name__ == "__main__":
     parser.add_argument('--gain', '-g', help='set the transmission gain. Multiple gains will result in multiple scans (per frequency). Default 0 dB',  nargs='+')
     parser.add_argument('--tones', '-tones', help='expected number of resonators',  type=int)
     parser.add_argument('--delay_duration', '-dd', help='Duration of the delay measurement',  type=float, default=0.01)
-    parser.add_argument('--delay_over', '-dd', help='Manually set line delay in nanoseconds. Skip the line delay measure.',  type=float)
+    parser.add_argument('--delay_over', '-do', help='Manually set line delay in nanoseconds. Skip the line delay measure.',  type=float)
 
     args = parser.parse_args()
 
