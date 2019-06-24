@@ -104,7 +104,7 @@ extern int TCP_ASYNC_PORT;
 extern std::string device_arguments;
 
 //valid for TX and RX operations, describe the signal generation/demodulation.
-enum w_type { TONES, CHIRP, NOISE , RAMP, NODSP, SWONLY};
+enum w_type { TONES, CHIRP, NOISE , RAMP, NODSP, SWONLY, DIRECT};
 
 std::string w_type_to_str(w_type enumerator);
 

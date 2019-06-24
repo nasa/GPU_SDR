@@ -1,9 +1,30 @@
 #include "kernels.cuh"
 
+//Direct demodulation kernel. This kernel takes the raw input from the SDR and separate channels. Note: does not do any filtering. None: input and output can point to the same location for inplace operations.
+__global__ void deirect_demodulator(
+  tone_parameters* __restrict tones_param,
+  size_t index_counter,
+  float2* intput,
+  float* output
+){
+
+
+}
+
+//Thrust execution of the direct demodulation
+int deirect_demodulator_wrapper(float2* intput, float* output, int length){
+
+  //cast the device pointer to thrust
+  thrust::device_ptr<float2> wrapped_ptr = thrust::device_pointer_cast(intput);
+
+  //cast the pointer to raw
+  //raw_ptr = thrust::raw_pointer_cast(d_vec.data());
+  return length;
+}
+
 //allocates memory on gpu and fills with a real hamming window. returns a pointer to the window on the device.
 //note that this is a host function that wraps some device calls
 //TODO: the window function should be made in a class not in a function. Once we have the class we can put the class template directly in the header file to avoid undefined reference to specialized templates during linking.
-
 template <typename T>
 T* make_hamming_window(int length, int side, bool diagnostic){
 

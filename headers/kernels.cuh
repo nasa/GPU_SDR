@@ -16,6 +16,10 @@
 #include <curand.h>
 #include <curand_kernel.h>
 #include <cufft.h>
+
+#include <thrust/device_vector.h>
+#include <thrust/device_ptr.h>
+
 //! @cond
 #include <iostream>
 #include <stdio.h>

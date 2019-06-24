@@ -27,6 +27,9 @@ std::string w_type_to_str(w_type enumerator){
         case(SWONLY):
             comp_string = "SWONLY";
             break;
+        case(DIRECT):
+            comp_string = "DIRECT";
+            break;
     }
     return comp_string;
 }
@@ -42,6 +45,8 @@ w_type string_to_w_type(std::string input_string){
     if(input_string.compare("TONES") == 0)conv = TONES;
 
     if(input_string.compare("SWONLY") == 0)conv = SWONLY;
+
+    if(input_string.compare("DIRECT") == 0)conv = DIRECT;
 
     return conv;
 

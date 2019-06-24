@@ -36,5 +36,5 @@ if __name__ == "__main__":
     ch_list = [0]
     print "Opening " + str(latest_file)
 
-    u.plot_raw_data(latest_file, channel_list=ch_list,mode='PM', output_filename = latest_file, end_time = 0.1, decimation = None,backend = 'matplotlib',size = (10,8))#
-    u.plot_raw_data(latest_file, channel_list=ch_list,mode='PM', output_filename = latest_file, end_time = 0.1, decimation = None,backend = 'plotly',size = (10,8))
+    u.plot_raw_data(latest_file, channel_list=ch_list,mode='PM', output_filename = latest_file[0], end_time = 0.1, decimation = None,backend = 'matplotlib',size = (10,8))#
+    u.plot_raw_data(latest_file, channel_list=ch_list,mode='PM', output_filename = latest_file[0], end_time = 0.1, decimation = None,backend = 'plotly',size = (10,8))

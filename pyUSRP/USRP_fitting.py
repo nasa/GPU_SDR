@@ -123,6 +123,11 @@ def nonlinear_model(f, f0, A, phi, D, dQr, dQe_re, dQe_im, a):
 
     return real_of_complex(s21)
 
+def S21_func(f, f0, A, phi, D, dQr, dQe_re, dQe_im, a):
+    '''
+    Given a frequency range (f) and the resonator paramters return the S21 complex function.
+    '''
+    return complex_of_real(nonlinear_model(f, f0, A, phi, D, dQr, dQe_re, dQe_im, a))
 
 def FWMH(freq, magnitude):
     magnitude = np.abs(magnitude)
@@ -134,6 +139,8 @@ def FWMH(freq, magnitude):
 
 def do_fit(freq, re, im, p0=None):
     '''
+    Function internally used to fit the resonators.
+    This is not the function to call to fit a VNA scan, to do that, try vna_fit().
     Notes:
         - f0 in p0 is in MHz
     '''
