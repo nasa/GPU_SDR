@@ -47,6 +47,7 @@ from USRP_low_level import *
 from USRP_files import *
 from scipy import optimize
 from USRP_plotting import *
+from USRP_VNA import linear_phase
 
 
 def real_of_complex(z):
@@ -252,6 +253,7 @@ def extimate_peak_number(filename, threshold = 0.2, smoothing = None, peak_width
     phase=phase[arbitrary_cut:-arbitrary_cut]
     magnitudedb=magnitudedb[arbitrary_cut:-arbitrary_cut]
     magnitude = magnitude[arbitrary_cut:-arbitrary_cut]
+    phase = linear_phase(phase)
 
 
     if smoothing is not None:
@@ -307,10 +309,7 @@ def extimate_peak_number(filename, threshold = 0.2, smoothing = None, peak_width
     #print np.std(gradS21)
     #print np.mean(gradS21)
 
-    indexes = peakutils.indexes(gradS21, thres=threshold, min_dist=peak_width)
-    for ii in range(len(freq)):
-        if ii in indexes:
-            mask[ii] = True
+
 
     # exclude center frequency
     center_excl = [[] for X in range(len(center))]
@@ -319,8 +318,9 @@ def extimate_peak_number(filename, threshold = 0.2, smoothing = None, peak_width
     for j in range(len(center)):
         if exclude_center:
             for ii in range(len(mask)):
-                if np.abs(freq[ii] - center[j]) < (50000):
+                if np.abs(freq[ii] - center[j]) < (int(50e3/resolution)):
                     mask[ii] = False
+                    gradS21[ii] = gradS21[ii-1]
                     center_excl[j].append(ii)
         if len(center_excl[j])>1:
             center_min[j] = min(center_excl[j])
@@ -330,6 +330,11 @@ def extimate_peak_number(filename, threshold = 0.2, smoothing = None, peak_width
             center_max[j] = None
 
     if(diagnostic_plots):fig, ax = pl.subplots()
+
+    indexes = peakutils.indexes(gradS21, thres=threshold, min_dist=peak_width)
+    for ii in range(len(freq)):
+        if ii in indexes:
+            mask[ii] = True
 
 
     max_diag = freq[mask]
@@ -895,8 +900,9 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
                 for j in range(len(resonators[i])):
 
                     # label informations
+                    label = ""
                     if len(filenames) == 1:
-                        label = ""
+                        pass
                     else:
                         label += "file: %s\n"%filenames[i]
 
@@ -1002,8 +1008,9 @@ def plot_resonators(filenames, reso_freq = None, backend = 'matplotlib', title_i
                     legend_handler_list = []
 
                     # label informations
+                    label = ""
                     if len(filenames) == 1:
-                        label = ""
+                        pass
                     else:
                         label += "file: %s\n"%filenames[i]
 

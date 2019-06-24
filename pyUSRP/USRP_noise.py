@@ -46,6 +46,7 @@ import progressbar
 from USRP_low_level import *
 from USRP_files import *
 from USRP_delay import *
+from USRP_fitting import get_fit_param
 
 def dual_get_noise(tones_A, tones_B, measure_t, rate, decimation = None, amplitudes_A = None, amplitudes_B = None, RF_A = None, RF_B = None, tx_gain_A = 0, tx_gain_B = 0, output_filename = None,
               Device = None, delay = None, pf_average = 4, **kwargs):
@@ -929,3 +930,425 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
 
     print_debug("Noise plotting done")
     return output_filename
+
+
+def calculate_frequency_timestream(noise_frequency, noise_data, fit_param):
+    """
+    Convert IQ timestreams into frequency and quality factor timestreams.
+    Derived from Albert's function to convert noise data in f0 stream data.
+    The original function has been stripped of the matplotlib capabilities and adapted to the scope of this library.
+
+    Arguments:
+<<<<<<< HEAD
+        - noise_frequency: float, Noise acquisition tone in Hz.
+        - noise_data: list of complex, Noise data already scaled as S21 (see diagnosic() function).
+        - fit_param: if fit parameters are given in the form (f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a, _, _, pcov), the fit won't be executed again.
+
+    Returns:
+        - X noise
+        - Qr noise
+
+    """
+
+    try:
+        f0, A, phi, D, Qi, Qr, Qe_re, Qe_im, a = fit_param
+=======
+    	- noise_frequency: float, Noise acquisition tone in Hz.
+    	- noise_data: list of complex, Noise data already scaled as S21 (see diagnosic() function).
+    	- fit_param: if fit parameters are given in the form (f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a, _, _, pcov), the fit won't be executed again.
+
+    Returns:
+    	- X noise
+    	- Qr noise
+
+	"""
+    try:
+        f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a = fit_param
+>>>>>>> cb69964b7fcddbf195c80befc13d0141df2370ae
+    except:
+        err_msg = "Fit parameter given to calculate_frequency_timestream() are not good."
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    Qe = Qe_re + 1.j*Qe_im
+
+    dQe = 1./Qe
+
+    f0 *= 1e6
+
+    #1. Remove the cable phase and the amplitude scaling from the time streams
+    n_amplitude =   A * np.exp(2.j*np.pi*(1e-6*D*(noise_frequency  -f0) + phi))
+
+    #print "noise offet: %.2f: "%np.abs(n_amplitude)
+    noise_data /= n_amplitude
+
+    qrx_noise = dQe/(1.-noise_data)
+
+    return 1./qrx_noise.real, f0*qrx_noise.imag/2.
+
+
+def copy_resonator_group(VNA_filename, NOISE_filename):
+    '''
+    Copy the resonator groups from a VNA file to a mnoise file.
+
+    Arguments:
+        - VNA_filename: name of the file containing the resonator group (can also be an other noise file).
+        - NOISE_filename: name of the file in which to copy the resonator group. If an other resonator group is in place, it will be rewrited.
+
+    Returns:
+        - None
+    '''
+    VNA_filename = format_filename(VNA_filename)
+    VNA_fv = h5py.File(VNA_filename, 'r')
+
+    if VNA_fv[resonator_grp_name] not in VNA_fv.keys():
+        err_msg = 'VNA file:%s does not contain the Resonators group'%VNA_filename
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    NOISE_filename = format_filename(NOISE_filename)
+    NOISE_fv = h5py.File(NOISE_filename, 'r+')
+
+    print_debug("Copying resonator group from \'%s\' to \'%s\' ..."%(VNA_filename,NOISE_filename))
+
+    resonator_grp_name = "Resonators"
+    resonator_grp = VNA_fv[resonator_grp_name]
+
+    try:
+        NOISE_fv = fv.create_group(resonator_grp_name)
+    except ValueError:
+        print_warning("Overwriting Noise subgroup %s in h5 file" % resonator_grp_name)
+        del NOISE_fv[resonator_grp_name]
+    # noise_resonator_group = noise_group.create_group(resonator_group_name)
+    NOISE_fv.copy(resonator_grp, NOISE_fv)
+
+    VNA_fv.close()
+    NOISE_fv.close()
+
+    return
+
+def get_frequency_timestreams(NOISE_filename, start = None, end = None, channel_freq = None, frontend = None):
+    '''
+    Returns the frequency and quality factor timestreams from a noise file in which a resonator group has been already copied.
+    To copy the resonator group refer to copy_resonator_group() function.
+
+    Arguments:
+        - NOISE_filename: Name of the noise file.
+        - start: start time in seconds. Default is from the beginning of the file.
+        - end: end of the data in seconds. Default is up to file's end.
+        - channel_freq: list of frequency of the channels to return. Default is all of them.
+        - frontend: from which frontend to take the noise data. Default is A.
+
+    Returns:
+        - tuple containing frequency timestreams and quality factor timestreams. Each element of the tuple is a list of timestreams.
+
+    Example:
+        >>> frequencies, Q_factors = get_frequency_timestreams("noisefile.h5", start = 1, end = 1.5, channel_freq = 325.5):
+        >>> # This will retrive frequency and quality factor timestreams of the 325.5 MHz channel (or closest) from the file "noisefile.h5" between 1 and 1.5 seconds of acquisition.
+    '''
+
+    NOISE_filename = format_filename(NOISE_filename)
+    print_debug("Opening file \'%s\'..."%NOISE_filename)
+    if frontend is not None:
+        if frontend == 'A':
+            ant = "A_RX2"
+        elif frontend == 'B':
+            ant = "B_RX2"
+        else:
+            err_msg = "cannot recognize frontend code \'%s\' in get_frequency_timestreams()"%frontend
+            print_error(err_msg)
+            raise ValueError(err_msg)
+    else:
+        ant = frontend
+
+    info = get_rx_info(NOISE_filename, ant=ant)
+    last_sample = None
+    if start is not None:
+        time_conv = float(info['rate'])/info['fft_tones']
+        start_sample = time_conv*start
+        if end is not None:
+            last_sample = time_conv*end
+    else:
+        start_sample = 0
+
+    tones = np.asarray(info['freq'])+info['rf']
+
+    if channel_freq is not None:
+        print_debug("Channel selected: ")
+        numeric_channel_list = []
+        for x in channel_freq:
+            j = find_nearest(tones,x)
+            numeric_channel_list.append(j)
+            print_debug("%d) %.2f MHz"%(len(numeric_channel_list),tones[j]/1e6))
+
+    else:
+        numeric_channel_list = channel_freq
+
+    params = get_fit_param(NOISE_filename, verbose = False)
+
+    data = openH5file(NOISE_filename, ch_list=numeric_channel_list, start_sample=start_sample, last_sample=last_sample, usrp_number=None, front_end=frontend,
+                   verbose=False, error_coord=False, big_file = False)
+    result_f = []
+    result_q = []
+    for i in range(len(data)):
+        # f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a
+        fit_param = (params[i]['f0'], params[i]['A'], params[i]['phi'], params[i]['D'], params[i]['Qi'], params[i]['Qr'], np.real(params[i]['Qe']),np.imag(params[i]['Qe']),params[i]['a'])
+        f_ts, q_ts = calculate_frequency_timestream(tones[i], data[i], fit_param)
+        result_f.append(f_ts)
+        result_q.append(q_ts)
+
+    return result_f, result_q
+
+def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=None, low_pass=None, backend='matplotlib', output_filename=None,
+                  channel_list=None, start_time=None, end_time=None, auto_open=True, **kwargs):
+        '''
+        Plot frequency timestreams from given H5 noise files.
+
+        Arguments:
+            - a list of strings containing the files to plot.
+            - decimation: eventually deciamte the signal before plotting.
+            - displayed_samples: calculate decimation to display a certain number of samples.
+            - low pass: floating point number controlling the cut-off frequency of a low pass filter that is eventually applied to the data.
+            - backend: [string] choose the return type of the plot. Allowed backends for now are:
+                * matplotlib: creates a matplotlib figure, plots in non-blocking mode and return the matplotlib figure object. kwargs in this case accept:
+                    - size: size of the plot in the form of a tuple (inches,inches). Default is matplotlib default.
+                * plotly: plot using plotly and webgl interface, returns the html code descibing the plot. kwargs in this case accept:
+                    - size: size of the plot. Default is plotly default.
+                * bokeh: use bokeh to generate an interactive html file containing the IQ plane and the magnitude/phase timestream.
+
+            - output_filename: string: name of the file saved. Default is a timestamp.
+            - channel_list: select only al list of channels to plot.
+            - start_time: time where to start plotting. Default is 0.
+            - end_time: time where to stop plotting. Default is end of the measure.
+            - auto_open: open the plot in default system browser if plotly backend is selected (non-blocking). Default is True.
+            - kwargs:
+                * usrp_number and front_end can be passed to the openH5file() function.
+                * fig_size: the size of matplotlib figure.
+                * add_info: list of strings as long as the file list to add info to the legend.
+
+        Returns:
+            - the complete name of the saved file or None in case no file is saved.
+
+        Note:
+            - Possible errors are signaled on the plot.
+        '''
+        import pdb
+        pdb.set_trace()
+        downsample_warning = True
+        overwriting_decim_waring = True
+        try:
+            fig_size = kwargs['figsize']
+        except KeyError:
+            fig_size = None
+
+        if output_filename is None:
+            output_filename = "USRP_freq_timestream_"+get_timestamp()
+        try:
+            add_info_labels = kwargs['add_info']
+        except KeyError:
+            add_info_labels = None
+        plot_title = 'USRP frequency/Qr timestream '
+        if backend == 'matplotlib':
+            fig, ax = pl.subplots(nrows=2, ncols=1, sharex=True)
+            if fig_size is None:
+                fig_size = (16, 10)
+            fig.set_size_inches(fig_size[0], fig_size[1])
+            ax[1].set_xlabel("Time [s]")
+            formatter0 = EngFormatter(unit='s')
+            ax[1].xaxis.set_major_formatter(formatter0)
+            formatter1 = EngFormatter(unit='')
+            ax[0].set_ylabel("Frequency Shift [Hz]")
+            ax[1].set_ylabel("Qr")
+            ax[0].yaxis.set_major_formatter(formatter1)
+            ax[1].yaxis.set_major_formatter(formatter1)
+
+
+        elif backend == 'plotly':
+            fig = tools.make_subplots(rows=2, cols=1, subplot_titles=('I timestream', 'Q timestream'),
+                                      shared_xaxes=True)
+            fig['layout']['yaxis1'].update(title='Frequency Shift [Hz]')
+            fig['layout']['yaxis2'].update(title='Qr')
+            fig['layout']['xaxis'].update(exponentformat='SI')
+            fig['layout']['xaxis1'].update(title='Time [s]')
+
+        filenames = to_list_of_str(filenames)
+
+        print_debug("Plotting from files:")
+        for i in range(len(filenames)):
+            print_debug("%d) %s" % (i, filenames[i]))
+        try:
+            usrp_number = kwargs['usrp_number']
+        except KeyError:
+            usrp_number = None
+        try:
+            front_end = kwargs['front_end']
+        except KeyError:
+            front_end = None
+        file_count = 0
+        for filename in filenames:
+
+            filename = format_filename(filename)
+            parameters = global_parameter()
+            parameters.retrive_prop_from_file(filename)
+            ant = parameters.get_active_rx_param()
+
+            if len(ant) > 1:
+                print_error("multiple RX devices not yet supported")
+                return
+            freq = None
+            if parameters.get(ant[0], 'wave_type')[0] == "TONES":
+                decimation_factor = parameters.get(ant[0], 'fft_tones')
+                freq = np.asarray(parameters.get(ant[0], 'freq')) + parameters.get(ant[0], 'rf')
+                if parameters.get(ant[0], 'decim') != 0:
+                    decimation_factor *= parameters.get(ant[0], 'decim')
+
+                effective_rate = parameters.get(ant[0], 'rate') / float(decimation_factor)
+
+            elif parameters.get(ant[0], 'wave_type')[0] == "CHIRP":
+                if parameters.get(ant[0], 'decim') != 0:
+                    effective_rate = parameters.get(ant[0], 'swipe_s')[0] / parameters.get(ant[0], 'chirp_t')[0]
+                else:
+                    effective_rate = parameters.get(ant[0], 'rate')
+
+            else:
+                decimation_factor = max(1, parameters.get(ant[0], 'fft_tones'))
+
+                if parameters.get(ant[0], 'decim') != 0:
+                    decimation_factor *= parameters.get(ant[0], 'decim')
+
+                effective_rate = parameters.get(ant[0], 'rate') / float(decimation_factor)
+
+            if start_time is not None:
+                file_start_time = start_time * effective_rate
+            else:
+                file_start_time = 0
+            if end_time is not None:
+                file_end_time = end_time * effective_rate
+            else:
+                file_end_time = None
+
+            freq_ts, qr_ts = get_frequency_timestreams(filename,
+                start = file_start_time,
+                end = file_end_time,
+                channel_freq = None,
+                frontend = None
+            )
+            # samples, errors = openH5file(
+            #     filename,
+            #     ch_list=channel_list,
+            #     start_sample=file_start_time,
+            #     last_sample=file_end_time,
+            #     usrp_number=usrp_number,
+            #     front_end=front_end,
+            #     verbose=False,
+            #     error_coord=True
+            # )
+
+            #print_debug("plot_raw_data() found %d channels each long %d samples" % (len(samples), len(samples[0])))
+            if channel_list == None:
+                ch_list = range(len(freq_ts))
+            else:
+                if max(channel_list) > len(freq_ts):
+                    print_warning(
+                        "Channel list selected in plot_raw_data() is bigger than avaliable channels. plotting all available channels")
+                    ch_list = range(len(freq_ts))
+                else:
+                    ch_list = channel_list
+
+
+            # prepare samples TODO
+            for i in ch_list:
+
+
+                Y1 = freq_ts[i]
+                Y2 = qr_ts[i]
+
+                if displayed_samples is not None:
+                    if decimation is not None and overwriting_decim_waring:
+                        print_warning("Overwriting offline decimation arguments with displayed_samples")
+                        overwriting_decim_waring = False
+                    decimation = int(len(freq_ts[i])/displayed_samples)
+                    if decimation <= 1 and downsample_warning:
+                        print_warning("Channel does not require decimation to reach the number of displayed samples")
+                        downsample_warning = False
+                if decimation is not None and decimation > 1:
+                    decimation = int(np.abs(decimation))
+                    Y1 = signal.decimate(Y1, decimation, ftype='fir')
+                    Y2 = signal.decimate(Y2, decimation, ftype='fir')
+                else:
+                    decimation = 1
+
+                X = np.arange(len(Y1)) / float(effective_rate / decimation) + file_start_time / float(effective_rate)
+
+                if effective_rate / 1e6 > 1:
+                    rate_tag = 'rate: %.2f Msps' % (effective_rate / 1e6)
+                else:
+                    rate_tag = 'rate: %.2f ksps' % (effective_rate / 1e3)
+
+                if freq is None:
+                    label = "Channel %d" % i
+                else:
+                    label = "Channel %.2f MHz" % (freq[i] / 1.e6)
+
+                if backend == 'matplotlib':
+                    label += "\n" + filename
+                    if add_info_labels is not None:
+                        label += "\n" + add_info_labels[file_count]
+                    ax[0].plot(X[decimation:-decimation], Y1[decimation:-decimation], color=get_color(i + file_count), label=label)
+                    ax[1].plot(X[decimation:-decimation], Y2[decimation:-decimation], color=get_color(i + file_count))
+                elif backend == 'plotly':
+                    label += "<br>" + filename
+                    if add_info_labels is not None:
+                        label += "<br>" + add_info_labels[file_count]
+                    fig.append_trace(go.Scatter(
+                        x=X[decimation:-decimation],
+                        y=Y1[decimation:-decimation],
+                        name=label,
+                        legendgroup="group" + str(i) + "file" + str(file_count),
+                        line=dict(color=get_color(i + file_count)),
+                        mode='lines'
+                    ), 1, 1)
+                    fig.append_trace(go.Scatter(
+                        x=X[decimation:-decimation],
+                        y=Y2[decimation:-decimation],
+                        # name = "channel %d"%i,
+                        showlegend=False,
+                        legendgroup="group" + str(i) + "file" + str(file_count),
+                        line=dict(color=get_color(i + file_count)),
+                        mode='lines'
+                    ), 2, 1)
+            file_count += 1
+        final_filename = ""
+        if backend == 'matplotlib':
+            fig.suptitle(plot_title + "\n" + rate_tag)
+            handles, labels = ax[0].get_legend_handles_labels()
+            if len(errors) > 0:
+                yellow_patch = mpatches.Patch(color='yellow', label='ERRORS')
+                handles.append(yellow_patch)
+                labels.append('ERRORS')
+            #fig.legend(handles, labels, loc=7)
+            ax[0].legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
+            ax[0].grid(True)
+            ax[1].grid(True)
+            final_filename = output_filename + '.png'
+            fig.savefig(final_filename, bbox_inches="tight")
+            pl.close(fig)
+
+        if backend == 'plotly':
+            final_filename = output_filename + ".html"
+            fig['layout'].update(title=plot_title + "<br>" + rate_tag)
+            plotly.offline.plot(fig, filename=final_filename, auto_open=auto_open)
+
+        return final_filename
+
+
+def calculate_NEF_spectra():
+    #copied from calculate_spec
+    return
+
+def get_NEF_spec():
+    return
+
+def plot_NEF_spectra():
+    #plot_spec
+    return

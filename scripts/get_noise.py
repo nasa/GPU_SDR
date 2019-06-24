@@ -12,11 +12,13 @@ except ImportError:
 
 import argparse
 
-def run(rate,freq,front_end, tones, lapse, decimation, gain):
+def run(rate,freq,front_end, tones, lapse, decimation, gain, vna):
 
 
     noise_filename = u.Get_noise(tones, measure_t = lapse, rate = rate, decimation = decimation, amplitudes = None,
                               RF = freq, output_filename = None, Front_end = front_end,Device = None, delay = 0, pf_average = 4, tx_gain = gain)
+    if vna is not None:
+        u.copy_resonator_group(vna, noise_filename)
 
     return noise_filename
 
@@ -56,8 +58,6 @@ if __name__ == "__main__":
 
         rf_freq = args.freq*1e6
 
-
-
     if not u.Connect():
         u.print_error("Cannot find the GPU server!")
         exit()
@@ -65,6 +65,6 @@ if __name__ == "__main__":
     # Data acquisition
 
     f = run(rate = args.rate*1e6, freq = rf_freq, front_end = args.frontend,
-            tones = np.asarray(tones), lapse = args.time, decimation = args.decimation, gain = args.gain)
+            tones = np.asarray(tones), lapse = args.time, decimation = args.decimation, gain = args.gain, vna= args.VNA)
 
     # Data analysis and plotting will be in an other python script
