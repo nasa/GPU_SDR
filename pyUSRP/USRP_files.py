@@ -448,6 +448,9 @@ class global_parameter(object):
         empty_spec['chirp_t'] = [0]
         empty_spec['fft_tones'] = 0
         empty_spec['pf_average'] = 4
+
+        empty_spec['data_mem_mult'] = 1
+
         empty_spec['tuning_mode'] = 1  # fractional
         prop = {}
         prop['A_TXRX'] = empty_spec.copy()
@@ -656,8 +659,12 @@ class global_parameter(object):
                         self.parameters[ant_key]['chirp_f'][j] = int(self.parameters[ant_key]['chirp_f'][j])
 
                     self.parameters[ant_key]['samples'] = int(self.parameters[ant_key]['samples'])
+
+                    self.parameters[ant_key]['data_mem_mult'] = int(self.parameters[ant_key]['data_mem_mult'])
+
                 # case in which it is OFF:
                 else:
+                    self.parameters[ant_key]['data_mem_mult'] = 0
                     self.parameters[ant_key]['mode'] = "OFF"
                     self.parameters[ant_key]['rate'] = 0
                     self.parameters[ant_key]['rf'] = 0

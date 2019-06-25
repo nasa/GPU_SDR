@@ -237,6 +237,20 @@ bool string2param(std::string data, usrp_param &my_parameter){
         return false;
     }
 
+    //block just added follows:
+    try{
+        my_parameter.A_TXRX.data_mem_mult = parameters.get_child("A_TXRX").get<double>("data_mem_mult");
+        my_parameter.B_TXRX.data_mem_mult = parameters.get_child("B_TXRX").get<double>("data_mem_mult");
+        my_parameter.A_RX2.data_mem_mult  = parameters.get_child("A_RX2").get<double>("data_mem_mult");
+        my_parameter.B_RX2.data_mem_mult  = parameters.get_child("B_RX2").get<double>("data_mem_mult");
+    }catch(std::exception& error){
+        std::cout << error.what()<<std::endl;
+        print_error("could not parse the JSON file correctly: be sure that the data type used\
+        for descriptor \"data_mem_mult\" match the specifications!");
+        return false;
+    }
+    //end of the block
+
     std::cout<<"printing parameters..."<<std::endl;
     return true;
 

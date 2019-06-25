@@ -144,6 +144,8 @@ struct param{
     std::vector<float> chirp_t;
     std::vector<int> chirp_f;
     std::vector<int> swipe_s;
+    
+    size_t data_mem_mult; //memory multiplier added to cope with analysis data expansion.
 
     //polyphase filter bank specific
     int fft_tones; // it is an int because of size_t* incompatible with cufft calls

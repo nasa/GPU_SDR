@@ -16,15 +16,6 @@
 #include "USRP_server_diagnostic.hpp"
 #include "USRP_server_memory_management.hpp"
 
-
-class TXStreamer {
-	public:
-		TXStreamer(const size_t n);
-		virtual ~TXStreamer();
-		virtual void get(float *samples)=0;
-		const size_t _n;
-};
-
 //!@brief This class generates the transimission buffer given a the parameter object in the initialization.
 //!The way the buffer is generated is internally managed, different kind of buffers are generated using different strategies. This class is non threadsafe.
 

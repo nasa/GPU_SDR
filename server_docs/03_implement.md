@@ -39,17 +39,39 @@ All the file and paths mentioned in this tutorial refers to the main repository 
 
 5. At this point the server receive via async TCP channel the keyword representing your DPS algorithm and propagates it to the #RX_buffer_demodulator class in cpp/USRP_demodulator.cpp. We have to modify this class in order to make it handle our special case. First thing to do is to handle the initialization: go to cpp/USRP_demodulator.cpp and modify the switch statement of initialization of the #RX_buffer_demodulator class by adding the case corresponding to your DSP label.
 
-  <img src="Tutorial_RX_04.png" alt="Tutorial_RX_04.png" height="250"/>
+<img src="Tutorial_RX_04.png" alt="Tutorial_RX_04.png" width="650"/>
 
-6. The direct demodulation of multiple tones poses the unusual problem of being capable to expand the data size in respect of a single buffer acquired from the SDR
+
+6. The direct demodulation of multiple tones poses the unusual problem of being capable to expand the data size in respect of a single buffer acquired from the SDR. If the product of your operation is potentially bigger than the original data buffer we need to tell the server to pre-allocate more memory for data processing than for data acquisition.
 
 
 
 ### Client part
+The client part of adding a new readout method is entirely developed in Python.
 
 ## Adding new parameters
-Adding new parameters to the communication protocol requires the modification of a couple of of C++ and the modification of the parameter Python class. All sort of types can be passed as well as arrays (in the form of lists/numpy in Python and STL verctors in C++)
+Adding new parameters to the communication protocol requires the modification of a couple of of C++ and the modification of the parameter Python class. All sort of types can be passed as well as arrays (in the form of lists/numpy in Python and STL verctors in C++). As example we'll illustrate the instroduction of the  \code{.cpp} size_t data_mem_mult \endcode parameter needed by the direct demodulator.
 
 ### C++ part
+* Modify the struct #param in USRP_server_setting.hpp by adding the new parameter. In this case we're adding data_mem_mult:
+
+<img src="Tutorial_ADD_01.png" alt="Tutorial_ADD_01.png" width="750"/>
+
+* Modify the #string2param function in USRP_JSON_interpreter.cpp by copy-pasting a try-catch block and filling with the parameter just added. Take note of the string key you use as it has to be the same in python.
+<img src="Tutorial_ADD_02.png" alt="Tutorial_ADD_02.png" width="750"/>
+
+\note There are two kinds of blocks here. One uses the get_child() method and it's ment for single values (one per each channel) while the templated function #as_vector manages array interpreting.
+
+* The param structure can then be used inside the #RX_buffer_demodulator #TX_buffer_generator classes directly as it gets propagated. The case of the example will be used instead during the memory initialization phase which is not covered in this guide.
+
+\note Even if the new parameter has been implemented as a ```size_t```, the JSON conversion function template is specialized as ```double```. The value is then implicitly cast.
 
 ### Python part
+
+* Modify the global_parameter object in the pyUSRP/USRP_files.py file by adding:
+  * An initialization value in the initialize() method.
+    <img src="Tutorial_ADD_03.png" alt="Tutorial_ADD_03.png" width="450"/>
+
+  * A type check (and enforcement) and an initialized value in the self_check() method.
+
+    <img src="Tutorial_ADD_04.png" alt="Tutorial_ADD_04.png" width="850"/>
