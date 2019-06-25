@@ -46,3 +46,10 @@ All the file and paths mentioned in this tutorial refers to the main repository 
 
 
 ### Client part
+
+## Adding new parameters
+Adding new parameters to the communication protocol requires the modification of a couple of of C++ and the modification of the parameter Python class. All sort of types can be passed as well as arrays (in the form of lists/numpy in Python and STL verctors in C++)
+
+### C++ part
+
+### Python part
