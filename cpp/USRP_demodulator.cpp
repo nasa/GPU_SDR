@@ -30,6 +30,7 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
         print_error("Multiple chirp RX buffer demodulation has been requested. This feature is not implemented yet.");
         exit(-1);
     }
+    // In the future this can be removed and different tones generator can be used to compose a single signal.
     if(mixed_buffer_type){
         print_error("Mixed RX buffer demodulation has been requested. This feature is not implemented yet.");
         exit(-1);
@@ -45,12 +46,17 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
 
     //if there is a valid decimation enable the decimator
     decimator_active = (parameters->decim > 0)?true:false;
-    if(decimator_active)std::cout<<"Decimator is active: "<<parameters->decim <<std::endl;
+    //if(decimator_active)std::cout<<"Decimator is active: "<<parameters->decim <<std::endl;
     //print_debug("decimator is active?",decimator_active);
     //initialize the memory pointer for eventual spare buffers
     spare_size = 0;
 
     switch(last_w_type){
+        // Insert new DSP cases below!
+
+        case DIRECT:
+
+          // Initialization code!
 
         case TONES:
 
