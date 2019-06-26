@@ -449,7 +449,7 @@ class global_parameter(object):
         empty_spec['fft_tones'] = 0
         empty_spec['pf_average'] = 4
 
-        empty_spec['data_mem_mult'] = 0
+        empty_spec['data_mem_mult'] = 1
 
         empty_spec['tuning_mode'] = 1  # fractional
         prop = {}

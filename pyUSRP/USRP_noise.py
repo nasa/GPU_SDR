@@ -1040,7 +1040,7 @@ def calculate_frequency_timestream(noise_frequency, noise_data, fit_param):
 
     qrx_noise = dQe/(1.-noise_data)
 
-    return 1./qrx_noise.real, f0*qrx_noise.imag/2.
+    return f0*qrx_noise.imag/2., 1./qrx_noise.real
 
 
 def copy_resonator_group(VNA_filename, NOISE_filename):
@@ -1150,8 +1150,8 @@ def get_frequency_timestreams(NOISE_filename, start = None, end = None, channel_
         # f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a
         fit_param = (params[i]['f0'], params[i]['A'], params[i]['phi'], params[i]['D'], params[i]['Qi'], params[i]['Qr'], np.real(params[i]['Qe']),np.imag(params[i]['Qe']),params[i]['a'])
         f_ts, q_ts = calculate_frequency_timestream(tones[i], data[i], fit_param)
-        result_f.append(f_ts)
-        result_q.append(q_ts)
+        result_f.append(f_ts - np.mean(f_ts))
+        result_q.append(q_ts - np.mean(q_ts))
 
     return result_f, result_q
 
@@ -1188,8 +1188,6 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
         Note:
             - Possible errors are signaled on the plot.
         '''
-        import pdb
-        pdb.set_trace()
         downsample_warning = True
         overwriting_decim_waring = True
         try:
@@ -1214,7 +1212,7 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
             ax[1].xaxis.set_major_formatter(formatter0)
             formatter1 = EngFormatter(unit='')
             ax[0].set_ylabel("Frequency Shift [Hz]")
-            ax[1].set_ylabel("Qr")
+            ax[1].set_ylabel("Qr Shift [-]")
             ax[0].yaxis.set_major_formatter(formatter1)
             ax[1].yaxis.set_major_formatter(formatter1)
 
@@ -1223,7 +1221,7 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
             fig = tools.make_subplots(rows=2, cols=1, subplot_titles=('I timestream', 'Q timestream'),
                                       shared_xaxes=True)
             fig['layout']['yaxis1'].update(title='Frequency Shift [Hz]')
-            fig['layout']['yaxis2'].update(title='Qr')
+            fig['layout']['yaxis2'].update(title='Qr Shift [-]')
             fig['layout']['xaxis'].update(exponentformat='SI')
             fig['layout']['xaxis1'].update(title='Time [s]')
 
