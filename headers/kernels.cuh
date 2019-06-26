@@ -30,6 +30,7 @@
 //! @endcond
 #ifndef pi_f
 #define pi_f 3.14159265358979f
+#define Q_PHASE_alt -1.570796327f
 #define _31_BIT_VALUE 2147483647.5
 #endif
 
@@ -65,6 +66,26 @@ struct tone_parameters{
     float* tones_amplitudes; //tones amplitudes (linear, host side)
 };
 
+
+//Direct demodulation kernel. This kernel takes the raw input from the SDR and separate channels. Note: does not do any filtering.
+__global__ void direct_demodulator(
+  double* __restrict tone_frquencies,
+  size_t index_counter,
+  uint single_tone_length,
+  size_t total_length,
+  float2* __restrict intput,
+  float2* __restrict output
+);
+
+//Wrapper for the direct demodulation.
+void deirect_demodulator_wrapper(
+  double* __restrict tone_frquencies,
+  size_t index_counter,
+  uint single_tone_length,
+  size_t total_length,
+  float2* __restrict intput,
+  float2* __restrict output,
+  cudaStream_t internal_stream);
 
 void chirp_gen_wrapper(
     float2* __restrict__ output, //pointer to the gpu buffer

@@ -32,9 +32,9 @@ if __name__ == "__main__":
     os.chdir(args.folder)
 
     list_of_files = glob.glob('USRP*.h5')
-    latest_file = [x.split(".")[0] for x in (sorted(list_of_files, key=os.path.getctime))]
+    latest_file = [x.split(".")[0] for x in (sorted(list_of_files, key=os.path.getctime))][0]
     ch_list = [0]
     print "Opening " + str(latest_file)
 
-    u.plot_raw_data(latest_file, channel_list=ch_list,mode='PM', output_filename = latest_file[0], end_time = 0.1, decimation = None,backend = 'matplotlib',size = (10,8))#
-    u.plot_raw_data(latest_file, channel_list=ch_list,mode='PM', output_filename = latest_file[0], end_time = 0.1, decimation = None,backend = 'plotly',size = (10,8))
+    u.plot_raw_data(latest_file, channel_list=ch_list,mode='IQ', output_filename = latest_file[0], end_time = 0.1, decimation = None,backend = 'matplotlib',size = (10,8))#
+    u.plot_raw_data(latest_file, channel_list=ch_list,mode='IQ', output_filename = latest_file[0], end_time = 0.1, decimation = None,backend = 'plotly',size = (10,8))

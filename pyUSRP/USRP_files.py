@@ -662,6 +662,9 @@ class global_parameter(object):
 
                     self.parameters[ant_key]['data_mem_mult'] = int(self.parameters[ant_key]['data_mem_mult'])
 
+                    if (self.parameters[ant_key]['wave_type'][0] == "DIRECT"):
+                        self.parameters[ant_key]['data_mem_mult'] = len(self.parameters[ant_key]['wave_type'])
+
                 # case in which it is OFF:
                 else:
                     self.parameters[ant_key]['data_mem_mult'] = 0
@@ -973,6 +976,9 @@ def Param_to_H5(H5fp, parameters_class, **kwargs):
             elif parameters_class.parameters[ant_name]['wave_type'][0] == "NOISE":
                 data_len = int(np.ceil(parameters_class.parameters[ant_name]['samples'] / max(
                     parameters_class.parameters[ant_name]['decim'], 1)))
+
+            elif parameters_class.parameters[ant_name]['wave_type'][0] == "DIRECT":
+                data_len = parameters_class.parameters[ant_name]['samples']/max(parameters_class.parameters[ant_name]['decim'],1)
             else:
                 print_warning("No file size could be determined from DSP descriptor: \'%s\'" % str(
                     parameters_class.parameters[ant_name]['wave_type'][0]))

@@ -44,8 +44,12 @@ TX_buffer_generator::TX_buffer_generator(param* init_parameters){
         case SWONLY:
             print_error("NODSP CASE NOT IMPLEMENTED.");
             exit(-1);
-            
+
         case RAMP:
+            print_error("RAMP CASE NOT IMPLEMENTED.");
+            exit(-1);
+
+        case DIRECT:
             print_error("RAMP CASE NOT IMPLEMENTED.");
             exit(-1);
 

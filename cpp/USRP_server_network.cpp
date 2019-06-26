@@ -209,13 +209,13 @@ void Sync_server::tcp_streamer(param* current_settings){
 
     //maximum transmission buffer size is only reached when no decimation is applied.
     //To avoid error the support memory to the transmission buffer will be oversized.
-    size_t max_size = current_settings->buffer_len * 2 * sizeof(float) + header_size;
+    size_t max_size = current_settings->data_mem_mult *current_settings->buffer_len * 2 * sizeof(float) + header_size;
 
     //buffer for serializing the network packet
     char *fullData  = ( char *)std::malloc(max_size+1);
 
     //additional check for debugging
-    if(current_settings->buffer_len <= 0){
+    if(current_settings->buffer_len * current_settings->data_mem_mult <= 0){
       std::stringstream ss;
       ss<<std::string("Sync data thread: ")<<std::string("Maximum buffer length is <= 0 in the TCP streamer. This is not allowed");
       print_error(ss.str());

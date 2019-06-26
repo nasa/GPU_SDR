@@ -55,8 +55,38 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
         // Insert new DSP cases below!
 
         case DIRECT:
-
+          if(diagnostic)print_warning("Demodulator diagnostic enabled.");
           // Initialization code!
+
+          // Create the device vector of frequencies
+          cudaMalloc((void **)&DIRECT_tone_frquencies, parameters->wave_type.size()*sizeof(double));
+
+          // Fill the device vector of frequencies (optimization: relative to the rate, see direct demodulation kernel)
+          tones = (double*)malloc(parameters->freq.size()*sizeof(double));
+          for(uint k=0; k<parameters->freq.size(); k++){
+            tones[k] = double(parameters->freq[k])/parameters->rate;
+          }
+
+          // Upload the frequency vector
+          cudaMemcpy(DIRECT_tone_frquencies, &(tones[0]), parameters->freq.size() * sizeof(double),cudaMemcpyHostToDevice);
+
+          // Allocate input memory
+          cudaMalloc((void **)&direct_input,parameters->buffer_len*sizeof(float2));
+
+          // Allocate output memory
+          cudaMalloc((void **)&direct_output, parameters->data_mem_mult* parameters->buffer_len*sizeof(float2));
+
+          //Optimization: calculate this once.
+          DIRECT_output_size = parameters->buffer_len * parameters->wave_type.size();
+
+          //Initialize bookeeping
+          DIRECT_current_index = 0;
+
+          //declare pointers to functions
+          process_ptr = &RX_buffer_demodulator::process_direct;
+          clr_ptr = &RX_buffer_demodulator::close_direct;
+
+          break;
 
         case TONES:
 
@@ -334,6 +364,31 @@ int RX_buffer_demodulator::process_chirp(float2** __restrict__ input_buffer, flo
     //wait for operation to be completed before returning
 
     return valid_size;
+}
+
+int RX_buffer_demodulator::process_direct(float2** __restrict__ input_buffer, float2** __restrict__ output_buffer){
+
+  cudaMemcpyAsync(direct_input, *input_buffer, parameters->buffer_len*sizeof(float2),cudaMemcpyHostToDevice, internal_stream);
+  deirect_demodulator_wrapper(DIRECT_tone_frquencies, DIRECT_current_index,parameters->buffer_len,DIRECT_output_size,direct_input,direct_output,internal_stream);
+  //Update bookeeping
+  DIRECT_current_index+=parameters->buffer_len;
+
+  //Numerically control this value: if too big adds noise in _sinf()
+  DIRECT_current_index = DIRECT_current_index % parameters->rate;
+
+  //This is temporary. A decimator filter has to be in place here.
+  cudaMemcpyAsync(*output_buffer, direct_output, sizeof(float2)*DIRECT_output_size, cudaMemcpyDeviceToHost, internal_stream);
+  cudaStreamSynchronize(internal_stream);
+  return DIRECT_output_size;
+}
+
+void RX_buffer_demodulator::close_direct(){
+  cudaStreamDestroy(internal_stream);
+  cudaFree(DIRECT_tone_frquencies);
+  cudaFree(direct_input);
+  cudaFree(direct_output);
+  free(tones);
+  return;
 }
 
 //process a packet with the pfb and set the variables for the next

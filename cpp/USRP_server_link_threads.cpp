@@ -141,12 +141,13 @@ void TXRX::set(usrp_param* global_param){
                 rx_thread_n.push_back(this_thread_n);
                 thread_counter +=1;
 
-                if (output_memory_size>modes[i]->buffer_len or not rx_output_memory){
-                    std::cout<<"Allocating RX output memory buffer: "<< (modes[i]->buffer_len * sizeof(float2))/(1024.*1024.)<< " MB per buffer..."<<std::endl;
+                if ((output_memory_size>modes[i]->buffer_len * modes[i]->data_mem_mult) or not rx_output_memory){
+                    std::cout<<"Allocating RX output memory buffer: "<< (modes[i]->data_mem_mult * modes[i]->buffer_len * sizeof(float2))/(1024.*1024.)<< " MB per buffer..."<<std::endl;
                     if(modes[i]->buffer_len>output_memory_size and output_memory_size>0)std::cout<<" (updating buffer size)"<<std::endl;
                     if(rx_output_memory) rx_output_memory->close();
-                    output_memory_size = modes[i]->buffer_len;
+                    output_memory_size = modes[i]->buffer_len * modes[i]->data_mem_mult;
                     rx_output_memory = new preallocator<float2>(output_memory_size,RX_QUEUE_LENGTH);
+                    print_debug("memory count done: ",modes[i]->data_mem_mult);
                 }else{
                     std::cout<<" RX output memory buffer requirements already satisfaid."<<std::endl;
                 }

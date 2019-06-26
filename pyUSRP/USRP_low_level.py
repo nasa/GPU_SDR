@@ -262,7 +262,7 @@ def quantize_tones(tones, rate, bins):
     #bin_center_axis = np.linspace(-rate/2, rate/2, bins)
 
     bin_center_axis = []
-    for i in range(bins):
+    for i in range(int(bins)):
         bin_center_axis.append(i*(float(rate)/bins))
     bin_center_axis = np.asarray(bin_center_axis) - (float(rate)/bins) * (bins/2)
 

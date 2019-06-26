@@ -12,11 +12,11 @@ except ImportError:
 
 import argparse
 
-def run(rate,freq,front_end, tones, lapse, decimation, gain, vna):
+def run(rate,freq,front_end, tones, lapse, decimation, gain, vna, mode):
 
 
     noise_filename = u.Get_noise(tones, measure_t = lapse, rate = rate, decimation = decimation, amplitudes = None,
-                              RF = freq, output_filename = None, Front_end = front_end,Device = None, delay = 0, pf_average = 4, tx_gain = gain)
+                              RF = freq, output_filename = None, Front_end = front_end,Device = None, delay = 0, pf_average = 4, tx_gain = gain, mode = mode)
     if vna is not None:
         u.copy_resonator_group(vna, noise_filename)
 
@@ -36,7 +36,7 @@ if __name__ == "__main__":
     parser.add_argument('--decimation', '-d', help='Decimation factor required', type=float, default=100)
     parser.add_argument('--time', '-t', help='Duration of the scan in seconds', type=float, default=10)
     parser.add_argument('--VNA', '-vna', help='VNA file containing the resonators. Relative to the specified folder above.', type=str)
-
+    parser.add_argument('--mode', '-m', help='Noise acquisition kernels. DIRECT uses direct demodulation PFB use the polyphase filter bank technique.', type=str, default= "DIRECT")
 
     args = parser.parse_args()
     try:
@@ -65,6 +65,6 @@ if __name__ == "__main__":
     # Data acquisition
 
     f = run(rate = args.rate*1e6, freq = rf_freq, front_end = args.frontend,
-            tones = np.asarray(tones), lapse = args.time, decimation = args.decimation, gain = args.gain, vna= args.VNA)
+            tones = np.asarray(tones), lapse = args.time, decimation = args.decimation, gain = args.gain, vna= args.VNA, mode = args.mode)
 
     # Data analysis and plotting will be in an other python script

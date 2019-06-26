@@ -140,6 +140,24 @@ class RX_buffer_demodulator{
 
         float2* profile;
 
+        //Direct demodulations frequency array on device
+        double* DIRECT_tone_frquencies;
+
+        //Direct demodulator bookeeping.
+        size_t DIRECT_current_index;
+
+        //tone calculation array for direct demodulation.
+        double *tones;
+
+        //Direct demodulation output size.
+        int DIRECT_output_size;
+
+        //Direct demodulation input
+        float2* direct_input;
+
+        //Direct demodulation output
+        float2* direct_output;
+
         //wrap RX signal information in the apposite struct
         chirp_parameter h_parameter;
 
@@ -160,6 +178,12 @@ class RX_buffer_demodulator{
         //! @brief Process the nodsp case by simply copying the input in the output.
         //! @todo This function should't exist: it would be better to directly bypass the RX_buffer_demodulator::process() call in the TXRX::rx_single_link() process.
         int process_nodsp(float2** __restrict__ input_buffer, float2** __restrict__ output_buffer);
+
+        //! @brief Process a single buffer by demodulating directly the tones (i.e. multiplying by sinusoids)
+        int process_direct(float2** __restrict__ input_buffer, float2** __restrict__ output_buffer);
+
+        //! @brief Close the direct demodulation case.
+        void close_direct();
 
         //! Close the NODSP case: just destroy the cuda stream object.
         void close_nodsp();

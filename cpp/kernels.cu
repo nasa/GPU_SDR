@@ -1,25 +1,51 @@
 #include "kernels.cuh"
 
-//Direct demodulation kernel. This kernel takes the raw input from the SDR and separate channels. Note: does not do any filtering. None: input and output can point to the same location for inplace operations.
-__global__ void deirect_demodulator(
-  tone_parameters* __restrict tones_param,
+//Direct demodulation kernel. This kernel takes the raw input from the SDR and separate channels. Note: does not do any filtering.
+__global__ void direct_demodulator(
+  double* __restrict tone_frquencies,
   size_t index_counter,
-  float2* intput,
-  float* output
+  uint single_tone_length,
+  size_t total_length,
+  float2* __restrict intput,
+  float2* __restrict output
 ){
+    double _i,_q;
+    double tone_calculated_phase;
+    uint input_index;
 
+    for(uint i = blockIdx.x * blockDim.x + threadIdx.x;
+        i < total_length;
+        i += gridDim.x*blockDim.x
+    ){
+
+        input_index = i % single_tone_length;
+
+        //here's the core: reading from the pointer should be automatically cached.
+        tone_calculated_phase = 2. * tone_frquencies[i/single_tone_length] * (index_counter + input_index); //*pi_f
+
+        //generate sine and cosine
+        sincospi(tone_calculated_phase,&_q,&_i);
+
+        //demodulate
+        output[i].x = intput[input_index].x * _i + intput[input_index].y * _q;
+        output[i].y = intput[input_index].y * _i - intput[input_index].x * _q;
+
+  }
 
 }
 
-//Thrust execution of the direct demodulation
-int deirect_demodulator_wrapper(float2* intput, float* output, int length){
+//Wrapper for the direct demodulation
+void deirect_demodulator_wrapper(
+  double* __restrict tone_frquencies,
+  size_t index_counter,
+  uint single_tone_length,
+  size_t total_length,
+  float2* __restrict intput,
+  float2* __restrict output,
+  cudaStream_t internal_stream){
 
-  //cast the device pointer to thrust
-  thrust::device_ptr<float2> wrapped_ptr = thrust::device_pointer_cast(intput);
+    direct_demodulator<<<1024,32,0,internal_stream>>>(tone_frquencies,index_counter,single_tone_length,total_length,intput,output);
 
-  //cast the pointer to raw
-  //raw_ptr = thrust::raw_pointer_cast(d_vec.data());
-  return length;
 }
 
 //allocates memory on gpu and fills with a real hamming window. returns a pointer to the window on the device.

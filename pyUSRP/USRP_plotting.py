@@ -252,8 +252,12 @@ def plot_raw_data(filenames, decimation=None, displayed_samples=None, low_pass=N
                 Y2 = signal.decimate(Y2, decimation, ftype='fir')
             else:
                 decimation = 1
-
-            X = np.arange(len(Y1)) / float(effective_rate / decimation) + file_start_time / float(effective_rate)
+            try:
+                X = np.arange(len(Y1)) / float(effective_rate / decimation) + file_start_time / float(effective_rate)
+            except TypeError:
+                error_msg = "The combination of start_time, end_time and or displayed_samples/decimation resulted in <=1 sample. Cannot plot."
+                print_error(error_msg)
+                raise(error_msg)
 
             if effective_rate / 1e6 > 1:
                 rate_tag = 'DAQ rate: %.2f Msps' % (effective_rate / 1e6)
