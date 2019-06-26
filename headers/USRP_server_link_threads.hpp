@@ -144,6 +144,9 @@ class TXRX{
         Sync_server* TCP_streamer;
 
         H5_file_writer* H5_writer;
+
+        //temporary storage of memory size multiplier for analysis
+        size_t mem_mult_tmp;
 };
 
 #endif

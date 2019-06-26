@@ -449,7 +449,7 @@ class global_parameter(object):
         empty_spec['fft_tones'] = 0
         empty_spec['pf_average'] = 4
 
-        empty_spec['data_mem_mult'] = 1
+        empty_spec['data_mem_mult'] = 0
 
         empty_spec['tuning_mode'] = 1  # fractional
         prop = {}
@@ -662,7 +662,7 @@ class global_parameter(object):
 
                     self.parameters[ant_key]['data_mem_mult'] = int(self.parameters[ant_key]['data_mem_mult'])
 
-                    if (self.parameters[ant_key]['wave_type'][0] == "DIRECT"):
+                    if ((self.parameters[ant_key]['wave_type'][0] == "DIRECT") and self.parameters[ant_key]['data_mem_mult'] == 0):
                         self.parameters[ant_key]['data_mem_mult'] = len(self.parameters[ant_key]['wave_type'])
 
                 # case in which it is OFF:
