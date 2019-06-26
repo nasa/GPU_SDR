@@ -59,7 +59,7 @@ struct chirp_parameter{
     float freq_norm; //coefficient to adapt buffer samples to TX/RX frequency (deprecated).
 };
 
-//descriptor of the mutitone generation
+//! Descriptor of the mutitone generation
 struct tone_parameters{
     int tones_number; //how many tones to generate
     int* tone_frquencies; //tones frequencies in Hz (frequency resolution will be 1Hz, host side)
@@ -67,8 +67,8 @@ struct tone_parameters{
 };
 
 
-//Direct demodulation kernel. This kernel takes the raw input from the SDR and separate channels. Note: does not do any filtering.
-__global__ void direct_demodulator(
+//! Direct demodulation kernel. This kernel takes the raw input from the SDR and separate channels. Note: does not do any filtering.
+__global__ void direct_demodulator_fp64(
   double* __restrict tone_frquencies,
   size_t index_counter,
   uint single_tone_length,
@@ -77,15 +77,31 @@ __global__ void direct_demodulator(
   float2* __restrict output
 );
 
-//Wrapper for the direct demodulation.
-void deirect_demodulator_wrapper(
-  double* __restrict tone_frquencies,
+//! Integer version of the direct demodulation kernel (numerically more stable). This kernel takes the raw input from the SDR and separate channels. Note: does not do any filtering.
+__global__ void direct_demodulator_integer(
+  int* __restrict tone_frequencies,
+  int* __restrict tone_phases,
+  int wavetablelen,
   size_t index_counter,
   uint single_tone_length,
   size_t total_length,
-  float2* __restrict intput,
+  float2* __restrict input,
+  float2* __restrict output
+);
+
+//! Wrapper for the integer direct demodulation.
+// Calls the #direct_demodulator_integer() kernel and places it on a given stream.
+void direct_demodulator_wrapper(
+  int* __restrict tone_frequencies,
+  int* __restrict tone_phases,
+  int wavetablelen,
+  size_t index_counter,
+  uint single_tone_length,
+  size_t total_length,
+  float2* __restrict input,
   float2* __restrict output,
-  cudaStream_t internal_stream);
+  cudaStream_t internal_stream
+);
 
 void chirp_gen_wrapper(
     float2* __restrict__ output, //pointer to the gpu buffer

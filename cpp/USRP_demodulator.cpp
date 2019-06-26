@@ -59,16 +59,19 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
           // Initialization code!
 
           // Create the device vector of frequencies
-          cudaMalloc((void **)&DIRECT_tone_frquencies, parameters->wave_type.size()*sizeof(double));
+          cudaMalloc((void **)&DIRECT_tone_frquencies, parameters->wave_type.size()*sizeof(int));
 
-          // Fill the device vector of frequencies (optimization: relative to the rate, see direct demodulation kernel)
-          tones = (double*)malloc(parameters->freq.size()*sizeof(double));
-          for(uint k=0; k<parameters->freq.size(); k++){
-            tones[k] = double(parameters->freq[k])/parameters->rate;
+          //No care for phase yet
+          cudaMalloc((void **)&DIRECT_tone_phases, parameters->wave_type.size()*sizeof(int));
+          cudaMemset(DIRECT_tone_phases, 0, parameters->wave_type.size()*sizeof(int));
+
+          DIRECT_tones = (int*)malloc(parameters->wave_type.size()*sizeof(int));
+          for(uint k=0; k<parameters->wave_type.size(); k++ ){
+            DIRECT_tones[k] = parameters->freq[k];
           }
 
           // Upload the frequency vector
-          cudaMemcpy(DIRECT_tone_frquencies, &(tones[0]), parameters->freq.size() * sizeof(double),cudaMemcpyHostToDevice);
+          cudaMemcpy(DIRECT_tone_frquencies, DIRECT_tones, parameters->freq.size() * sizeof(int),cudaMemcpyHostToDevice);
 
           // Allocate input memory
           cudaMalloc((void **)&direct_input,parameters->buffer_len*sizeof(float2));
@@ -368,8 +371,21 @@ int RX_buffer_demodulator::process_chirp(float2** __restrict__ input_buffer, flo
 
 int RX_buffer_demodulator::process_direct(float2** __restrict__ input_buffer, float2** __restrict__ output_buffer){
 
+  //Load the memory
   cudaMemcpyAsync(direct_input, *input_buffer, parameters->buffer_len*sizeof(float2),cudaMemcpyHostToDevice, internal_stream);
-  deirect_demodulator_wrapper(DIRECT_tone_frquencies, DIRECT_current_index,parameters->buffer_len,DIRECT_output_size,direct_input,direct_output,internal_stream);
+
+  //Call the kernel
+  direct_demodulator_wrapper(
+      DIRECT_tone_frquencies,
+      DIRECT_tone_phases,
+      parameters->rate,
+      DIRECT_current_index,
+      parameters->buffer_len,
+      DIRECT_output_size,direct_input,
+      direct_output,
+      internal_stream
+  );
+
   //Update bookeeping
   DIRECT_current_index+=parameters->buffer_len;
 
@@ -380,14 +396,16 @@ int RX_buffer_demodulator::process_direct(float2** __restrict__ input_buffer, fl
   cudaMemcpyAsync(*output_buffer, direct_output, sizeof(float2)*DIRECT_output_size, cudaMemcpyDeviceToHost, internal_stream);
   cudaStreamSynchronize(internal_stream);
   return DIRECT_output_size;
+
 }
 
 void RX_buffer_demodulator::close_direct(){
   cudaStreamDestroy(internal_stream);
   cudaFree(DIRECT_tone_frquencies);
+  cudaFree(DIRECT_tone_phases);
   cudaFree(direct_input);
   cudaFree(direct_output);
-  free(tones);
+  free(DIRECT_tones);
   return;
 }
 

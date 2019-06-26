@@ -140,7 +140,7 @@ void TXRX::set(usrp_param* global_param){
 
                 rx_thread_n.push_back(this_thread_n);
                 thread_counter +=1;
-                mem_mult_tmp = std::max(modes[i]->data_mem_mult,1);
+                mem_mult_tmp = std::max((int)(modes[i]->data_mem_mult),1);
                 if ((output_memory_size>modes[i]->buffer_len * mem_mult_tmp) or not rx_output_memory){
                     std::cout<<"Allocating RX output memory buffer: "<< (mem_mult_tmp * modes[i]->buffer_len * sizeof(float2))/(1024.*1024.)<< " MB per buffer..."<<std::endl;
                     if(modes[i]->buffer_len>output_memory_size and output_memory_size>0)std::cout<<" (updating buffer size)"<<std::endl;

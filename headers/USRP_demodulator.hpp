@@ -141,16 +141,19 @@ class RX_buffer_demodulator{
         float2* profile;
 
         //Direct demodulations frequency array on device
-        double* DIRECT_tone_frquencies;
+        int* DIRECT_tone_frquencies;
+
+        //Direct demodulations initial phases array on device
+        int* DIRECT_tone_phases;
 
         //Direct demodulator bookeeping.
         size_t DIRECT_current_index;
 
-        //tone calculation array for direct demodulation.
-        double *tones;
-
         //Direct demodulation output size.
         int DIRECT_output_size;
+
+        //Temporary frequency array storage. Usefull to convert an STL vector to CUDA array with confidence.
+        int *DIRECT_tones;
 
         //Direct demodulation input
         float2* direct_input;

@@ -1,7 +1,7 @@
 #include "kernels.cuh"
 
 //Direct demodulation kernel. This kernel takes the raw input from the SDR and separate channels. Note: does not do any filtering.
-__global__ void direct_demodulator(
+__global__ void direct_demodulator_fp64(
   double* __restrict tone_frquencies,
   size_t index_counter,
   uint single_tone_length,
@@ -21,7 +21,7 @@ __global__ void direct_demodulator(
         input_index = i % single_tone_length;
 
         //here's the core: reading from the pointer should be automatically cached.
-        tone_calculated_phase = 2. * tone_frquencies[i/single_tone_length] * (index_counter + input_index); //*pi_f
+        tone_calculated_phase = 2. * tone_frquencies[i/single_tone_length] * (index_counter + input_index);
 
         //generate sine and cosine
         sincospi(tone_calculated_phase,&_q,&_i);
@@ -34,18 +34,55 @@ __global__ void direct_demodulator(
 
 }
 
-//Wrapper for the direct demodulation
-void deirect_demodulator_wrapper(
-  double* __restrict tone_frquencies,
+__global__ void direct_demodulator_integer(
+  int* __restrict tone_frequencies,
+  int* __restrict tone_phases,
+  int wavetablelen,
   size_t index_counter,
   uint single_tone_length,
   size_t total_length,
-  float2* __restrict intput,
+  float2* __restrict input,
+  float2* __restrict output
+){
+    double _i,_q;
+    double tone_calculated_phase;
+    uint input_index;
+
+    for(uint i = blockIdx.x * blockDim.x + threadIdx.x;
+        i < total_length;
+        i += gridDim.x*blockDim.x
+    ){
+        input_index = i % single_tone_length;
+        int ch = i / single_tone_length;
+        long long int tf = tone_frequencies[ch];
+        long long int ii = (input_index + index_counter)%wavetablelen;
+        long long int tp = tone_phases[ch];
+        long long int my_phase = (tp + (tf * ii)%wavetablelen);
+        tone_calculated_phase = 2. * (my_phase / (double)wavetablelen);
+
+        //generate sine and cosine
+        sincospi(tone_calculated_phase,&_q,&_i);
+
+        //demodulate
+        output[i].x = input[input_index].x * _i + input[input_index].y * _q;
+        output[i].y = input[input_index].y * _i - input[input_index].x * _q;
+
+      }
+}
+
+//Wrapper for the direct demodulation
+void direct_demodulator_wrapper(
+  int* __restrict tone_frequencies,
+  int* __restrict tone_phases,
+  int wavetablelen,
+  size_t index_counter,
+  uint single_tone_length,
+  size_t total_length,
+  float2* __restrict input,
   float2* __restrict output,
   cudaStream_t internal_stream){
 
-    direct_demodulator<<<1024,32,0,internal_stream>>>(tone_frquencies,index_counter,single_tone_length,total_length,intput,output);
-
+    direct_demodulator_integer<<<1024,32,0,internal_stream>>>(tone_frequencies,tone_phases,wavetablelen,index_counter,single_tone_length,total_length,input,output);
 }
 
 //allocates memory on gpu and fills with a real hamming window. returns a pointer to the window on the device.
