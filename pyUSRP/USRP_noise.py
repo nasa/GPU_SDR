@@ -568,13 +568,25 @@ def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF =
         noise_command.set(RX_frontend, "decim", 0)
 
     elif mode =="DIRECT":
-        number_of_samples = rate * measure_t
-        tones = quantize_tones(tones, rate, rate)
+        buffer_len = int(1e6)
         decimation = int(decimation)
-        expected_samples = int(float(number_of_samples)/decimation)
+        number_of_samples = rate * measure_t
+        if decimation != 0:
+            expected_samples = int(float(number_of_samples)/decimation)
+            if buffer_len % decimation != 0:
+                error_msg = "Cannot use a decimation factor of %d with a buffer len of %d as decimation % buffer_len must be 0"
+                print_error(error_mas)
+                raise ValueError(error_msg)
+        else:
+            expected_samples = int(number_of_samples)
+            print_debug("GPU FIR filter disabled")
+
+        #Quantize tones to 1Hz resolution
+        tones = [int(tt) for tt in tones]
+
         noise_command = global_parameter()
         noise_command.set(TX_frontend, "mode", "TX")
-        noise_command.set(TX_frontend, "buffer_len", 1e6)
+        noise_command.set(TX_frontend, "buffer_len", buffer_len)
         noise_command.set(TX_frontend, "gain", tx_gain)
         noise_command.set(TX_frontend, "delay", 1)
         noise_command.set(TX_frontend, "samples", number_of_samples)
@@ -591,7 +603,7 @@ def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF =
 
         noise_command.set(RX_frontend, "mode", "RX")
         #noise_command.set(RX_frontend, 'tuning_mode', 0)
-        noise_command.set(RX_frontend, "buffer_len", 1e6)
+        noise_command.set(RX_frontend, "buffer_len", buffer_len)
         noise_command.set(RX_frontend, "gain", 0)
         noise_command.set(RX_frontend, "delay", 1 + delay)
         noise_command.set(RX_frontend, "samples", number_of_samples)
@@ -677,11 +689,8 @@ def spec_from_samples(samples, sampling_rate=1, welch=None, dbc=False, rotate=Tr
         samples = samples / np.mean(samples)
         samples = samples - np.mean(samples)
 
-    Frequencies, RealPart = signal.welch(samples[start_clip_samples:end_clip_samples].real, nperseg=welch, fs=sampling_rate, detrend='linear',
-                                         scaling='density')
-    Frequencies, ImaginaryPart = signal.welch(samples[start_clip_samples:end_clip_samples].imag, nperseg=welch, fs=sampling_rate, detrend='linear',
-                                              scaling='density')
-
+    Frequencies, RealPart = signal.welch(samples[start_clip_samples:end_clip_samples].real, nperseg=welch, fs=sampling_rate, detrend='linear',scaling='density')
+    Frequencies, ImaginaryPart = signal.welch(samples[start_clip_samples:end_clip_samples].imag, nperseg=welch, fs=sampling_rate, detrend='linear',scaling='density')
 
 
     return Frequencies, 10 * np.log10(RealPart), 10 * np.log10(ImaginaryPart)
@@ -719,10 +728,15 @@ def calculate_noise(filename, welch=None, dbc=False, rotate=True, usrp_number=0,
     active_RX_param = parameters.parameters[ant[0]]
 
     try:
-        sampling_rate = active_RX_param['rate'] / active_RX_param['fft_tones']
-        if active_RX_param['decim']>1:
-            sampling_rate /= active_RX_param['decim']
-
+        if active_RX_param['wave_type'][0] == "DIRECT":
+            if (active_RX_param['decim']>0):
+                sampling_rate = float(active_RX_param['rate']) / active_RX_param['decim']
+            else:
+                sampling_rate = float(active_RX_param['rate'])
+        else:
+            sampling_rate = float(active_RX_param['rate']) / active_RX_param['fft_tones']
+            if active_RX_param['decim']>1:
+                sampling_rate /= float(active_RX_param['decim'])
     except TypeError:
         print_warning("Parameters passed to spectrum evaluation are not valid. Sampling rate = 1")
         sampling_rate = 1
@@ -855,6 +869,9 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
     add_info_labels = None
     try:
         add_info_labels = kwargs['add_info']
+        if len(add_info_labels) != len(filenames):
+            print_warning("Cannot add info labels on noise plot. len(add_info_labels)(%d)!=len(filenames)(%d)"%(len(add_info_labels),len(filenames)))
+            add_info_labels = None
     except KeyError:
         pass
 

@@ -20,6 +20,8 @@
 #include <thrust/device_vector.h>
 #include <thrust/device_ptr.h>
 
+#include "fir.hpp"
+
 //! @cond
 #include <iostream>
 #include <stdio.h>
@@ -37,6 +39,8 @@
 //could be used to tune for other GPUs. NOTE: it also defines the shared memory
 //! @brief Tune the Thread Per Block used in certain functions.
 #define PFB_DECIM_TPB 64. //Threads per block
+
+
 
 
 struct filter_param {
@@ -83,20 +87,21 @@ __global__ void direct_demodulator_integer(
   int* __restrict tone_phases,
   int wavetablelen,
   size_t index_counter,
-  uint single_tone_length,
+  size_t single_tone_length,
   size_t total_length,
   float2* __restrict input,
   float2* __restrict output
 );
 
+
 //! Wrapper for the integer direct demodulation.
-// Calls the #direct_demodulator_integer() kernel and places it on a given stream.
+//! Calls the #direct_demodulator_integer() kernel and places it on a given stream.
 void direct_demodulator_wrapper(
   int* __restrict tone_frequencies,
   int* __restrict tone_phases,
   int wavetablelen,
   size_t index_counter,
-  uint single_tone_length,
+  size_t single_tone_length,
   size_t total_length,
   float2* __restrict input,
   float2* __restrict output,
@@ -146,12 +151,12 @@ void tone_select_wrapper(
 //allocates memory on gpu and fills with a real hamming window. returns a pointer to the window on the device.
 //note that this is a host function that wraps some device calls
 template <typename T>
-T* make_hamming_window(int length, int side, bool diagnostic = false);
-float2* make_hamming_window(int length, int side, bool diagnostic = false);
+T* make_hamming_window(int length, int side, bool diagnostic, bool host_ret);
+float2* make_hamming_window(int length, int side, bool diagnostic, bool host_ret);
 
 //allocates memory on gpu and fills with a real sinc window. returns a pointer to the window on the device.
 //note that this is a host function that wraps some device calls
-float2* make_sinc_window(int length, float fc, bool diagnostic);
+float2* make_sinc_window(int length, float fc, bool diagnostic, bool host_ret);
 
 //! @brief Creates a flattop window in the GPU memory.
 float2* make_flat_window(int length, int side, bool diagnostic);

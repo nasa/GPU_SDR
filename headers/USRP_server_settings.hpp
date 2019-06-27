@@ -77,14 +77,14 @@ using namespace logging::trivial;
 //length of the TX and RX queue. for non real time application longer queue are needed to stack up data
 
 //this two values increase the ammount of cpu RAM initially allocated. Increasing those values will result in more memory usage.
-#define RX_QUEUE_LENGTH     200
-#define TX_QUEUE_LENGTH     200
+#define RX_QUEUE_LENGTH     100
+#define TX_QUEUE_LENGTH     100
 
 //increasing those values will only increase the limit of RAM that COULD be used.
-#define ERROR_QUEUE_LENGTH  20000
-#define STREAM_QUEUE_LENGTH 20000
-#define SW_LOOP_QUEUE_LENGTH 200
-#define SECONDARY_STREAM_QUEUE_LENGTH 20000 //between the stream and the filewriter (keep it long if writing files)
+#define ERROR_QUEUE_LENGTH  1000
+#define STREAM_QUEUE_LENGTH 1000
+#define SW_LOOP_QUEUE_LENGTH 100
+#define SECONDARY_STREAM_QUEUE_LENGTH 100 //between the stream and the filewriter (keep it long if writing files)
 
 //cut-off frequency of the post-demodulation decimator filter (relative to Nyquist)(deprecated)
 #define ADDITIONAL_FILTER_FCUT 0.2
@@ -144,7 +144,7 @@ struct param{
     std::vector<float> chirp_t;
     std::vector<int> chirp_f;
     std::vector<int> swipe_s;
-    
+
     size_t data_mem_mult; //memory multiplier added to cope with analysis data expansion.
 
     //polyphase filter bank specific

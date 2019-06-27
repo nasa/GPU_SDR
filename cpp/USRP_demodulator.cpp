@@ -1,4 +1,6 @@
 #include "USRP_demodulator.hpp"
+#include "fir.hpp"
+#define checkcublas(X) assert( ( X ) == CUBLAS_STATUS_SUCCESS )
 
 //initialization: the parameters are coming directly from the client (from the async communication thread)
 //diagnostic allows to print the window on a binary file and stores some diagnostic information //TODO on a hdf5 file??
@@ -76,14 +78,36 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
           // Allocate input memory
           cudaMalloc((void **)&direct_input,parameters->buffer_len*sizeof(float2));
 
-          // Allocate output memory
-          cudaMalloc((void **)&direct_output, parameters->data_mem_mult* parameters->buffer_len*sizeof(float2));
-
           //Optimization: calculate this once.
           DIRECT_output_size = parameters->buffer_len * parameters->wave_type.size();
 
+          // Allocate output memory
+          cudaMalloc((void **)&direct_output, DIRECT_output_size*sizeof(float2));
+
           //Initialize bookeeping
           DIRECT_current_index = 0;
+
+          //Attach the demodulator handle to the stream.
+          cublasCreate(&handle);
+          cublasSetStream(handle,internal_stream);
+
+          DIRECT_FIR_output_size = DIRECT_output_size;
+
+          if(parameters->decim > 0){
+
+            //Initialize FIR taps
+            fir_taps = make_sinc_window(parameters->decim * parameters->pf_average, 0.75, false, true);
+            //for (int y = 0; )
+            //make_hamming_window<float2>(parameters->buffer_len, 0, false, true)
+
+            DIRECT_FIR_output_size /= parameters->decim;
+            cudaMalloc((void **)&FIR_output, DIRECT_FIR_output_size*sizeof(float2));
+            //Initialize FIR
+            //NOTE: the FIR will work on one channel at time
+            DIRECT_FIR = new FIR(handle, internal_stream, fir_taps, parameters->decim, parameters->pf_average, parameters->buffer_len);
+          }
+
+          cudaMalloc((void **)&transposed, DIRECT_FIR_output_size*sizeof(float2));
 
           //declare pointers to functions
           process_ptr = &RX_buffer_demodulator::process_direct;
@@ -104,7 +128,7 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
             fcut = 1./(2*parameters->fft_tones);
 
             //calculate the window and stores it in gpu memory. NOTE: this is done on the default stream.
-            window = make_sinc_window(parameters->fft_tones*parameters->pf_average, fcut, diagnostic);
+            window = make_sinc_window(parameters->fft_tones*parameters->pf_average, fcut, diagnostic,false);
 
             //convert the parameter struct to a gpu version for the kernels and upload it.
             upload_multitone_parameters();
@@ -247,7 +271,7 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
             fcut = 1./(2*parameters->fft_tones);
 
             //calculate the window and stores it in gpu memory. NOTE: this is done on the default stream.
-            window = make_sinc_window(parameters->fft_tones*parameters->pf_average, fcut, diagnostic);
+            window = make_sinc_window(parameters->fft_tones*parameters->pf_average, fcut, diagnostic, false);
 
             //convert the parameter struct to a gpu version for the kernels and upload it.
             upload_multitone_parameters();
@@ -369,11 +393,13 @@ int RX_buffer_demodulator::process_chirp(float2** __restrict__ input_buffer, flo
     return valid_size;
 }
 
+// @todo this function has to be splitted in decimated and undecimated case. branching is not ok here.
 int RX_buffer_demodulator::process_direct(float2** __restrict__ input_buffer, float2** __restrict__ output_buffer){
-
+  int ret;
+  size_t output_channel_len = parameters->buffer_len/std::max((int)(parameters->decim),1);
   //Load the memory
   cudaMemcpyAsync(direct_input, *input_buffer, parameters->buffer_len*sizeof(float2),cudaMemcpyHostToDevice, internal_stream);
-
+  std::cout<< "total length: "<<DIRECT_output_size<<" single tone length: "<<parameters->buffer_len <<std::endl;
   //Call the kernel
   direct_demodulator_wrapper(
       DIRECT_tone_frquencies,
@@ -381,10 +407,28 @@ int RX_buffer_demodulator::process_direct(float2** __restrict__ input_buffer, fl
       parameters->rate,
       DIRECT_current_index,
       parameters->buffer_len,
-      DIRECT_output_size,direct_input,
+      DIRECT_output_size,
+      direct_input,
       direct_output,
       internal_stream
   );
+
+  //Apply FIR filtering to each channel
+  if (parameters->decim>0){
+      for(size_t i = 0; i< parameters->wave_type.size(); i++) DIRECT_FIR->run_fir((direct_output)+(i*parameters->buffer_len), (FIR_output)+i*output_channel_len);
+      checkcublas(cublasCgeam(
+        handle,
+        CUBLAS_OP_T, //op A
+        CUBLAS_OP_N, //op B
+        parameters->wave_type.size(), //m
+        output_channel_len, //n
+        &onef, //aplha
+        FIR_output,output_channel_len, //A
+        &zerof, //beta
+        direct_input,output_channel_len, //B not important as beta == 0
+        transposed,(int)parameters->wave_type.size() //C
+      ));
+  }
 
   //Update bookeeping
   DIRECT_current_index+=parameters->buffer_len;
@@ -392,11 +436,28 @@ int RX_buffer_demodulator::process_direct(float2** __restrict__ input_buffer, fl
   //Numerically control this value: if too big adds noise in _sinf()
   DIRECT_current_index = DIRECT_current_index % parameters->rate;
 
-  //This is temporary. A decimator filter has to be in place here.
-  cudaMemcpyAsync(*output_buffer, direct_output, sizeof(float2)*DIRECT_output_size, cudaMemcpyDeviceToHost, internal_stream);
+  if (parameters->decim<=0){
+    //cudaMemcpyAsync(*output_buffer, direct_output, sizeof(float2)*DIRECT_output_size, cudaMemcpyDeviceToHost, internal_stream);
+    checkcublas(cublasCgeam(
+      handle,
+      CUBLAS_OP_T, //op A
+      CUBLAS_OP_N, //op B
+      parameters->wave_type.size(), //m
+      parameters->buffer_len, //n
+      &onef, //aplha
+      direct_output,parameters->buffer_len, //A
+      &zerof, //beta
+      direct_input,parameters->buffer_len, //B not important as beta == 0
+      transposed,(int)parameters->wave_type.size() //C
+    ));
+    cudaMemcpyAsync(*output_buffer, transposed, sizeof(float2)*DIRECT_output_size, cudaMemcpyDeviceToHost, internal_stream);
+    ret =  DIRECT_output_size;
+  }else{
+    ret = DIRECT_output_size/parameters->decim;
+    cudaMemcpyAsync(*output_buffer, transposed, sizeof(float2)*ret, cudaMemcpyDeviceToHost, internal_stream);
+  }
   cudaStreamSynchronize(internal_stream);
-  return DIRECT_output_size;
-
+  return ret;
 }
 
 void RX_buffer_demodulator::close_direct(){
@@ -405,7 +466,13 @@ void RX_buffer_demodulator::close_direct(){
   cudaFree(DIRECT_tone_phases);
   cudaFree(direct_input);
   cudaFree(direct_output);
+  cudaFree(transposed);
   free(DIRECT_tones);
+  if (parameters->decim>0){
+      delete(DIRECT_FIR);
+      free(fir_taps);
+      cudaFree(FIR_output);
+  }
   return;
 }
 
@@ -488,9 +555,6 @@ int RX_buffer_demodulator::process_pfb(float2** __restrict__ input_buffer, float
     //NOTE: this variable has been calculated before the buffer helper update
     //is needed to know how many samples to stream
     return output_buffer_valid_len;
-
-
-
 
 
 }

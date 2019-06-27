@@ -134,9 +134,9 @@ class RX_buffer_demodulator{
         //eventually used in decimation operations
         cublasHandle_t handle;
 
-        cufftComplex zero;
+        cufftComplex zero = {0.0f,0.0f};
 
-        cufftComplex one;
+        cufftComplex one = {1.0f,0.0f};
 
         float2* profile;
 
@@ -164,7 +164,26 @@ class RX_buffer_demodulator{
         //wrap RX signal information in the apposite struct
         chirp_parameter h_parameter;
 
-        //process a packet demodulating with chirp
+        //FIR class pointer for direct demodulation.
+        FIR* DIRECT_FIR;
+
+        //host pointer to device FIR taps for direct demodulation
+        float2* fir_taps;
+
+        //! Direct demodulation device transpose output
+        float2* transposed;
+
+        cuComplex onef = {1.f,0.f};
+
+        cuComplex zerof = {0.f,0.f};
+
+        //! Direct demodulator output size after FIR
+        size_t DIRECT_FIR_output_size;
+
+        //! FIR output space for direct demodulation.
+        float2* FIR_output;
+
+        //! Process a packet demodulating with chirp
         int process_chirp(float2** __restrict__ input_buffer, float2** __restrict__ output_buffer);
 
         //process a packet with the pfb and set the variables for the next

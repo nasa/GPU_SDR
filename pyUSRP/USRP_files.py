@@ -662,8 +662,8 @@ class global_parameter(object):
 
                     self.parameters[ant_key]['data_mem_mult'] = int(self.parameters[ant_key]['data_mem_mult'])
 
-                    if ((self.parameters[ant_key]['wave_type'][0] == "DIRECT") and self.parameters[ant_key]['data_mem_mult'] == 0):
-                        self.parameters[ant_key]['data_mem_mult'] = len(self.parameters[ant_key]['wave_type'])
+                    if ((self.parameters[ant_key]['wave_type'][0] == "DIRECT")):
+                        self.parameters[ant_key]['data_mem_mult'] = max(np.ceil(len(self.parameters[ant_key]['wave_type'])/max(float(self.parameters[ant_key]['decim']),1)),1)
 
                 # case in which it is OFF:
                 else:

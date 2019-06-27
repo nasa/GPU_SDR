@@ -244,6 +244,7 @@ void Sync_server::tcp_streamer(param* current_settings){
             if(stream_queue->pop(incoming_packet)){
                 //calculate total size to be transmitted
                 int total_size = header_size + incoming_packet.length * 2 * sizeof(float);
+                std::cout<<"streaming "<<incoming_packet.length<<" samples"<<std::endl;
 
                 //setrialize data structure in a char buffer
                 boost::this_thread::interruption_point();

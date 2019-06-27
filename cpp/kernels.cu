@@ -1,5 +1,12 @@
 #include "kernels.cuh"
 
+__global__ void DIRECT_decimator(
+  uint single_tone_length,
+  size_t total_length,
+  float2* __restrict intput,
+  float2* __restrict output
+);
+
 //Direct demodulation kernel. This kernel takes the raw input from the SDR and separate channels. Note: does not do any filtering.
 __global__ void direct_demodulator_fp64(
   double* __restrict tone_frquencies,
@@ -34,26 +41,27 @@ __global__ void direct_demodulator_fp64(
 
 }
 
+
 __global__ void direct_demodulator_integer(
   int* __restrict tone_frequencies,
   int* __restrict tone_phases,
   int wavetablelen,
   size_t index_counter,
-  uint single_tone_length,
+  size_t single_tone_length,
   size_t total_length,
   float2* __restrict input,
   float2* __restrict output
 ){
     double _i,_q;
     double tone_calculated_phase;
-    uint input_index;
+    size_t input_index;
 
-    for(uint i = blockIdx.x * blockDim.x + threadIdx.x;
+    for(size_t i = blockIdx.x * blockDim.x + threadIdx.x;
         i < total_length;
         i += gridDim.x*blockDim.x
     ){
         input_index = i % single_tone_length;
-        int ch = i / single_tone_length;
+        size_t ch = i / single_tone_length;
         long long int tf = tone_frequencies[ch];
         long long int ii = (input_index + index_counter)%wavetablelen;
         long long int tp = tone_phases[ch];
@@ -63,9 +71,16 @@ __global__ void direct_demodulator_integer(
         //generate sine and cosine
         sincospi(tone_calculated_phase,&_q,&_i);
 
-        //demodulate
-        output[i].x = input[input_index].x * _i + input[input_index].y * _q;
+        //demodulate (strided acces is due to the way python inteprets packets)
+        //output[input_index*2+ch].y = input_index;//input[input_index].y * _i - input[input_index].x * _q;
+        //output[input_index*2+ch].x = tf;//input[input_index].x * _i + input[input_index].y * _q;
+
+        //multichannel diagnostic
+        //output[i].y = input_index;
+        //output[i].x = tf;
+
         output[i].y = input[input_index].y * _i - input[input_index].x * _q;
+        output[i].x = input[input_index].x * _i + input[input_index].y * _q;
 
       }
 }
@@ -76,7 +91,7 @@ void direct_demodulator_wrapper(
   int* __restrict tone_phases,
   int wavetablelen,
   size_t index_counter,
-  uint single_tone_length,
+  size_t single_tone_length,
   size_t total_length,
   float2* __restrict input,
   float2* __restrict output,
@@ -89,7 +104,7 @@ void direct_demodulator_wrapper(
 //note that this is a host function that wraps some device calls
 //TODO: the window function should be made in a class not in a function. Once we have the class we can put the class template directly in the header file to avoid undefined reference to specialized templates during linking.
 template <typename T>
-T* make_hamming_window(int length, int side, bool diagnostic){
+T* make_hamming_window(int length, int side, bool diagnostic, bool host_ret){
 
     T *d_win,*h_win = (T*)malloc(length*sizeof(T));
 
@@ -137,13 +152,9 @@ T* make_hamming_window(int length, int side, bool diagnostic){
 }
 //specializing the template to avoid error during the linking process
 template <>
-float2* make_hamming_window<float2>(int length, int side, bool diagnostic){
+float2* make_hamming_window<float2>(int length, int side, bool diagnostic, bool host_ret){
 
-    float2 *d_win,*h_win = (float2*)malloc(length*sizeof(float2));
-
-    //allocate some memory on the GPU
-    cudaMalloc((void **)&d_win, length*sizeof(float2));
-
+    float2 *ret,*d_win,*h_win = (float2*)malloc(length*sizeof(float2));
 
     //initialize the accumulator used for normalization
     float scale = 0;
@@ -168,9 +179,6 @@ float2* make_hamming_window<float2>(int length, int side, bool diagnostic){
     //normalize the window
     for(int i = 0; i < length; i++) h_win[i].x /= scale;
 
-    //upload the window on the GPU
-    cudaMemcpy(d_win, h_win, length*sizeof(float2),cudaMemcpyHostToDevice);
-
     if(diagnostic){
         //write a diagnostic binary file containing the window.
         //TODO there hsould be a single hdf5 file containing all the diagnostic informations
@@ -178,11 +186,23 @@ float2* make_hamming_window<float2>(int length, int side, bool diagnostic){
         fwrite(static_cast<void*>(h_win), length, sizeof(float2), window_diagnostic);
         fclose(window_diagnostic);
     }
+    if (not host_ret){
 
-    //cleanup
-    free(h_win);
-    cudaDeviceSynchronize();
-    return d_win;
+        //allocate some memory on the GPU
+        cudaMalloc((void **)&d_win, length*sizeof(float2));
+
+        //upload the window on the GPU
+        cudaMemcpy(d_win, h_win, length*sizeof(float2),cudaMemcpyHostToDevice);
+
+        //cleanup
+        free(h_win);
+        cudaDeviceSynchronize();
+        ret =  d_win;
+    }else{
+        ret = h_win;
+    }
+
+    return ret;
 }
 
 float2* make_flat_window(int length, int side, bool diagnostic){
@@ -235,12 +255,9 @@ float2* make_flat_window(int length, int side, bool diagnostic){
 
 //allocates memory on gpu and fills with a real sinc window. returns a pointer to the window on the device.
 //note that this is a host function that wraps some device calls
-float2* make_sinc_window(int length, float fc, bool diagnostic = false){
+float2* make_sinc_window(int length, float fc, bool diagnostic = false, bool host_ret = false){
 
-    float2 *d_win,*h_win = (float2*)malloc(length*sizeof(float2));
-
-    //allocate some memory on the GPU
-    cudaMalloc((void **)&d_win, length*sizeof(float2));
+    float2 *ret,*d_win,*h_win = (float2*)malloc(length*sizeof(float2));
 
     int sinc_index;
 
@@ -268,8 +285,7 @@ float2* make_sinc_window(int length, float fc, bool diagnostic = false){
     //normalize the window
     for(int i = 0; i < length; i++) h_win[i].x /= scale;
 
-    //upload the window on the GPU
-    cudaMemcpy(d_win, h_win, length*sizeof(float2),cudaMemcpyHostToDevice);
+
 
     if(diagnostic){
         //write a diagnostic binary file containing the window.
@@ -278,11 +294,19 @@ float2* make_sinc_window(int length, float fc, bool diagnostic = false){
         fwrite(static_cast<void*>(h_win), length, sizeof(float2), window_diagnostic);
         fclose(window_diagnostic);
     }
-
-    //cleanup
-    free(h_win);
-    cudaDeviceSynchronize();
-    return d_win;
+    if(not host_ret){
+      //allocate some memory on the GPU
+      cudaMalloc((void **)&d_win, length*sizeof(float2));
+      //upload the window on the GPU
+      cudaMemcpy(d_win, h_win, length*sizeof(float2),cudaMemcpyHostToDevice);
+      //cleanup
+      free(h_win);
+      cudaDeviceSynchronize();
+      ret = d_win;
+    }else{
+      ret = h_win;
+    }
+    return ret;
 }
 
 __global__ void init_states(curandState *state, int twice_vector_len){
