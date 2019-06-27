@@ -399,7 +399,7 @@ int RX_buffer_demodulator::process_direct(float2** __restrict__ input_buffer, fl
   size_t output_channel_len = parameters->buffer_len/std::max((int)(parameters->decim),1);
   //Load the memory
   cudaMemcpyAsync(direct_input, *input_buffer, parameters->buffer_len*sizeof(float2),cudaMemcpyHostToDevice, internal_stream);
-  std::cout<< "total length: "<<DIRECT_output_size<<" single tone length: "<<parameters->buffer_len <<std::endl;
+  //std::cout<< "total length: "<<DIRECT_output_size<<" single tone length: "<<parameters->buffer_len <<std::endl;
   //Call the kernel
   direct_demodulator_wrapper(
       DIRECT_tone_frquencies,
@@ -718,7 +718,7 @@ void RX_buffer_demodulator::upload_multitone_parameters(){
       for(int u = 0; u<h_param.eff_n_tones; u++){
         if((parameters->freq[u] < bin_axis[i] + bin_size) && (parameters->freq[u] > bin_axis[i] - bin_size) ){
             tone_bins[u] = (i + (parameters->fft_tones/2))%parameters->fft_tones;
-            std::cout<<"parameter f: "<<parameters->freq[u]<<" goes in bin: "<<tone_bins[u]<<std::endl;
+            //std::cout<<"parameter f: "<<parameters->freq[u]<<" goes in bin: "<<tone_bins[u]<<std::endl;
           }
         }
     }
