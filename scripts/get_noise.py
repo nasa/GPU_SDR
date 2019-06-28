@@ -1,5 +1,5 @@
 
-import sys,os
+import sys,os,random
 import numpy as np
 try:
     import pyUSRP as u
@@ -38,6 +38,7 @@ if __name__ == "__main__":
     parser.add_argument('--pf', '-pf', help='Polyphase averaging factor for PF mode and taps multiplier for DIRECT mode FIR filter', type=int, default=4)
     parser.add_argument('--VNA', '-vna', help='VNA file containing the resonators. Relative to the specified folder above.', type=str)
     parser.add_argument('--mode', '-m', help='Noise acquisition kernels. DIRECT uses direct demodulation PFB use the polyphase filter bank technique.', type=str, default= "DIRECT")
+    parser.add_argument('--random', '-r', help='Generate N random tones for benchmarking purposes', type=int)
 
     args = parser.parse_args()
     try:
@@ -51,11 +52,17 @@ if __name__ == "__main__":
         rf_freq, tones = u.get_tones(args.VNA)
         u.print_debug("getting %d tones from %s" % (len(tones),args.VNA))
     else:
-        try:
-            tones = [float(x) for x in args.tones]
-            tones = np.asarray(tones)*1e6
-        except ValueError:
-            u.print_error("Cannot convert tone arfreqgument.")
+        if args.random is not None:
+            tones = [random.randrange(-args.rate/2.,-args.rate/2.,args.rate) for c in range(args.random)]
+        else:
+            try:
+                if args.tones is not None:
+                    tones = [float(x) for x in args.tones]
+                    tones = np.asarray(tones)*1e6
+                else:
+                    tones = []
+            except ValueError:
+                u.print_error("Cannot convert tone argument.")
 
         rf_freq = args.freq*1e6
 
