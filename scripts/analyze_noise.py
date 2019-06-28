@@ -14,7 +14,7 @@ import argparse
 
 def run(backend, files, welch):
     for f in files:
-        u.calculate_noise(f, verbose = True, welch = max(welch,1), dbc = False, clip = 0.1)
+        u.calculate_noise(f, verbose = True, welch = max(welch,1), dbc = True, clip = 0.1)
 
     print u.plot_noise_spec(files, channel_list=None, max_frequency=None, title_info=None, backend=backend,
                     cryostat_attenuation=0, auto_open=True, output_filename=None, add_info = ["decimation: 100x fs: 100Msps","loopback decimation 100x","decimation: OFF fs: 1Msps"])

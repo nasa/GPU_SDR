@@ -164,8 +164,8 @@ class RX_buffer_demodulator{
         //wrap RX signal information in the apposite struct
         chirp_parameter h_parameter;
 
-        //FIR class pointer for direct demodulation.
-        FIR* DIRECT_FIR;
+        //! FIR class pointer for direct demodulation (one per channel).
+        FIR** DIRECT_FIR;
 
         //host pointer to device FIR taps for direct demodulation
         float2* fir_taps;
