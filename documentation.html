@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="">
+  <meta name="author" content="">
+
+  <title>GPU readout docs</title>
+
+  <!-- Bootstrap core CSS -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+  <link href="server_docs/css/full-width-pics.css" rel="stylesheet">
+  <!-- Custom styles for this template -->
+  <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+
+</head>
+
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+    <div class="container">
+      <a class="navbar-brand" href="#">Flexible Radiofrequency Readout</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarResponsive">
+        <ul class="navbar-nav ml-auto">
+          <li class="nav-item active">
+            <a class="nav-link" href="#">This page
+              <span class="sr-only">(current)</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="server_docs/build/html/index.html">GPU Server</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="lib_docs/lib_docs_index.html">Python client API</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#">Web GUI (Coming soon...)</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Header - set the background image for the header in the line below -->
+  <header class="py-5 bg-image-full" style="background-image: url('server_docs/images/front_pic.jpeg');">
+    <img class="img-fluid d-block mx-auto" src="server_docs/images/jpl-logo.png" style="height: 90px;" alt="logo_not_found">
+    <img class="img-fluid d-block mx-auto" src="server_docs/images/caltech-logo.png" style="height:90px;" alt="logo_not_found">
+  </header>
+
+  <!-- Content section -->
+  <section class="py-5">
+    <div class="container">
+      <h1>GPU flexible readout</h1>
+      <p class="lead">This software provide an interface with SDR (software defined radio) capable of reading out superconductive frequency multiplexed detectors and perform basic noise analysis.</p>
+      <p>The software consist in two parts: a GPU server application and a Python 2.7 client API. The respective documentation is accessible in the menu at the top of the page.</p>
+      <div class="alert alert-warning" role="alert">
+        If the links don't work as expected and you are reading this documentation from your own local source you may have to compile the documentation first. Check the README file in the root folder.
+      </div>
+      <h2>GPU server application</h2>
+      <p class="lead"> The GPU server is a program that exchange the data between the SDR(s) and the GPU(s).<p>
+      <p>It sources DSP specifications needed for analyzing and generating signals from the client API via TCP protocol. The result of the signal processing is streamed to the client API and/or saved on local storage. The GPU server has first to be compiled on the linux machine that will run it. Launch it with sudo permission and make sure it finds at least one device.</p>
+      <h2>Python client API</h2>
+      <p class="lead">The client API interfaces the user with the server exposing high level functionalities like VNA scan and multitone noise acquisition. </p>
+      <p>The API communicate with the GPU server via TCP protocol and saves to disk the data received. The API also includes basic noise analysis functionalities like resonator fitting and noise spectra plotting</p>
+
+
+
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="py-5 bg-dark">
+    <div class="container">
+      <p class="m-0 text-center text-white">Opensource software license statement TBD</p>
+    </div>
+    <!-- /.container -->
+  </footer>
+
+</body>
+
+
+<script>
+  var is404 = location.href.search(/(\?|&)page=fourOhFour(\&|$)/g) =! -1;
+  if ( is404 ) {
+      // jQuery popup code here
+  }
+</script>
+
+</html>
