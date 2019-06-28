@@ -1072,9 +1072,9 @@ def copy_resonator_group(VNA_filename, NOISE_filename):
         - None
     '''
     VNA_filename = format_filename(VNA_filename)
+    resonator_grp_name = "Resonators"
     VNA_fv = h5py.File(VNA_filename, 'r')
-
-    if VNA_fv[resonator_grp_name] not in VNA_fv.keys():
+    if resonator_grp_name not in VNA_fv.keys():
         err_msg = 'VNA file:%s does not contain the Resonators group'%VNA_filename
         print_error(err_msg)
         raise ValueError(err_msg)
@@ -1084,13 +1084,15 @@ def copy_resonator_group(VNA_filename, NOISE_filename):
 
     print_debug("Copying resonator group from \'%s\' to \'%s\' ..."%(VNA_filename,NOISE_filename))
 
-    resonator_grp_name = "Resonators"
+
     resonator_grp = VNA_fv[resonator_grp_name]
 
     try:
-        NOISE_fv = fv.create_group(resonator_grp_name)
+        NOISE_fv_reso = NOISE_fv.create_group(resonator_grp_name)
     except ValueError:
         print_warning("Overwriting Noise subgroup %s in h5 file" % resonator_grp_name)
+        del NOISE_fv[resonator_grp_name]
+    else:
         del NOISE_fv[resonator_grp_name]
     # noise_resonator_group = noise_group.create_group(resonator_group_name)
     NOISE_fv.copy(resonator_grp, NOISE_fv)
@@ -1137,7 +1139,11 @@ def get_frequency_timestreams(NOISE_filename, start = None, end = None, channel_
     info = get_rx_info(NOISE_filename, ant=ant)
     last_sample = None
     if start is not None:
-        time_conv = float(info['rate'])/info['fft_tones']
+        if info['wave_type'] == "TONES":
+            decimation_factor = info['fft_tones']/max(info['decim'],1.)
+        else:
+            decimation_factor = info['decim']
+        time_conv = float(info['rate'])/decimation_factor
         start_sample = time_conv*start
         if end is not None:
             last_sample = time_conv*end
