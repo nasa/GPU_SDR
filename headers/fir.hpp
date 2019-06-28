@@ -30,6 +30,7 @@ class FIR
 	void fir_apply(const float2 *din);
 	void fir_shift();
 	void fir_to_host(float2 *hout);
+	void fir_to_dev(float2 *dout);
 
 	void run_fir(const float2 *din, float2 *hout);
 

@@ -68,17 +68,21 @@ void FIR::fir_shift()
 	cudaMemsetAsync(&_dout[rem],0,_nb*sizeof(float2),_stream);
 }
 
-//MODIFIED TO DEVICE-DEVICE (more operations needed)
 void FIR::fir_to_host(float2 *hout)
 {
-	//cudaMemcpyAsync(hout,_dout,_nb*sizeof(float2),cudaMemcpyDeviceToHost,_stream);	// M is the decimation factor
-  cudaMemcpyAsync(hout,_dout,_nb*sizeof(float2),cudaMemcpyDeviceToDevice,_stream);	// M is the decimation factor
+	cudaMemcpyAsync(hout,_dout,_nb*sizeof(float2),cudaMemcpyDeviceToHost,_stream);	// M is the decimation factor
 
 }
 
+// To be refined
+//! @todo refine names
+void FIR::fir_to_dev(float2 *dout)
+{
+  cudaMemcpyAsync(dout,_dout,_nb*sizeof(float2),cudaMemcpyDeviceToDevice,_stream);	// M is the decimation factor
+}
 void FIR::run_fir(const float2 *din, float2 *hout)
 {
 	fir_apply(din);
-	fir_to_host(hout);
+	fir_to_dev(hout);
 	fir_shift();
 }

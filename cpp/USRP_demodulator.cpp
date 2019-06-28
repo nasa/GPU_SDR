@@ -96,7 +96,7 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
           if(parameters->decim > 0){
 
             //Initialize FIR taps
-            fir_taps = make_sinc_window(parameters->decim * parameters->pf_average, 0.75, false, true);
+            fir_taps = make_sinc_window(parameters->decim * parameters->pf_average, 0.75/(parameters->decim*2), false, true);
             //for (int y = 0; )
             //make_hamming_window<float2>(parameters->buffer_len, 0, false, true)
 
@@ -104,7 +104,10 @@ RX_buffer_demodulator::RX_buffer_demodulator(param* init_parameters, bool init_d
             cudaMalloc((void **)&FIR_output, DIRECT_FIR_output_size*sizeof(float2));
             //Initialize FIR
             //NOTE: the FIR will work on one channel at time
-            DIRECT_FIR = new FIR(handle, internal_stream, fir_taps, parameters->decim, parameters->pf_average, parameters->buffer_len);
+            DIRECT_FIR = (FIR**)malloc(sizeof(FIR*)*parameters->wave_type.size());
+
+            //could make use of multiple streams
+            for(size_t k=0; k<parameters->wave_type.size(); k++)DIRECT_FIR[k] = new FIR(handle, internal_stream, fir_taps, parameters->decim, parameters->pf_average, parameters->buffer_len);
           }
 
           cudaMalloc((void **)&transposed, DIRECT_FIR_output_size*sizeof(float2));
@@ -415,7 +418,7 @@ int RX_buffer_demodulator::process_direct(float2** __restrict__ input_buffer, fl
 
   //Apply FIR filtering to each channel
   if (parameters->decim>0){
-      for(size_t i = 0; i< parameters->wave_type.size(); i++) DIRECT_FIR->run_fir((direct_output)+(i*parameters->buffer_len), (FIR_output)+i*output_channel_len);
+      for(size_t i = 0; i< parameters->wave_type.size(); i++) DIRECT_FIR[i]->run_fir((direct_output)+(i*parameters->buffer_len), (FIR_output)+i*output_channel_len);
       checkcublas(cublasCgeam(
         handle,
         CUBLAS_OP_T, //op A
@@ -469,7 +472,8 @@ void RX_buffer_demodulator::close_direct(){
   cudaFree(transposed);
   free(DIRECT_tones);
   if (parameters->decim>0){
-      delete(DIRECT_FIR);
+      for(size_t k=0; k<parameters->wave_type.size(); k++)delete(DIRECT_FIR[k]);
+      free(DIRECT_FIR);
       free(fir_taps);
       cudaFree(FIR_output);
   }
