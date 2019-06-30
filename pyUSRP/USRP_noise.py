@@ -1419,6 +1419,83 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
         return final_filename
 
 
+def diagnostic_VNA_noise(noise_filename, noise_points = None, VNA_file = None, ant = "A_RX2", backend = 'matplotlib', **kwargs):
+    '''
+    Plot the VNA traces and the noise (averaged or in N points) on the same plot to check for acquisition consistency.
+    The noise file has to contain the Resonators group in order to use this function; to copy that from a VNA file use the function #copy_resonator_group().
+
+    :param noise_filename: noise acquisition filename.
+    :param noise_points: the default behaviour is to average every channel in a single point; if this argument is >1 the noise will be decimated in that number of points.
+    :param VNA_file: if the fit information has to be taken from an external VNA file fill this argument with the filename.
+    :param backend: Choose the plotting backend. Currently implemented: plotly and matplotlib
+    :param ant: specify the antenna used to take noise data. Default is A_RX2
+    :param kwargs:
+        * auto_open: plotly backend specific, determines if after saving the plot the browser is called.
+        * multi_plot: matplotlib specific argument, if True instead of a single plot holding all diagnostics a folder will be created containing a plot per channel.
+        * figsize: matplotlib specific argument: figure size of the plot or each plot.
+
+    TODO: allow this function to interpret multiple VNA sources and multiple noise files.
+
+    '''
+
+    noise_filename = format_filename(noise_filename)
+    print("Plotting diagnostic data from \'%s\'"%noise_filename)
+    resonator_grp_name = "Resonators"
+    info = get_rx_info(noise_filename, ant=ant)
+    noise_file = h5py.File(noise_filename, 'r')
+
+    #source fit data
+    fit_source_filename = noise_filename
+    extra_source_info = ""
+    if VNA_file is not None:
+        fit_source_filename = format_filename(VNA_file)
+        extra_source_info = " Fit data taken from \'%s\'."%fit_source_filename
+        print_debug(extra_source_info)
+    fit_param = get_fit_param(fit_source_filename)
+    fit_data = get_fit_data(fit_source_filename)
+
+    #check backend existance
+    if ((backend!='') and (backend!='')):
+        err_msg = "backend %s not implemented in diagnostic_VNA_noise() function"%backend
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    #check Resonators group existance
+    if resonator_grp_name not in noise_file.keys():
+        err_msg = "Cannot find the Resonator group in the file %s" % noise_filename
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    #check resonator group length matching
+    if (len(noise_file.keys()) < len(info['wave_type'])):
+        warning_msg = "The length of the resonator group (%d) does not match the number of tones (%d) in file %s."
+        print_warning(warning_msg)
+
+    #check frequency matching
+    tones = np.asarray(info['freq']) + info['rf']
+    fit_freqs = np.asarray([p['f0'] for p in fit_param])
+
+    #do averages
+    if noise_points is None:
+        noise_points = np.asarray([
+            np.mean(noise_file['raw_data0'][dataset_name]) for dataset_name in noise_file['raw_data0'][ant]
+        ])
+    else:
+        decimation = int(len(noise_file['raw_data0']['channel_0'])/noise_points)
+        print_debug("Decimating %d"%decimation)
+        noise_points = np.asarray([
+            signal.decimate(
+                noise_file['raw_data0'][dataset_name] for dataset_name in noise_file['raw_data0'][ant],
+                decimation,
+                ftype="fir"
+            )[:] #here we should truncate to hide FIR effects
+        ])
+
+
+    #plot
+
+    return
+
 def calculate_NEF_spectra():
     #copied from calculate_spec
     return
