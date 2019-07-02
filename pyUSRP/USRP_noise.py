@@ -1169,7 +1169,7 @@ def get_frequency_timestreams(NOISE_filename, start = None, end = None, channel_
                    verbose=False, error_coord=False, big_file = False)
     result_f = []
     result_q = []
-    for i in range(len(data)):
+    for i in range(len(params)):
         # f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a
         fit_param = (params[i]['f0'], params[i]['A'], params[i]['phi'], params[i]['D'], params[i]['Qi'], params[i]['Qr'], np.real(params[i]['Qe']),np.imag(params[i]['Qe']),params[i]['a'])
         f_ts, q_ts = calculate_frequency_timestream(tones[i], data[i], fit_param)
@@ -1399,11 +1399,6 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
         if backend == 'matplotlib':
             fig.suptitle(plot_title + "\n" + rate_tag)
             handles, labels = ax[0].get_legend_handles_labels()
-            if len(errors) > 0:
-                yellow_patch = mpatches.Patch(color='yellow', label='ERRORS')
-                handles.append(yellow_patch)
-                labels.append('ERRORS')
-            #fig.legend(handles, labels, loc=7)
             ax[0].legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
             ax[0].grid(True)
             ax[1].grid(True)
@@ -1419,25 +1414,26 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
         return final_filename
 
 
-def diagnostic_VNA_noise(noise_filename, noise_points = None, VNA_file = None, ant = "A_RX2", backend = 'matplotlib', **kwargs):
+def diagnostic_VNA_noise(noise_filename, points = None, VNA_file = None, ant = "A_RX2", backend = 'matplotlib', **kwargs):
     '''
     Plot the VNA traces and the noise (averaged or in N points) on the same plot to check for acquisition consistency.
     The noise file has to contain the Resonators group in order to use this function; to copy that from a VNA file use the function #copy_resonator_group().
 
     :param noise_filename: noise acquisition filename.
-    :param noise_points: the default behaviour is to average every channel in a single point; if this argument is >1 the noise will be decimated in that number of points.
+    :param points: the default behaviour is to average every channel in a single point; if this argument is >1 the noise will be decimated in that number of points.
     :param VNA_file: if the fit information has to be taken from an external VNA file fill this argument with the filename.
     :param backend: Choose the plotting backend. Currently implemented: plotly and matplotlib
     :param ant: specify the antenna used to take noise data. Default is A_RX2
     :param kwargs:
         * auto_open: plotly backend specific, determines if after saving the plot the browser is called.
-        * multi_plot: matplotlib specific argument, if True instead of a single plot holding all diagnostics a folder will be created containing a plot per channel.
         * figsize: matplotlib specific argument: figure size of the plot or each plot.
 
     TODO: allow this function to interpret multiple VNA sources and multiple noise files.
 
     '''
-
+    def db(value):
+        return 20*np.log10(value)
+    
     noise_filename = format_filename(noise_filename)
     print("Plotting diagnostic data from \'%s\'"%noise_filename)
     resonator_grp_name = "Resonators"
@@ -1484,9 +1480,10 @@ def diagnostic_VNA_noise(noise_filename, noise_points = None, VNA_file = None, a
     #retrive calibrations
     calibrations = [(1./tx_info['ampl'][i])*USRP_calibration/(10**((USRP_power + tx_info['gain'])/20.)) for i in range(len(tx_info['ampl']))]
 
+
     #do averages
     print_debug("Averaging...")
-    if noise_points is None:
+    if points is None:
         noise_points = np.asarray([
             np.mean(dataset) for dataset in noise_file['raw_data0'][ant]['data']
         ])
@@ -1494,12 +1491,8 @@ def diagnostic_VNA_noise(noise_filename, noise_points = None, VNA_file = None, a
         decimation = int(np.shape(noise_file['raw_data0'][ant]['data'])[1]/noise_points)
         print_debug("Decimating %d"%decimation)
         noise_points = np.asarray([
-<<<<<<< HEAD
             signal.decimate(dataset,decimation,ftype="fir") for dataset in noise_file['raw_data0'][ant]['data']
-=======
-            signal.decimate(noise_file['raw_data0'][ant][dataset_name],decimation,ftype="fir")[:] for dataset_name in noise_file['raw_data0'][ant]
-             #here we should truncate to hide FIR effects
->>>>>>> e094f568ccf6335ed0f9218ac45b5bbb985de328
+
         ])
 
     title = "Diagnostic plot: overlaying averaged noise acquisition and VNA traces"
@@ -1508,22 +1501,62 @@ def diagnostic_VNA_noise(noise_filename, noise_points = None, VNA_file = None, a
     if backend == 'matplotlib':
         if fig_size is None:
             fig_size = (16, 10)
-        fig = pl.figure()
-        fig.set_size_inches(fig_size[0], fig_size[1])
-        ax = fig.add_subplot(111)
+        diagnostic_folder_name = "Diagnostic_"+noise_filename.split(".")[0]
+        try:
+            os.mkdir(diagnostic_folder_name)
+        except OSError:
+            pass
+
+
+        os.chdir(diagnostic_folder_name)
         for i in range(len(fit_data)):
+            #Plot single channel data
+            fig = pl.figure()
+            fig.set_size_inches(fig_size[0], fig_size[1])
+            ax = fig.add_subplot(111)
+
             label = "Channel %.2f MHz"%(fit_param[i]['f0'])
             current_color = get_color(i)
             edge_color = 'k'
             if current_color == 'black': edge_color = 'grey'
-            ax.plot((fit_data[i]['original']).real / calibrations[i], (fit_data[i]['original']).imag / calibrations[i] , color = current_color, label = label, alpha = 0.4)
-            ax.scatter(noise_points[i].real, noise_points[i].imag, color = current_color, edgecolors=edge_color,linewidth=3,s = 150)
-        fig.suptitle(title)
-        ax.set_aspect('equal','datalim')
-        ax.legend()
-        ax.grid()
-        fig.savefig("test.png")
-        pl.close(fig)
+
+            original_data = fit_data[i]['original']
+
+            ax.plot(original_data.real, original_data.imag , color = current_color, label = label, alpha = 0.4)
+            ax.scatter(noise_points[i].real  * calibrations[i], noise_points[i].imag  * calibrations[i], color = current_color, edgecolors=edge_color,linewidth=2,s = 110)
+            fig.suptitle(title)
+            ax.set_aspect('equal','datalim')
+            ax.legend()
+            ax.grid()
+            fig.savefig("diagnostic_channel_%d_IQ.png"%i)
+            pl.close(fig)
+
+
+            #plot phase and magnitude
+            fig = pl.figure()
+            fig.set_size_inches(fig_size[0], fig_size[1])
+            ax = fig.add_subplot(111)
+            ax.plot(fit_data[i]["frequency"],db(np.abs(original_data)),  label = "VNA data",  color = current_color)
+            if points is not None:
+                freq_data = [tx_info["rf"] + tx_info["freq"][i] for tt in range(len(noise_points[i]))]
+                magdata = db(np.abs(noise_points[i]) *calibrations[i])
+                diff_mag = np.mean(magdata) - vrms2dbm(np.abs(original_data)[find_nearest(fit_data[i]["frequency"], freq_data[0])])
+            else:
+                freq_data = [tx_info["rf"] + tx_info["freq"][i]]
+                magdata = [db(np.abs(noise_points[i]) * calibrations[i])]
+                diff_mag = magdata[0] - db(np.abs(original_data)[find_nearest(fit_data[i]["frequency"], freq_data[0])])
+            ax.scatter(freq_data, magdata , label = "Averaged noise data", color = current_color, edgecolors=edge_color,linewidth=2,s = 110)
+            ax.legend()
+            ax.grid()
+            fig.suptitle(label+"\n average discrepancy: %.2fdB"%diff_mag)
+            fig.savefig("diagnostic_channel_%d_mag.png"%i)
+            pl.close(fig)
+
+        os.chdir("..")
+
+
+
+
     elif backend == 'plotly':
         pass
     else:

@@ -76,6 +76,7 @@ if __name__ == "__main__":
     if args.guard_tones is not None:
         guard_tones = [float(x) for x in args.guard_tones]
         guard_tones = np.asarray(guard_tones)*1e6
+        # it's important that guard tones are at the end of the tone array !!!
         tones = np.concatenate((tones,guard_tones))
 
     # Data acquisition

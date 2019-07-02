@@ -583,6 +583,37 @@ def initialize_peaks(filename, N_peaks = 1, smoothing = None, peak_width = 90e3,
     else:
         return True
 
+
+def initialize_from_VNA(original_VNA, new_VNA, verbose = False):
+    '''
+    Initialize the peaks in a new VNA file using fitted parameters from an other VNA file that has already been fitted.
+    This function overwrites the Resonato group of the new_VNA file.
+    :param original_VNA: name of the VNA file containing the fits.
+    :param new_VNA: name of the VNA file to initialize.
+    :param verbose: print debug strings.
+
+    '''
+    original_VNA = format_filename(original_VNA)
+    new_VNA = format_filename(new_VNA)
+    original_fits_param = get_fit_param(original_VNA, verbose = verbose)
+    if len(original_fits_param)>0:
+        fv = h5py.File(new_VNA,'r+')
+        try:
+            reso_grp = fv.create_group("Resonators")
+        except ValueError:
+            print_warning("Overwriting resonator initialization attribute")
+            del fv["Resonators"]
+            reso_grp = fv.create_group("Resonators")
+
+        results = [reso['f0']*1e6 for reso in original_fits_param]
+        reso_grp.attrs.__setitem__("tones_init", results)
+
+        fv.close()
+    else:
+        err_msg = "Cannot find any resonator in the original file! check that the original VNA has been fitted."
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
 def vna_fit(filename, p0=None, fit_range = 10e4, verbose = False):
     """
     Open a pre analyzed, pre plotted (with tagged resonator inside) .h5 VNA file and fit the resonances in it. Creates a new group in the ".h5" file called "resonators" and save fitted curve and attributes in it.
