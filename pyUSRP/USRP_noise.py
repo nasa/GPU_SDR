@@ -900,7 +900,7 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
 
     elif backend == 'plotly':
         fig = tools.make_subplots(rows=1, cols=1)
-        fig['layout']['xaxis1'].update(title="Frequency [Hz]", type='log', exponentformat='SI', ticksuffix='Hz')
+        fig['layout']['xaxis1'].update(title="Frequency [Hz]")#), type='log')
 
     y_name_set = True
     rate_tag_set = True
@@ -938,15 +938,15 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
 
             if backend == 'matplotlib':
                 if info['dbc']:
-                    ax.set_ylabel("PSD [dBc]")
+                    ax.set_ylabel("PSD [dBc/Hz]")
                 else:
-                    ax.set_ylabel("PSD [dBm/sqrt(Hz)]")
+                    ax.set_ylabel("PSD [dBm/Hz]")
 
             elif backend == 'plotly':
                 if info['dbc']:
-                    fig['layout']['yaxis1'].update(title="PSD [dBc]")
+                    fig['layout']['yaxis1'].update(title="PSD [dBc/Hz]")
                 else:
-                    fig['layout']['yaxis1'].update(title="PSD [dBm/sqrt(Hz)]")
+                    fig['layout']['yaxis1'].update(title="PSD [dBm/Hz]")
 
         if rate_tag_set:
             rate_tag_set = False
@@ -989,6 +989,7 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
                 ), 1, 1)
         # increase file counter
         f_count += 1
+
     if backend == 'matplotlib':
         if title_info is not None:
             plot_title += "\n" + title_info
@@ -1008,8 +1009,6 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
             plot_title += "<br>" + title_info
 
         fig['layout'].update(title=plot_title)
-        #fig['layout']['xaxis'].update(exponentformat='SI')
-        #fig['layout']['xaxis'].update(ticksuffix='Hz')
         output_filename += ".html"
         if html:
             print_debug("Noise plotting done")
@@ -1242,7 +1241,7 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
 
 
         elif backend == 'plotly':
-            fig = tools.make_subplots(rows=2, cols=1, subplot_titles=('I timestream', 'Q timestream'),
+            fig = tools.make_subplots(rows=2, cols=1, subplot_titles=('f0 timestream', 'Qr timestream'),
                                       shared_xaxes=True)
             fig['layout']['yaxis1'].update(title='Frequency Shift [Hz]')
             fig['layout']['yaxis2'].update(title='Qr Shift [-]')
@@ -1495,7 +1494,12 @@ def diagnostic_VNA_noise(noise_filename, noise_points = None, VNA_file = None, a
         decimation = int(np.shape(noise_file['raw_data0'][ant]['data'])[1]/noise_points)
         print_debug("Decimating %d"%decimation)
         noise_points = np.asarray([
+<<<<<<< HEAD
             signal.decimate(dataset,decimation,ftype="fir") for dataset in noise_file['raw_data0'][ant]['data']
+=======
+            signal.decimate(noise_file['raw_data0'][ant][dataset_name],decimation,ftype="fir")[:] for dataset_name in noise_file['raw_data0'][ant]
+             #here we should truncate to hide FIR effects
+>>>>>>> e094f568ccf6335ed0f9218ac45b5bbb985de328
         ])
 
     title = "Diagnostic plot: overlaying averaged noise acquisition and VNA traces"

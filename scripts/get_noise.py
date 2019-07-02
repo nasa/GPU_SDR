@@ -33,17 +33,13 @@ if __name__ == "__main__":
     parser.add_argument('--rate', '-r', help='Sampling frequency in Msps', type=float, default = 100)
     parser.add_argument('--frontend', '-rf', help='front-end character: A or B', type=str, default="A")
     parser.add_argument('--tones','-T', nargs='+', help='Tones in MHz as a list i.e. -T 1 2 3')
+    parser.add_argument('--guard_tones','-gt', nargs='+', help='Add guard Tones in MHz as a list i.e. -T 1 2 3')
     parser.add_argument('--decimation', '-d', help='Decimation factor required', type=float, default=100)
     parser.add_argument('--time', '-t', help='Duration of the scan in seconds', type=float, default=10)
     parser.add_argument('--pf', '-pf', help='Polyphase averaging factor for PF mode and taps multiplier for DIRECT mode FIR filter', type=int, default=4)
     parser.add_argument('--VNA', '-vna', help='VNA file containing the resonators. Relative to the specified folder above.', type=str)
     parser.add_argument('--mode', '-m', help='Noise acquisition kernels. DIRECT uses direct demodulation PFB use the polyphase filter bank technique.', type=str, default= "DIRECT")
-<<<<<<< HEAD
-    parser.add_argument('--random', '-R', help='Generate N random tones for benchmarking purposes', type=int)
-
-=======
     parser.add_argument('--random', '-R', help='Generate random tones for benchmark and test reason', type=int)
->>>>>>> 335068e74a2529a7a1ffd2495cd8245a6f9f338b
     args = parser.parse_args()
     try:
         os.mkdir(args.folder)
@@ -56,7 +52,6 @@ if __name__ == "__main__":
         rf_freq, tones = u.get_tones(args.VNA)
         u.print_debug("getting %d tones from %s" % (len(tones),args.VNA))
     else:
-<<<<<<< HEAD
         if args.random is not None:
             tones = [random.randint(-args.rate/2.,-args.rate/2.) for c in range(args.random)]
         else:
@@ -68,16 +63,8 @@ if __name__ == "__main__":
                     tones = []
             except ValueError:
                 u.print_error("Cannot convert tone argument.")
-=======
-        if args.tones is not None:
-            try:
-                tones = [float(x) for x in args.tones]
-                tones = np.asarray(tones)*1e6
-            except ValueError:
-                u.print_error("Cannot convert tone args.")
->>>>>>> 335068e74a2529a7a1ffd2495cd8245a6f9f338b
 
-        rf_freq = args.freq*1e6
+    rf_freq = args.freq*1e6
 
     if args.random is not None:
         tones = [random.uniform(-args.rate*1e6/2, args.rate*1e6/2) for ui in range(args.random)]
@@ -85,6 +72,11 @@ if __name__ == "__main__":
     if not u.Connect():
         u.print_error("Cannot find the GPU server!")
         exit()
+
+    if args.guard_tones is not None:
+        guard_tones = [float(x) for x in args.guard_tones]
+        guard_tones = np.asarray(guard_tones)*1e6
+        tones = np.concatenate((tones,guard_tones))
 
     # Data acquisition
 
