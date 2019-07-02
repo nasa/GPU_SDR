@@ -47,6 +47,7 @@ from USRP_low_level import *
 from USRP_files import *
 from USRP_delay import *
 from USRP_fitting import get_fit_param
+from USRP_fitting import get_fit_data
 
 def dual_get_noise(tones_A, tones_B, measure_t, rate, decimation = None, amplitudes_A = None, amplitudes_B = None, RF_A = None, RF_B = None, tx_gain_A = 0, tx_gain_B = 0, output_filename = None,
               Device = None, delay = None, pf_average = None, mode = "DIRECT" ,**kwargs):
@@ -1442,7 +1443,13 @@ def diagnostic_VNA_noise(noise_filename, noise_points = None, VNA_file = None, a
     print("Plotting diagnostic data from \'%s\'"%noise_filename)
     resonator_grp_name = "Resonators"
     info = get_rx_info(noise_filename, ant=ant)
+    tx_info = get_tx_info(noise_filename, ant=ant.split('_')[0]+"_TXRX")
     noise_file = h5py.File(noise_filename, 'r')
+
+    try:
+        fig_size = kwargs['figsize']
+    except KeyError:
+        fig_size = None
 
     #source fit data
     fit_source_filename = noise_filename
@@ -1455,7 +1462,7 @@ def diagnostic_VNA_noise(noise_filename, noise_points = None, VNA_file = None, a
     fit_data = get_fit_data(fit_source_filename)
 
     #check backend existance
-    if ((backend!='') and (backend!='')):
+    if ((backend!='matplotlib') and (backend!='plotly')):
         err_msg = "backend %s not implemented in diagnostic_VNA_noise() function"%backend
         print_error(err_msg)
         raise ValueError(err_msg)
@@ -1467,32 +1474,58 @@ def diagnostic_VNA_noise(noise_filename, noise_points = None, VNA_file = None, a
         raise ValueError(err_msg)
 
     #check resonator group length matching
-    if (len(noise_file.keys()) < len(info['wave_type'])):
-        warning_msg = "The length of the resonator group (%d) does not match the number of tones (%d) in file %s."
+    if (len(fit_data) != len(info['wave_type'])):
+        warning_msg = "The length of the resonator group (%d) does not match the number of tones (%d) in file %s."%(len(fit_data), len(info['wave_type']), fit_source_filename)
         print_warning(warning_msg)
 
     #check frequency matching
     tones = np.asarray(info['freq']) + info['rf']
     fit_freqs = np.asarray([p['f0'] for p in fit_param])
 
+    #retrive calibrations
+    calibrations = [(1./tx_info['ampl'][i])*USRP_calibration/(10**((USRP_power + tx_info['gain'])/20.)) for i in range(len(tx_info['ampl']))]
+
     #do averages
+    print_debug("Averaging...")
     if noise_points is None:
         noise_points = np.asarray([
-            np.mean(noise_file['raw_data0'][dataset_name]) for dataset_name in noise_file['raw_data0'][ant]
+            np.mean(dataset) for dataset in noise_file['raw_data0'][ant]['data']
         ])
     else:
-        decimation = int(len(noise_file['raw_data0']['channel_0'])/noise_points)
+        decimation = int(np.shape(noise_file['raw_data0'][ant]['data'])[1]/noise_points)
         print_debug("Decimating %d"%decimation)
         noise_points = np.asarray([
-            signal.decimate(
-                noise_file['raw_data0'][dataset_name] for dataset_name in noise_file['raw_data0'][ant],
-                decimation,
-                ftype="fir"
-            )[:] #here we should truncate to hide FIR effects
+            signal.decimate(dataset,decimation,ftype="fir") for dataset in noise_file['raw_data0'][ant]['data']
         ])
 
-
+    title = "Diagnostic plot: overlaying averaged noise acquisition and VNA traces"
     #plot
+    print_debug("Plotting...")
+    if backend == 'matplotlib':
+        if fig_size is None:
+            fig_size = (16, 10)
+        fig = pl.figure()
+        fig.set_size_inches(fig_size[0], fig_size[1])
+        ax = fig.add_subplot(111)
+        for i in range(len(fit_data)):
+            label = "Channel %.2f MHz"%(fit_param[i]['f0'])
+            current_color = get_color(i)
+            edge_color = 'k'
+            if current_color == 'black': edge_color = 'grey'
+            ax.plot((fit_data[i]['original']).real / calibrations[i], (fit_data[i]['original']).imag / calibrations[i] , color = current_color, label = label, alpha = 0.4)
+            ax.scatter(noise_points[i].real, noise_points[i].imag, color = current_color, edgecolors=edge_color,linewidth=3,s = 150)
+        fig.suptitle(title)
+        ax.set_aspect('equal','datalim')
+        ax.legend()
+        ax.grid()
+        fig.savefig("test.png")
+        pl.close(fig)
+    elif backend == 'plotly':
+        pass
+    else:
+        err_msg = "%s backend not implemented in diagnostic function" % str(backend)
+        print_error(err_msg)
+        raise ValueError(err_msg)
 
     return
 
