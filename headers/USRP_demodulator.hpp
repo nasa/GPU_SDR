@@ -10,53 +10,34 @@
 
 //! @brief This class handles the DSP of the buffer coming from the the SDR.
 //! This is the class to implement to add a different DSP algorithm to the sevrer.
-class buffer_DSP{
-
-    public:
-
-        //! @brief Initialization method for the class called when a new command is received.
-        //! \param init_parameters pointer to the antenna configuration holding all the parameters.
-        //! \param init_diagnostic Define if diagnostic for the class is active or not. Depending on the implementation the diagnostic can output filter profiles on file, print some timing line and so on.
-        buffer_DSP(param* init_parameters, bool init_diagnostic = false);
-
-        //! @brief Destructor of the DSP handler class. Deallocates all the memory used in the process on both the RAM and the GPU RAM.
-        virtual ~buffer_DSP();
-
-        //! @brief PAcket handler for DSP class. This method process information pointed by the in parameter and write the output in the memory pointed by out parameter.
-        //! Both in and out are CPU RAM pointers already allocated. The memory input memory is NOT modified. The output memory has to be already allocated.
-        //! This function assumes that there is enough memory allocated to write the full output.
-        //! \return valid size of the output memory. Many processes cannot output a buffer of constant length, the return of this function tells the meaningful size of the memory.
-        //! \param in Pointer to CPU input memory.
-        //! \param out Pointer to CPU output memory.
-        virtual size_t process(float2* __restrict__ in, float2* __restrict__ out);
-
-};
-
 class RX_buffer_demodulator{
     public:
 
         //stores the signal processing parameters
         param* parameters;
 
-        //cut-off frequency fo the window. 1.f is Nyquist.
+        //! @brief PFB cut-off frequency fo the window. 1.f is Nyquist at the higher sampling frequency.
+        //! this parameter will be movoed to the param struct soon.
         float fcut;
 
-        //initialization: the parameters are coming directly from the client (from the async communication thread)
-        //diagnostic allows to print the window on a binary file and stores some diagnostic information
+        //! @brief Initialization method for the class called when a new command is received.
+        //! iagnostic allows to print the window on a binary file and stores some diagnostic information
         RX_buffer_demodulator(param* init_parameters, bool init_diagnostic = false);
 
-        //wrapper to the correct get function
+        //! @brief PAcket handler for DSP class. This method process information pointed by the in parameter and write the output in the memory pointed by out parameter.
+        //! Both in and out are CPU RAM pointers already allocated. The memory input memory is NOT modified. The output memory has to be already allocated.
+        //! This function assumes that there is enough memory allocated to write the full output.
         int process(float2** __restrict__ in, float2** __restrict__ out);
 
-        //wrapper to the correct cleaning function
+        //! @brief Wrapper to the correct cleaning function
         void close();
 
     private:
 
-        //enable or disable diagnostic information
+        //! Enable or disable diagnostic information
         bool diagnostic;
 
-        //enable or disable the post-demodulation decimator
+        //! Enable or disable the post-demodulation decimator
         bool decimator_active;
 
         //pointer to the demodulation function

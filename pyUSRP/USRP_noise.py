@@ -47,6 +47,7 @@ from USRP_low_level import *
 from USRP_files import *
 from USRP_delay import *
 from USRP_fitting import get_fit_param
+from USRP_fitting import get_fit_data
 
 def dual_get_noise(tones_A, tones_B, measure_t, rate, decimation = None, amplitudes_A = None, amplitudes_B = None, RF_A = None, RF_B = None, tx_gain_A = 0, tx_gain_B = 0, output_filename = None,
               Device = None, delay = None, pf_average = None, mode = "DIRECT" ,**kwargs):
@@ -899,7 +900,7 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
 
     elif backend == 'plotly':
         fig = tools.make_subplots(rows=1, cols=1)
-        fig['layout']['xaxis1'].update(title="Frequency [Hz]", type='log', exponentformat='SI', ticksuffix='Hz')
+        fig['layout']['xaxis1'].update(title="Frequency [Hz]")#), type='log')
 
     y_name_set = True
     rate_tag_set = True
@@ -937,15 +938,15 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
 
             if backend == 'matplotlib':
                 if info['dbc']:
-                    ax.set_ylabel("PSD [dBc]")
+                    ax.set_ylabel("PSD [dBc/Hz]")
                 else:
-                    ax.set_ylabel("PSD [dBm/sqrt(Hz)]")
+                    ax.set_ylabel("PSD [dBm/Hz]")
 
             elif backend == 'plotly':
                 if info['dbc']:
-                    fig['layout']['yaxis1'].update(title="PSD [dBc]")
+                    fig['layout']['yaxis1'].update(title="PSD [dBc/Hz]")
                 else:
-                    fig['layout']['yaxis1'].update(title="PSD [dBm/sqrt(Hz)]")
+                    fig['layout']['yaxis1'].update(title="PSD [dBm/Hz]")
 
         if rate_tag_set:
             rate_tag_set = False
@@ -988,6 +989,7 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
                 ), 1, 1)
         # increase file counter
         f_count += 1
+
     if backend == 'matplotlib':
         if title_info is not None:
             plot_title += "\n" + title_info
@@ -1007,8 +1009,6 @@ def plot_noise_spec(filenames, channel_list=None, max_frequency=None, title_info
             plot_title += "<br>" + title_info
 
         fig['layout'].update(title=plot_title)
-        #fig['layout']['xaxis'].update(exponentformat='SI')
-        #fig['layout']['xaxis'].update(ticksuffix='Hz')
         output_filename += ".html"
         if html:
             print_debug("Noise plotting done")
@@ -1072,9 +1072,9 @@ def copy_resonator_group(VNA_filename, NOISE_filename):
         - None
     '''
     VNA_filename = format_filename(VNA_filename)
+    resonator_grp_name = "Resonators"
     VNA_fv = h5py.File(VNA_filename, 'r')
-
-    if VNA_fv[resonator_grp_name] not in VNA_fv.keys():
+    if resonator_grp_name not in VNA_fv.keys():
         err_msg = 'VNA file:%s does not contain the Resonators group'%VNA_filename
         print_error(err_msg)
         raise ValueError(err_msg)
@@ -1084,13 +1084,15 @@ def copy_resonator_group(VNA_filename, NOISE_filename):
 
     print_debug("Copying resonator group from \'%s\' to \'%s\' ..."%(VNA_filename,NOISE_filename))
 
-    resonator_grp_name = "Resonators"
+
     resonator_grp = VNA_fv[resonator_grp_name]
 
     try:
-        NOISE_fv = fv.create_group(resonator_grp_name)
+        NOISE_fv_reso = NOISE_fv.create_group(resonator_grp_name)
     except ValueError:
         print_warning("Overwriting Noise subgroup %s in h5 file" % resonator_grp_name)
+        del NOISE_fv[resonator_grp_name]
+    else:
         del NOISE_fv[resonator_grp_name]
     # noise_resonator_group = noise_group.create_group(resonator_group_name)
     NOISE_fv.copy(resonator_grp, NOISE_fv)
@@ -1137,7 +1139,11 @@ def get_frequency_timestreams(NOISE_filename, start = None, end = None, channel_
     info = get_rx_info(NOISE_filename, ant=ant)
     last_sample = None
     if start is not None:
-        time_conv = float(info['rate'])/info['fft_tones']
+        if info['wave_type'] == "TONES":
+            decimation_factor = info['fft_tones']/max(info['decim'],1.)
+        else:
+            decimation_factor = info['decim']
+        time_conv = float(info['rate'])/decimation_factor
         start_sample = time_conv*start
         if end is not None:
             last_sample = time_conv*end
@@ -1163,7 +1169,7 @@ def get_frequency_timestreams(NOISE_filename, start = None, end = None, channel_
                    verbose=False, error_coord=False, big_file = False)
     result_f = []
     result_q = []
-    for i in range(len(data)):
+    for i in range(len(params)):
         # f0, A, phi, D, Qi, Qr, Qe_re, Qe_im,a
         fit_param = (params[i]['f0'], params[i]['A'], params[i]['phi'], params[i]['D'], params[i]['Qi'], params[i]['Qr'], np.real(params[i]['Qe']),np.imag(params[i]['Qe']),params[i]['a'])
         f_ts, q_ts = calculate_frequency_timestream(tones[i], data[i], fit_param)
@@ -1235,7 +1241,7 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
 
 
         elif backend == 'plotly':
-            fig = tools.make_subplots(rows=2, cols=1, subplot_titles=('I timestream', 'Q timestream'),
+            fig = tools.make_subplots(rows=2, cols=1, subplot_titles=('f0 timestream', 'Qr timestream'),
                                       shared_xaxes=True)
             fig['layout']['yaxis1'].update(title='Frequency Shift [Hz]')
             fig['layout']['yaxis2'].update(title='Qr Shift [-]')
@@ -1393,11 +1399,6 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
         if backend == 'matplotlib':
             fig.suptitle(plot_title + "\n" + rate_tag)
             handles, labels = ax[0].get_legend_handles_labels()
-            if len(errors) > 0:
-                yellow_patch = mpatches.Patch(color='yellow', label='ERRORS')
-                handles.append(yellow_patch)
-                labels.append('ERRORS')
-            #fig.legend(handles, labels, loc=7)
             ax[0].legend(handles, labels, bbox_to_anchor=(1.04, 1), loc="upper left")
             ax[0].grid(True)
             ax[1].grid(True)
@@ -1412,6 +1413,158 @@ def plot_frequency_timestreams(filenames, decimation=None, displayed_samples=Non
 
         return final_filename
 
+
+def diagnostic_VNA_noise(noise_filename, points = None, VNA_file = None, ant = "A_RX2", backend = 'matplotlib', **kwargs):
+    '''
+    Plot the VNA traces and the noise (averaged or in N points) on the same plot to check for acquisition consistency.
+    The noise file has to contain the Resonators group in order to use this function; to copy that from a VNA file use the function #copy_resonator_group().
+
+    :param noise_filename: noise acquisition filename.
+    :param points: the default behaviour is to average every channel in a single point; if this argument is >1 the noise will be decimated in that number of points.
+    :param VNA_file: if the fit information has to be taken from an external VNA file fill this argument with the filename.
+    :param backend: Choose the plotting backend. Currently implemented: plotly and matplotlib
+    :param ant: specify the antenna used to take noise data. Default is A_RX2
+    :param kwargs:
+        * auto_open: plotly backend specific, determines if after saving the plot the browser is called.
+        * figsize: matplotlib specific argument: figure size of the plot or each plot.
+
+    TODO: allow this function to interpret multiple VNA sources and multiple noise files.
+
+    '''
+    def db(value):
+        return 20*np.log10(value)
+    
+    noise_filename = format_filename(noise_filename)
+    print("Plotting diagnostic data from \'%s\'"%noise_filename)
+    resonator_grp_name = "Resonators"
+    info = get_rx_info(noise_filename, ant=ant)
+    tx_info = get_tx_info(noise_filename, ant=ant.split('_')[0]+"_TXRX")
+    noise_file = h5py.File(noise_filename, 'r')
+
+    try:
+        fig_size = kwargs['figsize']
+    except KeyError:
+        fig_size = None
+
+    #source fit data
+    fit_source_filename = noise_filename
+    extra_source_info = ""
+    if VNA_file is not None:
+        fit_source_filename = format_filename(VNA_file)
+        extra_source_info = " Fit data taken from \'%s\'."%fit_source_filename
+        print_debug(extra_source_info)
+    fit_param = get_fit_param(fit_source_filename)
+    fit_data = get_fit_data(fit_source_filename)
+
+    #check backend existance
+    if ((backend!='matplotlib') and (backend!='plotly')):
+        err_msg = "backend %s not implemented in diagnostic_VNA_noise() function"%backend
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    #check Resonators group existance
+    if resonator_grp_name not in noise_file.keys():
+        err_msg = "Cannot find the Resonator group in the file %s" % noise_filename
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    #check resonator group length matching
+    if (len(fit_data) != len(info['wave_type'])):
+        warning_msg = "The length of the resonator group (%d) does not match the number of tones (%d) in file %s."%(len(fit_data), len(info['wave_type']), fit_source_filename)
+        print_warning(warning_msg)
+
+    #check frequency matching
+    tones = np.asarray(info['freq']) + info['rf']
+    fit_freqs = np.asarray([p['f0'] for p in fit_param])
+
+    #retrive calibrations
+    calibrations = [(1./tx_info['ampl'][i])*USRP_calibration/(10**((USRP_power + tx_info['gain'])/20.)) for i in range(len(tx_info['ampl']))]
+
+
+    #do averages
+    print_debug("Averaging...")
+    if points is None:
+        noise_points = np.asarray([
+            np.mean(dataset) for dataset in noise_file['raw_data0'][ant]['data']
+        ])
+    else:
+        decimation = int(np.shape(noise_file['raw_data0'][ant]['data'])[1]/noise_points)
+        print_debug("Decimating %d"%decimation)
+        noise_points = np.asarray([
+            signal.decimate(dataset,decimation,ftype="fir") for dataset in noise_file['raw_data0'][ant]['data']
+
+        ])
+
+    title = "Diagnostic plot: overlaying averaged noise acquisition and VNA traces"
+    #plot
+    print_debug("Plotting...")
+    if backend == 'matplotlib':
+        if fig_size is None:
+            fig_size = (16, 10)
+        diagnostic_folder_name = "Diagnostic_"+noise_filename.split(".")[0]
+        try:
+            os.mkdir(diagnostic_folder_name)
+        except OSError:
+            pass
+
+
+        os.chdir(diagnostic_folder_name)
+        for i in range(len(fit_data)):
+            #Plot single channel data
+            fig = pl.figure()
+            fig.set_size_inches(fig_size[0], fig_size[1])
+            ax = fig.add_subplot(111)
+
+            label = "Channel %.2f MHz"%(fit_param[i]['f0'])
+            current_color = get_color(i)
+            edge_color = 'k'
+            if current_color == 'black': edge_color = 'grey'
+
+            original_data = fit_data[i]['original']
+
+            ax.plot(original_data.real, original_data.imag , color = current_color, label = label, alpha = 0.4)
+            ax.scatter(noise_points[i].real  * calibrations[i], noise_points[i].imag  * calibrations[i], color = current_color, edgecolors=edge_color,linewidth=2,s = 110)
+            fig.suptitle(title)
+            ax.set_aspect('equal','datalim')
+            ax.legend()
+            ax.grid()
+            fig.savefig("diagnostic_channel_%d_IQ.png"%i)
+            pl.close(fig)
+
+
+            #plot phase and magnitude
+            fig = pl.figure()
+            fig.set_size_inches(fig_size[0], fig_size[1])
+            ax = fig.add_subplot(111)
+            ax.plot(fit_data[i]["frequency"],db(np.abs(original_data)),  label = "VNA data",  color = current_color)
+            if points is not None:
+                freq_data = [tx_info["rf"] + tx_info["freq"][i] for tt in range(len(noise_points[i]))]
+                magdata = db(np.abs(noise_points[i]) *calibrations[i])
+                diff_mag = np.mean(magdata) - vrms2dbm(np.abs(original_data)[find_nearest(fit_data[i]["frequency"], freq_data[0])])
+            else:
+                freq_data = [tx_info["rf"] + tx_info["freq"][i]]
+                magdata = [db(np.abs(noise_points[i]) * calibrations[i])]
+                diff_mag = magdata[0] - db(np.abs(original_data)[find_nearest(fit_data[i]["frequency"], freq_data[0])])
+            ax.scatter(freq_data, magdata , label = "Averaged noise data", color = current_color, edgecolors=edge_color,linewidth=2,s = 110)
+            ax.legend()
+            ax.grid()
+            fig.suptitle(label+"\n average discrepancy: %.2fdB"%diff_mag)
+            fig.savefig("diagnostic_channel_%d_mag.png"%i)
+            pl.close(fig)
+
+        os.chdir("..")
+
+
+
+
+    elif backend == 'plotly':
+        pass
+    else:
+        err_msg = "%s backend not implemented in diagnostic function" % str(backend)
+        print_error(err_msg)
+        raise ValueError(err_msg)
+
+    return
 
 def calculate_NEF_spectra():
     #copied from calculate_spec
