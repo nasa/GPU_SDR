@@ -19,19 +19,81 @@ Than connect to the server::
 
   u.connect()
 
-<div class="alert alert-warning" role="alert">
+.. note::
   By default the library will connect to a GPU server that is running on the local machine. If the server is running on an other machine provide the address as a sting argument.
-</div>
 
 Once the client app is connected to the server launch any measure function provided with the distribution. Let's take a VNA scan between port TX/RX and RX2 on frontend A::
 
-  vna_filename = u.Single_VNA()
-  
-The function will block until the measurement is performed by the server and will create a local HDF5 file. The filename is than returned.
+  vna_filename = u.Single_VNA(<your arguments>)
+
+The function will block until the measurement is performed by the server and will create a local HDF5 file. The filename is than returned. In order to visualize the result of the VNA launch then the function::
+
+  u.VNA_analysis(vna_filename)
+
+That will read the raw data in the file and create the group VNA containing the frequency and S21 datasets. Finally for plotting launch::
+
+  u.plot_VNA(vna_filename)
+
+and optionally use the backend argument to choose between plotly and matplotlib. The matplotlib backend will save to disk a PNG file with the plot.
 
 Examples
 ========
-This section explain the use and purpose of the examples contained in the script folder of this distribution.
+This section explain the use and purpose of the examples contained in the script folder of this distribution. For more information about the programs arguments launch each of the scripts with the -h argument.
+The scope of each of this examples is to wrap library functions and complete a measurement or a simple analysis task.
+
+.. note::
+  All the programs that gather data have to interact with the GPU server via network.
+
+.. note::
+  These programs are intended as demonstration of the features of the system. They do NOT provide every option for functionality implemented.
+
+get_VNA.py
+----------
+Save the S21 function raw data to disk. If multiple gain arguments or LO frequency arguments are given, produces multiple scans. By default saves the data to the scripts/data/ folder.
+
+analyze_VNA.py
+--------------
+Analyze all the USRP_VNA* files present in the scripts/data/ folder. Overlay all the analyzed VNA files in a single plot.
+
+fit_VNA.py
+----------
+Fit the pre-analyzed VNA file with kinetic inductance resonator function and saves the fits results in the resonator group inside the same file.
+Two ways of initializing the peaks have been implemented: one that estimates the number and position of the peaks using a threshold on the derivative of S21; the other that given a number of peaks scan the S21 function for the best candidates.
+
+After fitting the program plot the resonators fits and the S21 with the resonator tags.
+
+get_noise.py
+------------
+Multitone noise acquisition. This program acquires multitone data. The tones can be initialized from a previously fitted VNA scan (using just the filename) or manually.
+Two different acquisition modes have been implemented: the direct demodulation mode and the PFB mode.
+
+analyze_noise.py
+----------------
+Calculates and save in the file the dBc/dBm spectrum of a multitone noise acquisition.
+
+freqts_plot.py
+--------------
+Translate tones power fluctuations into quality factor and resonant frequency fluctuation using VNA fit data.
+
+get_line_delay.py
+-----------------
+Estimate the loop line delay between two ports using a short chirped signal.
+
+get_noise_full.py
+-----------------
+Use the USRP as spectrum analyzer and saves data to disk
+.. note::
+  The client/server data rate can easily exceed the network buffer causing the client or the server to freeze if the connection between the does not have enough bandwidth for certain parameters.
+
+plot_spectrogram.py
+-------------------
+Plot the full spectrum noise acquisition.
+
+
+swipe_parameters.py
+-------------------
+This code example is the most similar to our acquisition routine.
+Acquire a VNA scan, analyze and fit it. Use the fit result to take a multitone noise acquisition and change some parameter (in this case the TX gain)
 
 Indices and tables
 ==================
