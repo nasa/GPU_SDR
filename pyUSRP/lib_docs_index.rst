@@ -6,7 +6,7 @@
 Welcome to pyUSRP's documentation!
 ==================================
 
-This API has been developed with frequency multiplexed cryogenics detector in mind. Hard coded internal parameters may be different for diffewrent applications.
+This API has been developed with frequency multiplexed cryogenics detector in mind. Hard coded internal parameters may be different for different applications.
 
 Quickstart guide
 ================
@@ -82,6 +82,7 @@ Estimate the loop line delay between two ports using a short chirped signal.
 get_noise_full.py
 -----------------
 Use the USRP as spectrum analyzer and saves data to disk
+
 .. note::
   The client/server data rate can easily exceed the network buffer causing the client or the server to freeze if the connection between the does not have enough bandwidth for certain parameters.
 
