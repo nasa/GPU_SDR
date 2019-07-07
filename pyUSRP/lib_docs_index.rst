@@ -8,6 +8,31 @@ Welcome to pyUSRP's documentation!
 
 This API has been developed with frequency multiplexed cryogenics detector in mind. Hard coded internal parameters may be different for diffewrent applications.
 
+Quickstart guide
+================
+In order to use this library an instance of the GPU server (link) has to be already running and connected to a USRP device (see link).
+First of all import the pyUSRP module::
+
+  import pyUSRP as u
+
+Than connect to the server::
+
+  u.connect()
+
+<div class="alert alert-warning" role="alert">
+  By default the library will connect to a GPU server that is running on the local machine. If the server is running on an other machine provide the address as a sting argument.
+</div>
+
+Once the client app is connected to the server launch any measure function provided with the distribution. Let's take a VNA scan between port TX/RX and RX2 on frontend A::
+
+  vna_filename = u.Single_VNA()
+  
+The function will block until the measurement is performed by the server and will create a local HDF5 file. The filename is than returned.
+
+Examples
+========
+This section explain the use and purpose of the examples contained in the script folder of this distribution.
+
 Indices and tables
 ==================
 
