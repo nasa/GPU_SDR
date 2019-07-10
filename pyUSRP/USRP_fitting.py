@@ -127,6 +127,7 @@ def nonlinear_model(f, f0, A, phi, D, dQr, dQe_re, dQe_im, a):
 def S21_func(f, f0, A, phi, D, dQr, dQe_re, dQe_im, a):
     '''
     Given a frequency range (f) and the resonator paramters return the S21 complex function.
+    d<param name> is intended as 1./<param name>
     '''
     return complex_of_real(nonlinear_model(f, f0, A, phi, D, dQr, dQe_re, dQe_im, a))
 
@@ -143,7 +144,7 @@ def do_fit(freq, re, im, p0=None):
     Function internally used to fit the resonators.
     This is not the function to call to fit a VNA scan, to do that, try vna_fit().
     Notes:
-        - f0 in p0 is in MHz
+    * f0 in p0 is in MHz
     '''
     model = nonlinear_model
     nt = len(freq)
@@ -1230,7 +1231,9 @@ def get_tones(filename, frontends = None, verbose = False):
     :param filename: the filename containing the fits (i.e. a VNA file).
     :param frontends: can be an antenna name ['A_RX2','B_RX2'], 'all' or None.
     :param verbose: print some debug line.
+
     :return if the argument 'all' is False return a tuple containing the central frequency and a list of relative tones; if None return the first frontend found in RX mode; if frontend name return the tones found in that frontend.
+
     '''
     if frontends is None:
         tones = get_best_readout(filename, verbose = verbose)

@@ -37,6 +37,9 @@
             </a>
           </li>
           <li class="nav-item">
+            <a class="nav-link" href="#">Gallery</a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link" href="server_docs/build/html/index.html">GPU Server</a>
           </li>
           <li class="nav-item">
@@ -45,6 +48,7 @@
           <li class="nav-item">
             <a class="nav-link" href="#">Web GUI (Coming soon...)</a>
           </li>
+
         </ul>
       </div>
     </div>
@@ -52,7 +56,7 @@
 
   <!-- Header - set the background image for the header in the line below -->
   <header class="py-5 bg-image-full" style="background-image: url('server_docs/images/front_pic.jpeg');">
-    <img class="img-fluid d-block mx-auto" src="server_docs/images/jpl-logo.png" style="height: 90px;" alt="logo_not_found">
+    <img class="img-fluid d-block mx-auto" src="server_docs/images/jpl-logo.png" style="height: 110px;" alt="logo_not_found">
     <img class="img-fluid d-block mx-auto" src="server_docs/images/caltech-logo.png" style="height:90px;" alt="logo_not_found">
   </header>
 
@@ -62,9 +66,11 @@
       <h1>GPU flexible readout</h1>
       <p class="lead">This software provide an interface with SDR (software defined radio) capable of reading out superconductive frequency multiplexed detectors and perform basic noise analysis.</p>
       <p>The software consist in two parts: a GPU server application and a Python 2.7 client API. The respective documentation is accessible in the menu at the top of the page.</p>
-      <div class="alert alert-warning" role="alert">
-        If the links don't work as expected and you are reading this documentation from your own local source you may have to compile the documentation first. Check the README file in the root folder.
+
+      <div class="alert alert-info" role="alert">
+        Checkout a paper about this system:  <a href="https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=8703439">IEEE</a>, <a href="https://arxiv.org/abs/1812.02200">ArXiv</a>
       </div>
+
       <h2>GPU server application</h2>
       <p class="lead"> The GPU server is a program that exchange the data between the SDR(s) and the GPU(s).<p>
       <p>It sources DSP specifications needed for analyzing and generating signals from the client API via TCP protocol. The result of the signal processing is streamed to the client API and/or saved on local storage. The GPU server has first to be compiled on the linux machine that will run it. Launch it with sudo permission and make sure it finds at least one device.</p>
@@ -80,7 +86,28 @@
   <!-- Footer -->
   <footer class="py-5 bg-dark">
     <div class="container">
-      <p class="m-0 text-center text-white">Opensource software license statement TBD</p>
+      <div class="alert alert-warning" role="alert">
+        If the links don't work as expected and you are reading this documentation from your own local source you may have to compile the documentation first. Check the README file in the root folder.
+      </div>
+      <p class="m-0 text-center text-white">
+
+        Copyright 2017 California Institute of Technology
+
+        Licensed under the Apache License, Version 2.0 (the "License");
+        you may not use this file except in compliance with the License.
+        You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+        Unless required by applicable law or agreed to in writing, software
+        distributed under the License is distributed on an "AS IS" BASIS,
+        WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+        See the License for the specific language governing permissions and
+        limitations under the License.
+
+
+
+      </p>
     </div>
     <!-- /.container -->
   </footer>

@@ -800,6 +800,7 @@ def VNA_analysis(filename, usrp_number = 0):
 def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_phase = True, verbose = False, **kwargs):
     '''
     Plot the VNA data from various files.
+
     :param filenames: list of strings containing the filenames to be plotted.
     :param backend: "matplotlib", "plotly" are supported.
     :param output_filename: filename of the output figure without extension. Default is VNA(_compare)_timestamp.xxx.
@@ -814,6 +815,7 @@ def plot_VNA(filenames, backend = "matplotlib", output_filename = None, unwrap_p
         - auto_open: for plotly backend. If True opens the plot in a browser. Default is True.
 
    :return The filename of the file just created. if kwargs['html'] is True returns the html of the file instead.
+
     '''
 
     print("Plotting VNA(s)...")

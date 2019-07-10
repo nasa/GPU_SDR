@@ -77,12 +77,18 @@ using namespace logging::trivial;
 //length of the TX and RX queue. for non real time application longer queue are needed to stack up data
 
 //this two values increase the ammount of cpu RAM initially allocated. Increasing those values will result in more memory usage.
+
+//! Describe how many buffer will be allocated for the frontend receiver queue memory pool. Increasing those values will result in more memory usage.
 #define RX_QUEUE_LENGTH     100
+
+//! Describe how many buffer will be allocated for the frontend transmitter queue memory pool. Increasing those values will result in more memory usage.
 #define TX_QUEUE_LENGTH     100
 
 //increasing those values will only increase the limit of RAM that COULD be used.
 #define ERROR_QUEUE_LENGTH  1000
 #define STREAM_QUEUE_LENGTH 1000
+
+//! Describe how many buffer will be allocated for the software emoulation of the USRP. This value is only important when the software is used in software loopback mode. Increasing those values will result in more memory usage.
 #define SW_LOOP_QUEUE_LENGTH 100
 #define SECONDARY_STREAM_QUEUE_LENGTH 100 //between the stream and the filewriter (keep it long if writing files)
 
