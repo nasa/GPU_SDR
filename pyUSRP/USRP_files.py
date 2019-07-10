@@ -117,6 +117,7 @@ def openH5file(filename, ch_list=None, start_sample=None, last_sample=None, usrp
                verbose=False, error_coord=False, big_file = False):
     '''
     Retrive Raw data from an hdf5 file generated with pyUSRP.
+
     :param filename: Name of the file to open
     :param ch_list: a list containing the channel number tp open.
     :param start_sample: first sample returned.
@@ -126,6 +127,7 @@ def openH5file(filename, ch_list=None, start_sample=None, last_sample=None, usrp
     :param verbose: print more information about the opening process.
     :param error_coord: If True returns (samples, err_coord) where err_coord is a list of tuples containing start and end sample of each faulty packet.
     :param big_file: default is False. if True last_sample and start_sample are ignored and the hdf5 object containing the raw data is returned. This is usefull when dealing with very large files. IMPORTANT: is user responsability to close the file if big_file is True, see return sepcs.
+
     :return: array-like object containing the data in the form data[channel][samples].
     :return: In case big_file is True returns the file object (so the user is able to close it) and the raw dataset. (file_pointer, dataset)
     :return: in case of error_coord True returns also the erorrs coordinate ((file_pointer,) dataset, errors)

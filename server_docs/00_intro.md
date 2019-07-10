@@ -2,7 +2,11 @@ Overview
 ========
 
 An overview of the working principle is reported in the figure below with some system requirements.
-\image html general_plot.png "*General scheme:Block representation of the readout system. This software runs on the "Readout server" in the figure.*
+
+<p>
+ <img src="general_plot.png" alt="General scheme" style="width:70%">
+ <center><em>General scheme:Block representation of the readout system. This software runs on the "Readout server" in the figure.</em></center>
+<p>
 
 The goal of this project is to provide a tool to read frequency multiplexed that is flexible enough to service a variety of technologies and, at the same time, easy enouh to develop so that innovative algorithms can be tested without having to deal with an FPGA firmware. Most of the computational operation required by the readout operations are offloaded on the GPU: the firmware present on the USRP device is the stock firmware without any modification. This firmware is used only to communicate data and metadata with the USRP device and does not perform (almost) any operation. Once the data are streamed on the host the server upload them on the GPU memory where they will be analysed. Thanks to the massive parallelization of operation on the GPU device the analysis operations are completed before the next packet of data is uploaded on the GPU. The flexibility of this system relies in the range of operation that can be performed on the data using a Nvidia GPU: thanks to the CUDA language a new signal processing operation can be implemented and tested in a timescale much shorter that the FPGA firmware equivalent. Instructions on how to implement a new algorrithm on the server are contained in the apposite section. Once the data have been analyzed on the GPU they are streamed to a client application via a TCP socket. The client provvided within the system consists of a python library that saves to disk the results and/or plot the data in real time.
 
@@ -18,11 +22,27 @@ Datapath
 
 Data are moved around the server using the lock-free queue implementation of boost libraries. Those queues (defined in USRP_server_settings.cpp) are queues of pointers to different kind of struct, these structs serve different purposes but relies on the same structure: a pointer to the memory and some metadata usefull to read the memory.
 
+<p>
+ <img src="Memory_model.png" alt="Memory_model.png" style="width:70%">
+ <center><em>RX datapath scheme:"Block representation of the datapath in the receiver side.</em></center>
+<p>
 
-\image html Memory_model.png *RX datapath scheme:"Block representation of the datapath in the receiver side.*
 
-\image html memory_tx.png *TX datapath scheme:"Block representation of the datapath in the transmission side*
+<p>
+ <img src="memory_tx.png" alt="memory_tx.png" style="width:70%">
+ <center><em>TX datapath scheme:"Block representation of the datapath in the transmission side</em></center>
+<p>
+
 
 Memory
 ----------------
-\image html Memory_allocator.png *Block diagram of the memory manager class used in the server.*
+All the memory used during a measurement is allocated at the beginning of the same except in case the system strongly (segfault without) needs more memory. The way buffer memory is managed is using a custom memory allocator coded in the file #USRP_server_memory_management.hpp. Note that most of the code has been moved to the .hpp because of the templating approach. The custom memory allocator is just an interface between the CUDA pinning mechanism and a couple of lock-free queues for passing and recycling pointers. They way it works can be summarized in few steps:
+* Upon initialization the memory allocator initializes a user-defined number of buffer and pin them to the CUDA driver page file (see CUDA pinned memory for more information)
+* When a buffer is needed the #preallocator::get() method will return a buffer.
+* Once the buffer has been used, it is returned to the pool using the #preallocator::trash() method.
+* A call to the #preallocator::close() method will free the memory pool.
+Internally pulling and pushing from the memory pool (which is a lock-free queue) is handled by a couple of low-priority, unbinded threads which ensure the operation is completed without blocking the main application. It may seem redundant to use a lock-free queue and two threads to achieve the immediate return of the memory invocation but lock-free stuff generally come with the price of a failure possibility which in this context will cause memory leaks and loss of stability.
+<p>
+ <img src="Memory_allocator.png" alt="Memory_allocator.png" style="width:70%">
+ <center><em>Block diagram of the memory manager class used in the server.</em></center>
+<p>

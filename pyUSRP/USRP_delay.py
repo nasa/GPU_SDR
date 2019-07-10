@@ -303,7 +303,9 @@ def analyze_line_delay(filename, diagnostic_plots = False):
 def load_delay_from_file(filename):
     '''
     Recover delay information from a delay file. Write this information in the internal dictionary LINE_DELAY.
+
     :param filename: Filename of the delay measure already analyzed.
+
     :return: rate in Msps, delay in ns
 
     Example:
@@ -368,8 +370,9 @@ def set_line_delay(rate, delay_ns):
 def load_delay_from_folder(foldername):
     '''
     Load line delay structure from folder matching the the acquisition rate with the right delay in the LINE_DELAY variable.
+    
     Note:
-        * The line delay is NOT matched with frequency but only with the sps rate of the USRP.
+    * The line delay is NOT matched with frequency but only with the sps rate of the USRP.
 
     :param foldername: folder containing the delay files. Delay files are detected using the filename string "USRP_Delay*.h5".
     '''

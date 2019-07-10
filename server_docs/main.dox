@@ -2,6 +2,4 @@
 
 The USRP_server is part of the radio-frequency readout system developed by the Jet Propulsion Laboratory since 2017. The present documentation describe the piece of software that interfaces the Ettus UHD libraries with the NVidia CUDA libraries to read frequency multiplexed detectors. For a description of the full system and example of application refer to: arXiv suff.
 
-
-
 */

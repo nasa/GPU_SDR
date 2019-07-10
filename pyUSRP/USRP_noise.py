@@ -700,13 +700,13 @@ def spec_from_samples(samples, sampling_rate=1, welch=None, dbc=False, rotate=Tr
 def calculate_noise(filename, welch=None, dbc=False, rotate=True, usrp_number=0, ant=None, verbose=False, clip=0.1):
     '''
     Generates the FFT of each channel stored in the .h5 file and stores the results in the same file.
-    Arguments:
-        - welch: in how many segment to divide the samples given for applying the Welch method.
-        - dbc: scales samples to calculate dBc spectra.
-        - rotate: if True rotate the IQ plane.
+
+    :param welch: in how many segment to divide the samples given for applying the Welch method.
+    :param dbc: scales samples to calculate dBc spectra.
+    :param rotate: if True rotate the IQ plane.
 
     TODO:
-        Default behaviour should be getting all the available RX antenna.
+    * Default behaviour should be getting all the available RX antenna.
     '''
 
     print("Calculating noise spectra for " + filename)
@@ -1433,7 +1433,7 @@ def diagnostic_VNA_noise(noise_filename, points = None, VNA_file = None, ant = "
     '''
     def db(value):
         return 20*np.log10(value)
-    
+
     noise_filename = format_filename(noise_filename)
     print("Plotting diagnostic data from \'%s\'"%noise_filename)
     resonator_grp_name = "Resonators"

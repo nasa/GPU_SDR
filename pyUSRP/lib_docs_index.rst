@@ -114,7 +114,7 @@ The "Connections" module
 The "Data analysis" module
 --------------------------
 
-*This module contains all the functions used to analyze the data take with this software. This module is very application specific so if you are not using Kinetic Inductance Detectors it may not well suite your needs. If KIDs are used, particularly if Thermal KIDs are used, the function in this module will cast the data to meaningful physical values.*
+*This module contains all the functions used to analyze the data take with this software. This module is very application specific: all the functions needed for general purpose analysis (like ffts) are in their respective submodule (i.e. noise)*
 
 .. automodule:: USRP_data_analysis
     :members:

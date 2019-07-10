@@ -1,3 +1,10 @@
+########################################################################################
+##                                                                                    ##
+##  THIS LIBRARY IS PART OF THE SOFTWARE DEVELOPED BY THE JET PROPULSION LABORATORY   ##
+##  IN THE CONTEXT OF THE GPU ACCELERATED FLEXIBLE RADIOFREQUENCY READOUT PROJECT     ##
+##                                                                                    ##
+########################################################################################
+
 import numpy as np
 import scipy.signal as signal
 import signal as Signal
