@@ -741,12 +741,15 @@ def get_fit_data(filename, verbose = False):
 
 
     ret = []
+    resonator_index = 0
     for resonator in reso_grp:
+        resonator_group_name = "reso_%d" % resonator_index
         ret.append({
-            "frequency":np.asarray(reso_grp[resonator]['freq']),
-            "fitted":np.asarray(reso_grp[resonator]["fitted_S21"]),
-            "original":np.asarray(reso_grp[resonator]["base_S21"])
+            "frequency":np.asarray(reso_grp[resonator_group_name]['freq']),
+            "fitted":np.asarray(reso_grp[resonator_group_name]["fitted_S21"]),
+            "original":np.asarray(reso_grp[resonator_group_name]["base_S21"])
             })
+        resonator_index += 1
 
     if verbose: print_debug("Resonator data collected")
     f.close()
@@ -776,17 +779,21 @@ def get_fit_param(filename, verbose = False):
         raise ValueError(err_msg)
 
     ret = []
+    resonator_index = 0
     for resonator in reso_grp:
+        resonator_group_name = "reso_%d" % resonator_index
         ret.append({
-            'f0':reso_grp[resonator].attrs.get("f0"),
-            'A':reso_grp[resonator].attrs.get("A"),
-            'phi':reso_grp[resonator].attrs.get("phi"),
-            'D':reso_grp[resonator].attrs.get("D"),
-            'Qi':reso_grp[resonator].attrs.get("Qi"),
-            'Qr':reso_grp[resonator].attrs.get("Qr"),
-            'Qe':reso_grp[resonator].attrs.get("Qe"),
-            'a':reso_grp[resonator].attrs.get("a")
+            'f0':reso_grp[resonator_group_name].attrs.get("f0"),
+            'A':reso_grp[resonator_group_name].attrs.get("A"),
+            'phi':reso_grp[resonator_group_name].attrs.get("phi"),
+            'D':reso_grp[resonator_group_name].attrs.get("D"),
+            'Qi':reso_grp[resonator_group_name].attrs.get("Qi"),
+            'Qr':reso_grp[resonator_group_name].attrs.get("Qr"),
+            'Qe':reso_grp[resonator_group_name].attrs.get("Qe"),
+            'a':reso_grp[resonator_group_name].attrs.get("a")
         })
+        resonator_index += 1
+
     if verbose: print_debug("Resonator parameters collected")
     f.close()
     return ret
