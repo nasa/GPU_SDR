@@ -17,6 +17,7 @@ try:
     from .USRP_noise import *
     from .USRP_full_spec import *
     from .USRP_plotting import *
+    from .USRP_triggers import *
 
 except ImportError as err:
     print("\033[1;31mERROR\033[0m: Import error from pyUSRP lib. Try running the install modules script.")

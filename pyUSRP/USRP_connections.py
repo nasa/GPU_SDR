@@ -86,7 +86,7 @@ def clean_data_queue(USRP_data_queue=USRP_data_queue):
     return residual_packets
 
 
-def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, push_queue = None, **kwargs):
+def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, push_queue = None, trigger = None, **kwargs):
     '''
     Consume the USRP_data_queue and writes an H5 file on disk.
 
@@ -95,6 +95,7 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
     :param filename: eventual filename. Default is datetime.
     :param dpc_expected: number of sample per channel expected. if given display a percentage progressbar.
     :param push_queue: external queue where to push data and metadata
+    :param trigger: trigger class (see section on trigger function for deteails)
 
     :return filename or empty string if something went wrong
 
@@ -105,7 +106,7 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
     global dynamic_alloc_warning
     push_queue_warning = False
 
-    def write_ext_H5_packet(metadata, data, h5fp, index):
+    def write_ext_H5_packet(metadata, data, h5fp, index, trigger = None):
         '''
         Write a single packet inside an already opened and formatted H5 file as an ordered dataset.
 
@@ -114,9 +115,7 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
             - data: the data to be written inside the dataset.
             - dataset: file pointer to the h5 file. extensible dataset has to be already created.
             - index: dictionary containg the accumulated length of the dataset.
-
-        Returns:
-            - The updated index dictionaty.
+            - trigger: trigger class. (see trigger section for more info)
 
         Notes:
             - The way this function write the packets inside the h5 file is strictly related to the metadata type in decribed in USRP_server_setting.hpp as RX_wrapper struct.
@@ -131,6 +130,12 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
         data_shape = np.shape(dataset)
         data_start = index
         data_end = data_start + samples_per_channel
+        if ((trigger is not None) and (metadata['length']>0)):
+            if trigger.trigger_control == "AUTO":
+                trigger_dataset = h5fp[dev_name][group_name]["trigger"]
+                current_len_trigger = len(trigger_dataset)
+                trigger_dataset.resize(current_len_trigger+1,0)
+                trigger_dataset[current_len_trigger] = index
         try:
             if data_shape[0] < metadata['channels']:
                 print_warning("Main dataset in H5 file not initialized.")
@@ -244,7 +249,7 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
         print "Writing data on disk with filename: \"" + filename + ".h5\""
 
     H5_file_pointer = create_h5_file(str(filename))
-    Param_to_H5(H5_file_pointer, parameters, **kwargs)
+    Param_to_H5(H5_file_pointer, parameters, trigger, **kwargs)
 
     allowed_counters = ['A_RX2','B_RX2']
     spc_acc = {}
@@ -256,8 +261,8 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
         widgets = [progressbar.Percentage(), progressbar.Bar()]
         bar = progressbar.ProgressBar(widgets=widgets, max_value=dpc_expected)
     else:
-        widgets = [progressbar.FormatLabel(
-            '\033[7;1;32mReceived: %(value)d samples per channel in: %(elapsed)s\033[0m')]
+        widgets = ['', progressbar.Counter('Samples per channel received: %(value)05d'),
+               ' Client time elapsed: ', progressbar.Timer(), '']
         bar = progressbar.ProgressBar(widgets=widgets)
     data_warning = True
     bar.start()
@@ -270,7 +275,9 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
                 acquisition_end_flag = True
             else:
                 # write_single_H5_packet(meta_data, data, H5_file_pointer)
-                write_ext_H5_packet(meta_data, data, H5_file_pointer, spc_acc[meta_data['front_end_code']])
+                if trigger is not None:
+                    data, meta_data = trigger.trigger(data, meta_data)
+                write_ext_H5_packet(meta_data, data, H5_file_pointer, spc_acc[meta_data['front_end_code']], trigger = trigger)
                 if push_queue is not None:
                     if not push_queue_warning:
                         try:
@@ -283,10 +290,10 @@ def Packets_to_file(parameters, timeout=None, filename=None, dpc_expected=None, 
                 try:
                     #print "max expected: %d total received %d"%(dpc_expected, spc_acc)
                     bar.update(spc_acc[meta_data['front_end_code']])
-
                 except:
                     if data_warning:
-                        bar.update(dpc_expected)
+                        if dpc_expected is not None:
+                            bar.update(dpc_expected)
                         if (more_sample_than_expected_WARNING):
                             print_warning("Sync rx is receiving more data than expected...")
                             more_sample_than_expected_WARNING = False

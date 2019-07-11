@@ -320,10 +320,11 @@ def extimate_peak_number(filename, threshold = 0.2, smoothing = None, peak_width
     for j in range(len(center)):
         if exclude_center:
             for ii in range(len(mask)):
-                if np.abs(freq[ii] - center[j]) < (int(5000e3/resolution)):
+                if np.abs(freq[ii] - center[j]) < (int(500000e3/resolution)):
                     mask[ii] = False
                     gradS21[ii] = gradS21[ii-1]
                     center_excl[j].append(ii)
+                    print "excluding: %.2f"%(freq[ii]/1e6)
         if len(center_excl[j])>1:
             center_min[j] = min(center_excl[j])
             center_max[j] = max(center_excl[j])

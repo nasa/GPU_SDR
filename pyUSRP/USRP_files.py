@@ -305,6 +305,11 @@ def openH5file(filename, ch_list=None, start_sample=None, last_sample=None, usrp
 
     else:
         samples = sub_group["data"].attrs.get("samples")
+        try:
+            trigger = sub_group['trigger']
+            print_warning("Gettign data from a triggered measure, time sequentiality of data is not guaranteed. To access the triggering info use get_trigger_info()")
+        except KeyError:
+            pass
         if samples is None:
             print_warning("Non samples attrinut found: data extracted from file could include zero padding")
             samples = last_sample
@@ -390,6 +395,17 @@ def get_noise(filename, usrp_number=0, front_end=None, channel_list=None):
 
     return info, frequency_axis, real, imag
 
+def get_trigger_info(filename, ant = None):
+    '''
+    Get the trigger information from a triggered measure.
+
+    :param filename: the name of the measure file.
+    :param ant: the name of the antenna. Default is automatically discovered.
+
+    :returns trigger dataset as a numpy array.
+
+    '''
+    return
 
 def get_readout_power(filename, channel, front_end=None, usrp_number=0):
     '''
@@ -929,13 +945,14 @@ def Front_end_chk(Front_end):
     return True
 
 
-def Param_to_H5(H5fp, parameters_class, **kwargs):
+def Param_to_H5(H5fp, parameters_class, trigger = None, **kwargs):
     '''
     Generate the internal structure of a H5 file correstonding to the parameters given.
 
     :param H5fp: already opened H5 file with write permissions
     :param parameters_class: an initialized global_parameter object containing the informations used to drive the GPU server.
     :param kwargs: each additional parameter will be interpreted as a tag to add in the raw data group of the file.
+    :param trigger: trigger class (see section on trigger function for deteails)
 
     Returns:
         - A list of names of H5 groups where to write incoming data.
@@ -964,33 +981,43 @@ def Param_to_H5(H5fp, parameters_class, **kwargs):
             except KeyError:
                 print_warning("Cannot extract number of channel from signal processing descriptor")
                 n_chan = 0
-
-            if parameters_class.parameters[ant_name]['wave_type'][0] == "TONES":
-                data_len = int(np.ceil(parameters_class.parameters[ant_name]['samples'] / (
-                            parameters_class.parameters[ant_name]['fft_tones'] * max(
-                        parameters_class.parameters[ant_name]['decim'], 1))))
-            elif parameters_class.parameters[ant_name]['wave_type'][0] == "CHIRP":
-                if parameters_class.parameters[ant_name]['decim'] == 0:
-                    data_len = parameters_class.parameters[ant_name]['samples']
-                else:
-                    data_len = parameters_class.parameters[ant_name]['swipe_s'][0]/parameters_class.parameters[ant_name]['decim']
-
-            elif parameters_class.parameters[ant_name]['wave_type'][0] == "NOISE":
-                data_len = int(np.ceil(parameters_class.parameters[ant_name]['samples'] / max(
-                    parameters_class.parameters[ant_name]['decim'], 1)))
-
-            elif parameters_class.parameters[ant_name]['wave_type'][0] == "DIRECT":
-                data_len = parameters_class.parameters[ant_name]['samples']/max(parameters_class.parameters[ant_name]['decim'],1)
-            else:
-                print_warning("No file size could be determined from DSP descriptor: \'%s\'" % str(
-                    parameters_class.parameters[ant_name]['wave_type'][0]))
+            if trigger is not None:
                 data_len = 0
+            else:
+                if parameters_class.parameters[ant_name]['wave_type'][0] == "TONES":
+                    data_len = int(np.ceil(parameters_class.parameters[ant_name]['samples'] / (
+                                parameters_class.parameters[ant_name]['fft_tones'] * max(
+                            parameters_class.parameters[ant_name]['decim'], 1))))
+                elif parameters_class.parameters[ant_name]['wave_type'][0] == "CHIRP":
+                    if parameters_class.parameters[ant_name]['decim'] == 0:
+                        data_len = parameters_class.parameters[ant_name]['samples']
+                    else:
+                        data_len = parameters_class.parameters[ant_name]['swipe_s'][0]/parameters_class.parameters[ant_name]['decim']
+
+                elif parameters_class.parameters[ant_name]['wave_type'][0] == "NOISE":
+                    data_len = int(np.ceil(parameters_class.parameters[ant_name]['samples'] / max(
+                        parameters_class.parameters[ant_name]['decim'], 1)))
+
+                elif parameters_class.parameters[ant_name]['wave_type'][0] == "DIRECT":
+                    data_len = parameters_class.parameters[ant_name]['samples']/max(parameters_class.parameters[ant_name]['decim'],1)
+                else:
+                    print_warning("No file size could be determined from DSP descriptor: \'%s\'" % str(
+                        parameters_class.parameters[ant_name]['wave_type'][0]))
+                    data_len = 0
 
             data_shape_max = (n_chan, data_len)
             rx_group.create_dataset("data", data_shape_max, dtype=np.complex64, maxshape=(None, None),
                                     chunks=True)  # , compression = H5PY_compression
             rx_group.create_dataset("errors", (0, 0), dtype=np.dtype(np.int64),
                                     maxshape=(None, None))  # , compression = H5PY_compression
+
+            if trigger is not None:
+                trigger_ds = rx_group.create_dataset("trigger", shape = (0,), dtype=np.dtype(np.int64), maxshape=(None,),chunks=True)
+                trigger_name = str(trigger.__class__.__name__)
+                trigger_ds.attrs.create("trigger_fcn", data = trigger_name)
+
+                trigger.dataset_init(rx_group)
+
             for param_name in parameters_class.parameters[ant_name]:
                 rx_group.attrs.create(name=param_name, data=parameters_class.parameters[ant_name][param_name])
 

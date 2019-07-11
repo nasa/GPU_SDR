@@ -383,7 +383,7 @@ def dual_get_noise(tones_A, tones_B, measure_t, rate, decimation = None, amplitu
     return output_filename
 
 def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF = None, tx_gain = 0, output_filename = None, Front_end = None,
-              Device = None, delay = None, pf_average = 4, mode = "DIRECT", **kwargs):
+              Device = None, delay = None, pf_average = 4, mode = "DIRECT", trigger = None, **kwargs):
     '''
     Perform a noise acquisition using fixed tone technique.
 
@@ -400,6 +400,7 @@ def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF =
         - delay: delay between TX and RX processes. Default is taken from the INTERNAL_DELAY variable.
         - pf_average: pfb averaging factor. Default is 4 for PFB mode and 1 for DIRECT mode.
         - mode: noise acquisition kernels. DIRECT uses direct demodulation PFB use the polyphase filter bank technique. Note that PF average will refer to something slightly different in DIRECT mode (moving average ratio: 1 has no overlap).
+        - trigger: function used for triggering. (See trigger section for more info). Default is no trigger.
         - kwargs:
             * verbose: additional prints. Default is False.
             * push_queue: queue for post writing samples.
@@ -582,6 +583,9 @@ def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF =
             expected_samples = int(number_of_samples)
             print_debug("GPU FIR filter disabled")
 
+        if trigger is not None:
+            expected_samples = None
+
         #Quantize tones to 1Hz resolution
         tones = [int(tt) for tt in tones]
 
@@ -638,6 +642,7 @@ def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF =
         dpc_expected=expected_samples,
         meas_type="Noise",
         push_queue = push_queue,
+        trigger = trigger,
         **kwargs
     )
 

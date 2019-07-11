@@ -12,11 +12,22 @@ except ImportError:
 
 import argparse
 
-def run(rate,freq,front_end, tones, lapse, decimation, gain, vna, mode, pf):
+def run(rate,freq,front_end, tones, lapse, decimation, gain, vna, mode, pf, trigger):
+
+    if trigger is not None:
+        try:
+            trigger = eval('u.'+trigger+'()')
+        except SyntaxError:
+            u.print_error("Cannot find the trigger \'%s\'. Is it implemented in the USRP_triggers module?"%trigger)
+            return ""
+        except AttributeError:
+            u.print_error("Cannot find the trigger \'%s\'. Is it implemented in the USRP_triggers module?"%trigger)
+            return ""
 
 
     noise_filename = u.Get_noise(tones, measure_t = lapse, rate = rate, decimation = decimation, amplitudes = None,
-                              RF = freq, output_filename = None, Front_end = front_end,Device = None, delay = 0, pf_average = pf, tx_gain = gain, mode = mode)
+                              RF = freq, output_filename = None, Front_end = front_end,Device = None, delay = 0,
+                              pf_average = pf, tx_gain = gain, mode = mode, trigger = trigger)
     if vna is not None:
         u.copy_resonator_group(vna, noise_filename)
 
@@ -40,6 +51,8 @@ if __name__ == "__main__":
     parser.add_argument('--VNA', '-vna', help='VNA file containing the resonators. Relative to the specified folder above.', type=str)
     parser.add_argument('--mode', '-m', help='Noise acquisition kernels. DIRECT uses direct demodulation PFB use the polyphase filter bank technique.', type=str, default= "DIRECT")
     parser.add_argument('--random', '-R', help='Generate random tones for benchmark and test reason', type=int)
+    parser.add_argument('--trigger', '-tr', help='String describing the trigger to use. Default is no trigger. Use the name of the trigger classes defined in the trigger module with no parentesis', type=str)
+
     args = parser.parse_args()
     try:
         os.mkdir(args.folder)
@@ -82,6 +95,7 @@ if __name__ == "__main__":
     # Data acquisition
 
     f = run(rate = args.rate*1e6, freq = rf_freq, front_end = args.frontend,
-            tones = np.asarray(tones), lapse = args.time, decimation = args.decimation, gain = args.gain, vna= args.VNA, mode = args.mode, pf = args.pf)
+            tones = np.asarray(tones), lapse = args.time, decimation = args.decimation,
+            gain = args.gain, vna= args.VNA, mode = args.mode, pf = args.pf, trigger = args.trigger)
 
     # Data analysis and plotting will be in an other python script

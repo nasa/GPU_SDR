@@ -25,6 +25,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed_init', '-si', help='Initialize every fit with the seed VNA instead of using last VNA', action="store_true")
     parser.add_argument('--peak_width', '-w', help='Frequency span for fitting.', type=float, default=80e3)
     parser.add_argument('--mode', '-m', help='Noise acquisition kernels. DIRECT uses direct demodulation PFB use the polyphase filter bank technique.', type=str, default= "DIRECT")
+    parser.add_argument('--trigger', '-tr', help='String describing the trigger to use. Default is no trigger. Use the name of the trigger classes defined in the trigger module with no parentesis', type=str)
 
 
 
@@ -54,6 +55,16 @@ if __name__ == "__main__":
         err_msg = "Frontend %s unknown" % args.frontend
         u.print_warning(err_msg)
         ant = None
+
+    if trigger is not None:
+        try:
+            trigger = eval('u.'+trigger+'()')
+        except SyntaxError:
+            u.print_error("Cannot find the trigger \'%s\'. Is it implemented in the USRP_triggers module?"%trigger)
+            return ""
+        except AttributeError:
+            u.print_error("Cannot find the trigger \'%s\'. Is it implemented in the USRP_triggers module?"%trigger)
+            return ""
 
     #replicate the VNA measure (WARNING: DOES NOT SUPPORT ITERATIONS)
     u.print_debug("Replicating seed VNA measure to ensure phase coherency...")
@@ -157,7 +168,8 @@ if __name__ == "__main__":
             delay = None,
             pf_average = 4,
             tx_gain = gains[i],
-            mode = args.mode
+            mode = args.mode,
+            trigger = trigger
         )
 
         #copy the resonator group
