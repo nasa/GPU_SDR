@@ -96,6 +96,79 @@ swipe_parameters.py
 This code example is the most similar to our acquisition routine.
 Acquire a VNA scan, analyze and fit it. Use the fit result to take a multitone noise acquisition and change some parameter (in this case the TX gain)
 
+
+Useful functions
+================
+
+Connections
+-----------
+.. autosummary::
+  USRP_connections.Connect
+  USRP_connections.Disconnect
+
+Launching measures
+------------------
+.. autosummary::
+  USRP_VNA.Single_VNA
+  USRP_noise.Get_noise
+  USRP_delay.measure_line_delay
+  USRP_full_spec.get_NODSP_tones
+  USRP_noise.Get_full_spec
+
+Getting data from files
+-----------------------
+.. autosummary::
+  USRP_files.openH5file
+  USRP_files.get_rx_info
+  USRP_files.get_tx_info
+  USRP_files.get_noise
+  USRP_files.get_trigger_info
+  USRP_files.get_readout_power
+  USRP_files.global_parameter.retrive_prop_from_file
+  USRP_files.get_VNA_data
+  USRP_files.get_dynamic_VNA_data
+  USRP_files.get_init_peaks
+  USRP_fitting.get_tones
+  USRP_fitting.get_best_readout
+  USRP_fitting.get_fit_param
+  USRP_fitting.get_fit_data
+  USRP_delay.load_delay_from_file
+  USRP_delay.load_delay_from_folder
+  USRP_full_spec.Get_full_spec
+  USRP_noise.get_frequency_timestreams
+
+Move data between files
+-----------------------
+.. autosummary::
+  USRP_fitting.initialize_from_VNA
+  USRP_delay.write_delay_to_file
+  USRP_noise.copy_resonator_group
+
+
+
+Analyze data
+------------
+.. autosummary::
+  USRP_fitting.vna_fit
+  USRP_fitting.initialize_peaks
+  USRP_fitting.extimate_peak_number
+  USRP_delay.analyze_line_delay
+  USRP_noise.calculate_noise
+  USRP_VNA.VNA_timestream_analysis
+  USRP_VNA.VNA_analysis
+
+Plotting data
+-------------
+.. autosummary::
+  USRP_fitting.plot_resonators
+  USRP_full_spec.plot_pfb
+  USRP_noise.plot_noise_spec
+  USRP_noise.plot_frequency_timestreams
+  USRP_noise.diagnostic_VNA_noise
+  USRP_plotting.plot_raw_data
+  USRP_VNA.VNA_timestream_plot
+  USRP_VNA.plot_VNA
+
 Indices and tables
 ==================
 
