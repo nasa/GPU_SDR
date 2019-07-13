@@ -16,12 +16,17 @@ class trigger_template(object):
     In case the trigger_control is not set on \'AUTO\' the user must take care of expanding the dataset before writing.
     '''
 
-    def __init__(self):
-        self.trigger_control = "AUTO" # OR MANUAL
+    def __init__(self, rate):
+        self.trigger_control = "MANUAL" # OR MANUAL
         if (self.trigger_control != "AUTO") and (self.trigger_control != "MANUAL"):
             err_msg = "Trigger_control in the trigger class can only have MANUAL or AUTO value, not \'%s\'"%str(self.trigger_control)
             print_error(err_msg)
             raise ValueError(err_msg)
+
+        #------------------------------
+        self.stored_data = np.array([])
+        self.time_index = 0
+        self.rate = rate
 
     def dataset_init(self, antenna_group):
         '''
@@ -34,7 +39,14 @@ class trigger_template(object):
         :param antenna_group is the antenna group containing the 'error','data' and triggering datasets.
         '''
 
+        self.trigger_group = antenna_group['trigger']
+
         return
+    def write_trigger(self, data):
+
+        current_len_trigger = len(self.trigger)
+        self.trigger.resize(current_len_trigger+1,0)
+        self.trigger[current_len_trigger] = data
 
     def trigger(self, data, metadata):
         '''
@@ -48,7 +60,55 @@ class trigger_template(object):
 
         Note: the order of data at this stage follows the example ch0_t0, ch1_t0, ch0_t1, ch1_t1, ch0_t2, ch1_t2...
         '''
-        return data, metadata
+
+        n_chan = metadata['channels']
+        self.time_index += metadata['length']/n_chan
+        self.stored_data = np.concatenate((self.stored_data,data)) ##accumulating data
+        if len(self.stored_data) >= 3 * metadata['length']: ##if data is long enough
+            n_samples = len(self.stored_data) / n_chan ##number of samples per channel
+            reshaped_data = np.reshape(self.stored_data, (n_samples, n_chan)).T
+            srate = self.rate
+            hits = np.zeros(n_samples, dtype=bool) ##initially all false.
+            for x in range(0, n_chan): ##loops over the channels
+                current = reshaped_data[x]
+                med = np.median(current)
+                stddev = np.std(current)
+                lo = med - 10*stddev
+                hi = med + 10*stddev
+                mask = np.logical_or(current<lo, current>hi)
+                hits = np.logical_or(hits, mask)
+            ##now hits has the indices of all the glitches across all the chs.
+            hit_indices = np.nonzero(hits)
+            indices_diffs = np.ediff1d(hit_indices)
+            count = 0
+            for y in range(0, len(indices_diff)):
+                if indices_diff[y] < (0.001*srate): ##if points are less than .001 sec apart
+                    hit_indices = np.delete(hit_indices, count+1)
+                else:
+                    count += 1
+            ##now hit indices only contains one marker per glitch.
+            if len(hit_indices) != 0: ##if this detects a glitch
+                num = int(s_rate * 0.002) ##half of number of points saved. (0.004 sec range total saved)
+                res = np.empty([0, n_chan])
+                for z in range(0, len(hit_indices)): ##find data around glitches
+                    i = hit_indices[z]
+                    chopped = reshaped_data[0:n_samples, (i-num):(i+num)]
+                    res = np.concatenate((res.T, chopped.T)).T
+                ##now res is ordered with rows being the channels and cols being glitch markers
+                ##and t contains the time markers for the recorded glitches -- where to store?
+                res = np.reshape(res, (1, res.size))
+                metadata['length'] = len(res)
+                self.stored_data = np.array([])
+                write_trigger(self.time_index)
+                return res, metadata
+            else: ##if no glitches detected
+                self.stored_data = np.array([])
+                metadata['length'] = 0
+                return [[],],metadata
+        else: ##if data is not long enough.
+            metadata['length'] = 0
+            return [[],],metadata
+
 
 class deriv_test(trigger_template):
     '''
