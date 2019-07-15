@@ -92,7 +92,7 @@ class trigger_template(object):
                 res = np.empty([0, n_chan])
                 for z in range(0, len(hit_indices)): ##find data around glitches
                     i = hit_indices[z]
-                    chopped = reshaped_data[0:n_samples, (i-num):(i+num)]
+                    chopped = reshaped_data[0:n_chan, (i-num):(i+num)]
                     res = np.concatenate((res.T, chopped.T)).T
                 ##now res is ordered with rows being the channels and cols being glitch markers
                 ##and t contains the time markers for the recorded glitches -- where to store?
