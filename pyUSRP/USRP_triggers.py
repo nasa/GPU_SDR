@@ -64,12 +64,12 @@ class trigger_template(object):
         n_chan = metadata['channels']
         self.time_index += metadata['length']/n_chan
         self.stored_data = np.concatenate((self.stored_data,data)) ##accumulating data
-        if len(self.stored_data) >= 3 * metadata['length']: ##if data is long enough
+        if len(self.stored_data) >= 10*self.rate: ##if data is long enough
             n_samples = len(self.stored_data) / n_chan ##number of samples per channel
             reshaped_data = np.reshape(self.stored_data, (n_samples, n_chan)).T
             srate = self.rate
             hits = np.zeros(n_samples, dtype=bool) ##initially all false.
-            for x in range(0, n_chan): ##loops over the channels
+            for x in range(0, n_chan):
                 current = reshaped_data[x]
                 med = np.median(current)
                 stddev = np.std(current)
@@ -105,10 +105,11 @@ class trigger_template(object):
             else: ##if no glitches detected
                 self.stored_data = np.array([])
                 metadata['length'] = 0
-                return [[],],metadata
+                return np.array([]), metadata
+                ###return piece of timestream
         else: ##if data is not long enough.
             metadata['length'] = 0
-            return [[],],metadata
+            return np.array([]), metadata
 
 
 class deriv_test(trigger_template):
