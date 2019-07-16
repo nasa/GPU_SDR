@@ -400,7 +400,7 @@ def Get_noise(tones, measure_t, rate, decimation = None, amplitudes = None, RF =
         - delay: delay between TX and RX processes. Default is taken from the INTERNAL_DELAY variable.
         - pf_average: pfb averaging factor. Default is 4 for PFB mode and 1 for DIRECT mode.
         - mode: noise acquisition kernels. DIRECT uses direct demodulation PFB use the polyphase filter bank technique. Note that PF average will refer to something slightly different in DIRECT mode (moving average ratio: 1 has no overlap).
-        - trigger: function used for triggering. (See trigger section for more info). Default is no trigger.
+        - trigger: class used for triggering. (See trigger section for more info). Default is no trigger.
         - kwargs:
             * verbose: additional prints. Default is False.
             * push_queue: queue for post writing samples.
