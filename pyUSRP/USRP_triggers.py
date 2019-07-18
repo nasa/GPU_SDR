@@ -101,7 +101,7 @@ class trigger_template(object):
                 metadata['length'] = len(res)
                 self.stored_data = np.array([])
                 #self.write_trigger(self.time_index) this is a bug
-                return res, metadata, times ####added times output for testing purposes
+                return res, metadata#, times ####added times output for testing purposes
             else: ##if no glitches detected
                 self.stored_data = np.array([])
                 metadata['length'] = 0

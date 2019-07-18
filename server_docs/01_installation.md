@@ -12,7 +12,7 @@ There are hardware requiremets depending on the bandwidth the user intend to use
 
   - __GPU__: The functionalities used in the kernels require CUDA >= 9.0. The hardware could be whatever support that cuda version. Take in account that the time required to process one packet must be inferior to the time needed to acquire it otherwise the real time feature of the GPU server is no longer in place. Often the execution time of a kernel well scales with the hardware (GPU) used.
 
-  _Suggested item from our tests: RTX 2070 or GTX1080Ti. We had great benefit from using memory faster than GDDR5_
+  _Suggested item from our tests: RTX 2080Ti or RTX4000. We had great benefit from using memory faster than GDDR5_
 
   - __RAM__: It' suggested to have at least 8GB available for the GPU server alone. Since the buffer on which UHD operates is stored in the RAM a fast clock frequency could improve the available bandwidth.
 
